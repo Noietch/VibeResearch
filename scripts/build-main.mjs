@@ -84,6 +84,20 @@ await build({
   logLevel: 'info',
 });
 
+await build({
+  entryPoints: [path.join(root, 'src/main/agent-local-entry.ts')],
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'cjs',
+  outfile: path.join(root, 'dist/main/agent-local.js'),
+  external,
+  alias,
+  tsconfig: path.join(root, 'tsconfig.main.json'),
+  sourcemap: false,
+  logLevel: 'info',
+});
+
 // Preload scripts MUST be CommonJS format for Electron
 await build({
   entryPoints: [path.join(root, 'src/main/preload.ts')],

@@ -10,6 +10,7 @@ import {
   type ModelKind,
 } from '../store/model-config-store';
 import { testApiConnection } from './ai-provider.service';
+import { callAgentServiceTest } from './agent-local.service';
 import {
   getSystemAgentConfigStatus,
   getSystemAgentConfigContents,
@@ -158,25 +159,29 @@ export class ModelsService {
       return { success: false, error: missingConfigMessage, logFile: getLogFilePath('agent.log') };
     }
 
-    const result = await testCliCommand({
+    const serviceResult = await callAgentServiceTest({
       command: model.command ?? '',
       envVars: model.envVars,
-      homeFiles: resolveAgentHomeFiles(model),
-      prependArgs: (model.command ?? '').includes('--settings') ? [] : resolveAgentCliArgs(model),
-      useLoginShell: true,
-      debugFilePrefix: 'saved-model-test',
+      agentTool: model.agentTool,
+      configContent: model.configContent,
+      authContent: model.authContent,
+      debugFilePrefix: `saved-model-${id}`,
     });
 
-    const persistedDiagnostics = result.diagnostics
-      ? persistDiagnosticsFiles(result.diagnostics, `saved-model-${id}`)
-      : undefined;
+    const persistedDiagnostics =
+      serviceResult.diagnostics && typeof serviceResult.diagnostics === 'object'
+        ? persistDiagnosticsFiles(
+            serviceResult.diagnostics as CliTestDiagnostics,
+            `saved-model-${id}`,
+          )
+        : undefined;
 
-    if (result.success) {
+    if (serviceResult.success) {
       const response = {
         success: true,
-        output: result.output,
+        output: serviceResult.output,
         diagnostics: persistedDiagnostics,
-        logFile: getLogFilePath('agent.log'),
+        logFile: serviceResult.logFile ?? getLogFilePath('agent.log'),
       };
       appendLog('agent', 'models:testSavedConnection:result', { id, response }, 'agent.log');
       if (persistedDiagnostics) {
@@ -194,18 +199,19 @@ export class ModelsService {
       appendLog(
         'agent',
         'models:testSavedConnection:diagnostics',
-        { id, diagnostics: persistedDiagnostics, logFile: getLogFilePath('agent.log') },
+        {
+          id,
+          diagnostics: persistedDiagnostics,
+          logFile: serviceResult.logFile ?? getLogFilePath('agent.log'),
+        },
         'agent.log',
       );
     }
     const response = {
       success: false,
-      error: classifyCliTestError(
-        (model.command ?? '').trim().split(/\s+/)[0] || 'cli',
-        result.error ?? 'CLI test failed',
-      ),
+      error: serviceResult.error ?? 'CLI test failed',
       diagnostics: persistedDiagnostics,
-      logFile: getLogFilePath('agent.log'),
+      logFile: serviceResult.logFile ?? getLogFilePath('agent.log'),
     };
     appendLog('agent', 'models:testSavedConnection:result', { id, response }, 'agent.log');
     return response;

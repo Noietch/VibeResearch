@@ -60,31 +60,6 @@ export function readIfExists(filePath: string): string {
   }
 }
 
-function collectHomeDirFiles(
-  relativeDir: string,
-): Array<{ relativePath: string; content: string }> {
-  const baseDir = path.join(os.homedir(), relativeDir);
-  if (!fs.existsSync(baseDir)) return [];
-
-  const files: Array<{ relativePath: string; content: string }> = [];
-
-  const visit = (currentDir: string) => {
-    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
-      const entryPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        visit(entryPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const relativePath = path.relative(os.homedir(), entryPath);
-      files.push({ relativePath, content: readIfExists(entryPath) });
-    }
-  };
-
-  visit(baseDir);
-  return files;
-}
-
 function upsertHomeFile(
   files: Array<{ relativePath: string; content: string }>,
   relativePath: string,
@@ -164,14 +139,7 @@ export function resolveAgentHomeFiles(
   if (!tool || tool === 'custom') return [];
 
   if (tool === 'claude-code') {
-    const inlineSettings = model.configContent?.trim();
-    if (!inlineSettings) {
-      return [];
-    }
-
-    const files = collectHomeDirFiles('.claude');
-    upsertHomeFile(files, '.claude/settings.json', inlineSettings);
-    return files;
+    return [];
   }
 
   if (tool === 'codex') {
@@ -181,7 +149,7 @@ export function resolveAgentHomeFiles(
       return [];
     }
 
-    const files = collectHomeDirFiles('.codex');
+    const files: Array<{ relativePath: string; content: string }> = [];
     if (inlineConfig) upsertHomeFile(files, '.codex/config.toml', inlineConfig);
     if (inlineAuth) upsertHomeFile(files, '.codex/auth.json', inlineAuth);
     return files;

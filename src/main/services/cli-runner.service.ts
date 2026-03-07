@@ -1,5 +1,5 @@
 import { spawn, exec, execSync } from 'child_process';
-import { BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -136,6 +136,29 @@ export function classifyCliTestError(command: string, raw: string): string {
   return message.slice(0, 300);
 }
 
+function sanitizeCliEnv(
+  env: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const next = { ...env };
+
+  const blockedKeys = [
+    'ELECTRON_RUN_AS_NODE',
+    'ELECTRON_NO_ATTACH_CONSOLE',
+    'ELECTRON_NO_ASAR',
+    'NODE_OPTIONS',
+    'npm_config_prefix',
+    'npm_config_user_agent',
+    'npm_execpath',
+    'npm_node_execpath',
+  ];
+
+  for (const key of blockedKeys) {
+    delete next[key];
+  }
+
+  return next;
+}
+
 function parseEnvVarsString(envVars?: string): Record<string, string> {
   const parsed: Record<string, string> = {};
   if (!envVars) return parsed;
@@ -176,6 +199,33 @@ function buildShellCommand(command: string, args: string[]): string {
   return [command, ...args].map(shellEscapeArg).join(' ');
 }
 
+function buildLoginShellCommand(command: string, args: string[], envPath: string): string {
+  return `export PATH=${shellEscapeArg(envPath)}; ${buildShellCommand(command, args)}`;
+}
+
+function resolveExecutablePath(command: string, envPath: string): string | null {
+  if (!command) return null;
+  if (path.isAbsolute(command)) {
+    return fs.existsSync(command) ? command : null;
+  }
+  if (command.includes(path.sep)) {
+    const absolute = path.resolve(command);
+    return fs.existsSync(absolute) ? absolute : null;
+  }
+
+  for (const entry of envPath.split(':').filter(Boolean)) {
+    const candidate = path.join(entry, command);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch {
+      // keep searching
+    }
+  }
+
+  return null;
+}
+
 function cleanupTempHome(tempHomeDir: string | null) {
   if (!tempHomeDir) return;
   try {
@@ -201,11 +251,11 @@ export async function testCliCommand(options: {
   usage?: CliUsageSummary;
   diagnostics?: CliTestDiagnostics;
 }> {
-  const env: Record<string, string | undefined> = {
+  const env = sanitizeCliEnv({
     ...process.env,
     PATH: getShellPath(),
     ...parseEnvVarsString(options.envVars),
-  };
+  });
   delete env.CLAUDECODE;
 
   const cmdParts = options.command.trim().split(/\s+/).filter(Boolean);
@@ -231,7 +281,11 @@ export async function testCliCommand(options: {
     env.USERPROFILE = tempHomeDir;
   }
 
-  const shellCommand = buildShellCommand(binary, args);
+  const preferredPath = env.PATH ?? getShellPath();
+  const resolvedBinary = resolveExecutablePath(binary, preferredPath);
+  const shellCommand = options.useLoginShell
+    ? buildLoginShellCommand(binary, args, preferredPath)
+    : buildShellCommand(binary, args);
   const stdoutFile = options.debugFilePrefix
     ? writeDebugFile(makeTimestampedLogName(`${options.debugFilePrefix}-stdout`, 'jsonl'), '')
     : undefined;
@@ -247,9 +301,15 @@ export async function testCliCommand(options: {
       usage?: CliUsageSummary;
       diagnostics?: CliTestDiagnostics;
     }>((resolve) => {
-      const proc = options.useLoginShell
-        ? spawn(getLoginShell(), ['-lic', shellCommand], { env, shell: false })
-        : spawn(binary, args, { env, shell: false });
+      const proc = resolvedBinary
+        ? spawn(resolvedBinary, args, { env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
+        : options.useLoginShell
+          ? spawn(getLoginShell(), ['-lic', shellCommand], {
+              env,
+              shell: false,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            })
+          : spawn(binary, args, { env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
       let finished = false;
@@ -324,7 +384,9 @@ export async function testCliCommand(options: {
         clearTimeout(timer);
         cleanupTempHome(tempHomeDir);
 
-        const combined = stdout.trim() || stderr.trim();
+        const stdoutText = stdout.trim();
+        const stderrText = stderr.trim();
+        const combined = stdoutText || stderrText;
         const parsed = parseStructuredCliOutput(binary, stdout);
         const diagnostics = {
           command: binary,
@@ -350,7 +412,7 @@ export async function testCliCommand(options: {
 
         resolve({
           success: false,
-          error: combined || `Exited with code ${code}`,
+          error: stderrText || parsed.text.trim() || stdoutText || `Exited with code ${code}`,
           diagnostics,
         });
       });
@@ -576,12 +638,12 @@ export function runCli(
 
   let tempHomeDir: string | null = createTempHome(options.homeFiles);
 
-  const env: Record<string, string | undefined> = {
+  const env = sanitizeCliEnv({
     ...process.env,
     PATH: getShellPath(),
     ...proxyEnv,
     ...(options.env ?? {}),
-  };
+  });
   if (tempHomeDir) {
     env.HOME = tempHomeDir;
     env.USERPROFILE = tempHomeDir;
@@ -594,10 +656,21 @@ export function runCli(
     tempHomeDir = null;
   };
 
-  const shellCommand = buildShellCommand(command, args);
-  const proc = options.useLoginShell
-    ? spawn(getLoginShell(), ['-lic', shellCommand], { env, cwd, shell: false })
-    : spawn(command, args, { env, cwd, shell: false });
+  const preferredPath = env.PATH ?? getShellPath();
+  const resolvedCommand = resolveExecutablePath(command, preferredPath);
+  const shellCommand = options.useLoginShell
+    ? buildLoginShellCommand(command, args, preferredPath)
+    : buildShellCommand(command, args);
+  const proc = resolvedCommand
+    ? spawn(resolvedCommand, args, { env, cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
+    : options.useLoginShell
+      ? spawn(getLoginShell(), ['-lic', shellCommand], {
+          env,
+          cwd,
+          shell: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+      : spawn(command, args, { env, cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdoutBuffer = '';
 
   proc.stdout.on('data', (data: Buffer) => {

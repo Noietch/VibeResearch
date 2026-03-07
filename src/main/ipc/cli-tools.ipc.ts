@@ -5,6 +5,7 @@ import {
   classifyCliTestError,
   testCliCommand,
   type CliUsageSummary,
+  type CliTestDiagnostics,
 } from '../services/cli-runner.service';
 import { getCliTools, saveCliTools, type CliConfig } from '../store/cli-tools-store';
 import { recordTokenUsage } from '../store/token-usage-store';
@@ -15,6 +16,12 @@ import {
   writeDebugFile,
 } from '../services/app-log.service';
 import { getModelConfig } from '../store/model-config-store';
+import {
+  attachAgentServiceStream,
+  callAgentServiceKill,
+  callAgentServiceRun,
+  callAgentServiceTest,
+} from '../services/agent-local.service';
 import {
   getMissingAgentConfigMessage,
   resolveAgentCliArgs,
@@ -204,39 +211,31 @@ export function setupCliToolsIpc() {
         return response;
       }
 
-      const result = await testCliCommand({
+      const serviceResult = await callAgentServiceTest({
         command: options.command,
         extraArgs: options.extraArgs,
         envVars: options.envVars,
-        homeFiles: resolveAgentHomeFiles(options),
-        prependArgs: options.command.includes('--settings') ? [] : resolveAgentCliArgs(options),
-        useLoginShell: true,
-        debugFilePrefix:
-          options.agentTool === 'claude-code'
-            ? 'claude-test'
-            : options.agentTool === 'codex'
-              ? 'codex-test'
-              : 'agent-test',
+        agentTool: options.agentTool,
+        configContent: options.configContent,
+        authContent: options.authContent,
       });
 
-      const persistedDiagnostics = result.diagnostics
-        ? persistDiagnosticsFiles(
-            result.diagnostics,
-            options.agentTool === 'claude-code'
-              ? 'claude-test'
-              : options.agentTool === 'codex'
-                ? 'codex-test'
-                : 'agent-test',
-          )
-        : undefined;
-      const response = result.success
-        ? { success: true, output: result.output, diagnostics: persistedDiagnostics }
+      const persistedDiagnostics =
+        serviceResult.diagnostics && typeof serviceResult.diagnostics === 'object'
+          ? persistDiagnosticsFiles(
+              serviceResult.diagnostics as CliTestDiagnostics,
+              options.agentTool === 'claude-code'
+                ? 'claude-test'
+                : options.agentTool === 'codex'
+                  ? 'codex-test'
+                  : 'agent-test',
+            )
+          : undefined;
+      const response = serviceResult.success
+        ? { success: true, output: serviceResult.output, diagnostics: persistedDiagnostics }
         : {
             success: false,
-            error: classifyCliTestError(
-              options.command.trim().split(/\s+/)[0] || 'cli',
-              result.error ?? 'CLI test failed',
-            ),
+            error: serviceResult.error ?? 'CLI test failed',
             diagnostics: persistedDiagnostics,
           };
 
@@ -291,15 +290,8 @@ export function setupCliToolsIpc() {
       const existing = activeProcesses.get(options.sessionId);
       if (existing) existing.kill();
 
-      const parsedEnv: Record<string, string> = {};
-      if (options.envVars) {
-        for (const pair of options.envVars.trim().split(/\s+/)) {
-          const eq = pair.indexOf('=');
-          if (eq > 0) parsedEnv[pair.slice(0, eq)] = pair.slice(eq + 1);
-        }
-      }
-
       let resolvedHomeFiles = options.homeFiles;
+      let prependArgs: string[] = [];
       if ((!resolvedHomeFiles || resolvedHomeFiles.length === 0) && options.modelId) {
         const model = getModelConfig(options.modelId);
         if (model) {
@@ -318,24 +310,22 @@ export function setupCliToolsIpc() {
             throw new Error(missingConfigMessage);
           }
           resolvedHomeFiles = resolveAgentHomeFiles(model);
+          prependArgs = options.tool.includes('--settings') ? [] : resolveAgentCliArgs(model);
         }
       }
 
       const cmdParts = options.tool.trim().split(/\s+/);
       const command = cmdParts[0];
-      const commandArgs = [...cmdParts.slice(1), ...options.args];
-
       sessionUsage.set(options.sessionId, {
         provider: command,
         model: options.displayLabel || options.tool,
       });
 
-      const proc = runCliToWindow(win, command, commandArgs, options.sessionId, {
-        cwd: options.cwd,
-        env: parsedEnv,
-        useProxy: options.useProxy,
-        homeFiles: resolvedHomeFiles,
-        useLoginShell: true,
+      const stream = await attachAgentServiceStream(options.sessionId, {
+        onOutput: (data) =>
+          win.webContents.send('cli:output', { sessionId: options.sessionId, data }),
+        onError: (data) =>
+          win.webContents.send('cli:error', { sessionId: options.sessionId, data }),
         onUsage: (usage) => {
           const existingUsage = sessionUsage.get(options.sessionId);
           if (!existingUsage) return;
@@ -350,22 +340,34 @@ export function setupCliToolsIpc() {
             usage,
             model: usage.model ?? existingUsage.model,
           });
+          win.webContents.send('cli:usage', { sessionId: options.sessionId, usage });
         },
-        onDone: () => {
+        onDone: (code) => {
           appendLog('agent', 'cli:run:done', { sessionId: options.sessionId }, AGENT_LOG_FILE);
+          win.webContents.send('cli:done', { sessionId: options.sessionId, code });
           finalizeSessionUsage(options.sessionId);
         },
       });
 
-      const wrappedProc = {
+      await callAgentServiceRun({
+        tool: options.tool,
+        args: options.args,
+        sessionId: options.sessionId,
+        cwd: options.cwd,
+        envVars: options.envVars,
+        useProxy: options.useProxy,
+        homeFiles: resolvedHomeFiles,
+        prependArgs,
+      });
+
+      activeProcesses.set(options.sessionId, {
         kill: () => {
           appendLog('agent', 'cli:run:kill', { sessionId: options.sessionId }, AGENT_LOG_FILE);
-          proc.kill();
+          stream.close();
+          void callAgentServiceKill(options.sessionId);
           finalizeSessionUsage(options.sessionId);
         },
-      };
-
-      activeProcesses.set(options.sessionId, wrappedProc);
+      });
       return { sessionId: options.sessionId, started: true };
     },
   );
@@ -377,6 +379,6 @@ export function setupCliToolsIpc() {
       proc.kill();
       return { killed: true };
     }
-    return { killed: false };
+    return callAgentServiceKill(sessionId);
   });
 }
