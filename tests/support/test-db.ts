@@ -26,18 +26,14 @@ export const ensureTestDatabaseSchema = () => {
   rmSync(`${testDbPath}-wal`, { force: true });
   rmSync(`${testDbPath}-journal`, { force: true });
 
-  execFileSync(
-    prismaBin,
-    ['db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate'],
-    {
-      cwd: repoRoot,
-      stdio: 'pipe',
-      env: {
-        ...process.env,
-        DATABASE_URL: `file:${testDbPath}`,
-      },
+  execFileSync(prismaBin, ['db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate'], {
+    cwd: repoRoot,
+    stdio: 'pipe',
+    env: {
+      ...process.env,
+      DATABASE_URL: `file:${testDbPath}`,
     },
-  );
+  });
 
   initialized = true;
 };
