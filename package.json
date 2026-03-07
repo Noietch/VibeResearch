@@ -17,6 +17,8 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release:mac": "bash scripts/build-release.sh",
+    "release:win": "bash scripts/build-release-win.sh",
+    "release:linux": "bash scripts/build-release-linux.sh",
     "postinstall": "electron-rebuild -f -w better-sqlite3 || true",
     "precommit:check": "vitest run tests/integration/papers.test.ts tests/integration/reading.test.ts tests/integration/projects.test.ts",
     "test": "vitest run",

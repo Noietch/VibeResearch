@@ -1,4 +1,16 @@
 # Changelog
+
+## 2026-03-07 (session 23)
+
+### feat: Add Windows and Linux build scripts
+
+- **Scope**: `scripts/build-release-win.sh`, `scripts/build-release-linux.sh`, `package.json`
+- **Changes**:
+  1. Created `build-release-win.sh` for Windows NSIS installer (x64, arm64)
+  2. Created `build-release-linux.sh` for Linux AppImage (x64, arm64, musl)
+  3. Added `npm run release:win` and `npm run release:linux` scripts
+- **Note**: Builds should ideally run on their target platforms (Windows for .exe, Linux for .AppImage) for best compatibility. Cross-compilation from macOS may require additional setup.
+
 ## 2026-03-07 (session 22)
 
 ### fix: Open PDF hyperlinks in external browser instead of navigating in-app
@@ -6,7 +18,6 @@
 - **Scope**: `src/main/index.ts`
 - **Problem**: Ctrl+clicking a hyperlink inside the PDF viewer (iframe) caused the iframe to navigate to the URL, replacing the PDF and leaving no way to go back.
 - **Fix**: Added `will-frame-navigate` event handler on `win.webContents` to intercept sub-frame (iframe) navigations. External URLs are now opened via `shell.openExternal` and the navigation is cancelled.
-
 
 ## 2026-03-07 (session 21)
 
@@ -22,7 +33,6 @@
   6. **`usage.promptTokens`/`completionTokens` → `usage.inputTokens`/`outputTokens`** — Updated `recordUsage` helper and agentic search usage recording.
 - **Test Design**: All integration tests pass; main process TypeScript type check passes.
 - **Validation**: `npm run precommit:check` — 14 passed, 1 skipped.
-
 
 ## 2026-03-07 (session 20)
 
@@ -47,7 +57,6 @@
   4. **Security handling** — Uses try/catch on `contentWindow.location` access to detect cross-origin navigation (security error = navigated away).
 - **Test Design**: Manual testing - clicking links inside PDF shows overlay with return button.
 - **Validation**: `npm run build` succeeds.
-
 
 ## 2026-03-07 (session 19)
 
