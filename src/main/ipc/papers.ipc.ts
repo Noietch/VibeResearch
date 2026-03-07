@@ -84,6 +84,7 @@ export function setupPapersIpc() {
     }
   });
 
+<<<<<<< HEAD
   ipcMain.handle('papers:getById', async (_, id: string): Promise<IpcResult<unknown>> => {
     try {
       const result = await getPapersService().getById(id);
@@ -93,6 +94,14 @@ export function setupPapersIpc() {
       console.error('[papers:getById] Error:', msg);
       return err(msg);
     }
+=======
+  ipcMain.handle('papers:importLocalPdf', async (_, filePath: string) => {
+    return getPapersService().importLocalPdf(filePath);
+  });
+
+  ipcMain.handle('papers:getById', async (_, id: string) => {
+    return getPapersService().getById(id);
+>>>>>>> 291356b (feat(import): support selecting local PDF files)
   });
 
   ipcMain.handle('papers:getByShortId', async (_, shortId: string): Promise<IpcResult<unknown>> => {

@@ -292,6 +292,7 @@ export const ipc = {
   }) => invoke<PaperItem[]>('papers:list', query ?? {}),
   listTodayPapers: () => invoke<PaperItem[]>('papers:listToday'),
   createPaper: (input: Record<string, unknown>) => invoke<PaperItem>('papers:create', input),
+  importLocalPdf: (filePath: string) => invoke<PaperItem>('papers:importLocalPdf', filePath),
   downloadPaper: (input: string, tags?: string[]) =>
     invoke<{
       paper: PaperItem;
@@ -421,6 +422,7 @@ export const ipc = {
   setProxyScope: (scope: ProxyScope) => invoke<{ success: boolean }>('settings:setProxyScope', scope),
   testProxy: (proxyUrl?: string) => invoke<{ hasProxy: boolean; results: ProxyTestResult[] }>('settings:testProxy', proxyUrl),
   selectFolder: () => invoke<string | null>('settings:selectFolder'),
+  selectPdfFile: () => invoke<string | null>('settings:selectPdfFile'),
   getStorageRoot: () => invoke<string>('settings:getStorageRoot'),
 
   // Shell

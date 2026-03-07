@@ -121,6 +121,48 @@ export class PapersService {
     return this.papersRepository.findByShortId(shortId);
   }
 
+  async importLocalPdf(filePath: string) {
+    const resolvedPath = path.resolve(filePath);
+    const extension = path.extname(resolvedPath).toLowerCase();
+    if (extension !== '.pdf') {
+      throw new Error('Only PDF files are supported');
+    }
+
+    const sourceStats = await fs.stat(resolvedPath).catch(() => null);
+    if (!sourceStats?.isFile()) {
+      throw new Error('Selected PDF file was not found');
+    }
+
+    const title =
+      path
+        .basename(resolvedPath, extension)
+        .replace(/[._-]+/g, ' ')
+        .trim() || 'Untitled PDF';
+    const shortId = await this.generateShortId();
+    const folder = await this.ensurePaperFolder(shortId);
+    const importedPdfPath = path.join(folder, 'paper.pdf');
+
+    await fs.copyFile(resolvedPath, importedPdfPath);
+
+    const created = await this.papersRepository.create({
+      shortId,
+      title,
+      authors: [],
+      source: 'manual',
+      pdfPath: importedPdfPath,
+      tags: ['pdf'],
+    });
+
+    await this.eventsRepository.create({
+      paperId: created.id,
+      source: 'manual',
+      rawTitle: title,
+      rawUrl: resolvedPath,
+    });
+
+    return created;
+  }
+
   async downloadPdf(paperId: string, pdfUrl: string) {
     const paper = await this.papersRepository.findById(paperId);
     if (!paper) throw new Error('Paper not found');
