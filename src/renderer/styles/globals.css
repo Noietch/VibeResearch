@@ -38,3 +38,70 @@
     @apply bg-notion-text-tertiary;
   }
 }
+
+@layer components {
+  .markdown-content pre code.hljs {
+    @apply block text-[13px] leading-6 text-slate-100;
+  }
+
+  .markdown-content :not(pre) > code {
+    @apply rounded bg-black/5 px-1 py-0.5;
+  }
+
+  .markdown-content .hljs-comment,
+  .markdown-content .hljs-quote {
+    color: #94a3b8;
+  }
+
+  .markdown-content .hljs-keyword,
+  .markdown-content .hljs-selector-tag,
+  .markdown-content .hljs-subst {
+    color: #c084fc;
+  }
+
+  .markdown-content .hljs-string,
+  .markdown-content .hljs-doctag,
+  .markdown-content .hljs-title,
+  .markdown-content .hljs-section,
+  .markdown-content .hljs-selector-id,
+  .markdown-content .hljs-selector-class {
+    color: #86efac;
+  }
+
+  .markdown-content .hljs-number,
+  .markdown-content .hljs-literal,
+  .markdown-content .hljs-variable,
+  .markdown-content .hljs-template-variable,
+  .markdown-content .hljs-tag .hljs-attr {
+    color: #fdba74;
+  }
+
+  .markdown-content .hljs-type,
+  .markdown-content .hljs-built_in,
+  .markdown-content .hljs-builtin-name,
+  .markdown-content .hljs-attr,
+  .markdown-content .hljs-attribute,
+  .markdown-content .hljs-meta,
+  .markdown-content .hljs-link {
+    color: #7dd3fc;
+  }
+
+  .markdown-content .hljs-symbol,
+  .markdown-content .hljs-bullet,
+  .markdown-content .hljs-addition {
+    color: #f9a8d4;
+  }
+
+  .markdown-content .hljs-deletion,
+  .markdown-content .hljs-regexp {
+    color: #fca5a5;
+  }
+
+  .markdown-content .hljs-emphasis {
+    font-style: italic;
+  }
+
+  .markdown-content .hljs-strong {
+    font-weight: 700;
+  }
+}

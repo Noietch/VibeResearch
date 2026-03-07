@@ -32,7 +32,6 @@ function setupTestStorage() {
       {
         id: 'test-lightweight',
         name: 'Test Lightweight',
-        kind: 'lightweight',
         backend: 'api',
         provider: 'custom',
         model: TEST_LIGHTWEIGHT_MODEL,
@@ -42,7 +41,6 @@ function setupTestStorage() {
       {
         id: 'test-chat',
         name: 'Test Chat',
-        kind: 'chat',
         backend: 'api',
         provider: 'custom',
         model: TEST_CHAT_MODEL,
@@ -84,7 +82,6 @@ describe('ai-provider service with model kind', () => {
       const config: ModelConfig & { apiKey?: string } = {
         id: 'test',
         name: 'Test Model',
-        kind: 'chat',
         backend: 'api',
         provider: 'custom',
         model: TEST_CHAT_MODEL!,

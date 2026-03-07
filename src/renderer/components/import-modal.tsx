@@ -181,6 +181,17 @@ export function ImportModal({
     await ipc.cancelImport();
   }, []);
 
+  const handleSelectLocalPdf = useCallback(async () => {
+    try {
+      const selected = await ipc.selectPdfFile();
+      if (selected) {
+        setLocalInput(selected);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to select PDF file');
+    }
+  }, []);
+
   // Handle local PDF input
   const handleLocalImport = useCallback(async () => {
     const trimmed = localInput.trim();
@@ -188,7 +199,11 @@ export function ImportModal({
     setStep('importing');
     setError('');
     try {
-      await ipc.downloadPaper(trimmed);
+      if (trimmed.toLowerCase().endsWith('.pdf')) {
+        await ipc.importLocalPdf(trimmed);
+      } else {
+        await ipc.downloadPaper(trimmed);
+      }
       onImported();
       onClose();
     } catch (err) {
@@ -476,20 +491,31 @@ export function ImportModal({
               {tab === 'local' && (
                 <div className="space-y-4">
                   <p className="text-sm text-notion-text-secondary">
-                    Import a paper by arXiv ID or URL.
+                    Import a paper by arXiv ID, URL, or a local PDF file.
                   </p>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                      arXiv ID or URL
+                      arXiv ID, URL, or local PDF path
                     </label>
-                    <input
-                      value={localInput}
-                      onChange={(e) => setLocalInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleLocalImport()}
-                      placeholder="e.g. 2401.12345 or https://arxiv.org/abs/2401.12345"
-                      className="w-full rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                      disabled={step === 'importing'}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={localInput}
+                        onChange={(e) => setLocalInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleLocalImport()}
+                        placeholder="e.g. 2401.12345, https://arxiv.org/abs/2401.12345, or /path/to/paper.pdf"
+                        className="w-full rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        disabled={step === 'importing'}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSelectLocalPdf}
+                        disabled={step === 'importing'}
+                        className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-notion-border px-3 py-2.5 text-sm font-medium text-notion-text hover:bg-notion-sidebar disabled:opacity-50"
+                      >
+                        <FileText size={14} />
+                        Choose PDF
+                      </button>
+                    </div>
                   </div>
                   {step === 'importing' && (
                     <div className="flex items-center gap-2 text-sm text-notion-text-secondary">

@@ -5,9 +5,11 @@ import { setupPapersIpc } from './ipc/papers.ipc';
 import { setupReadingIpc } from './ipc/reading.ipc';
 import { setupIngestIpc } from './ipc/ingest.ipc';
 import { setupProjectsIpc } from './ipc/projects.ipc';
+import { appendLog, getLogFilePath } from './services/app-log.service';
 import { setupProvidersIpc } from './ipc/providers.ipc';
 import { setupCliToolsIpc } from './ipc/cli-tools.ipc';
 import { setupModelsIpc } from './ipc/models.ipc';
+import { startAgentLocalService, stopAgentLocalService } from './services/agent-local.service';
 import { setupTokenUsageIpc } from './ipc/token-usage.ipc';
 import { setupTaggingIpc } from './ipc/tagging.ipc';
 import { ensureStorageDir, getDbPath } from './store/storage-path';
@@ -49,10 +51,22 @@ if (!process.env.PRISMA_QUERY_ENGINE_LIBRARY) {
       path.join(__dirname, '../native/libquery_engine-darwin-arm64.dylib.node'),
       path.join(__dirname, '../native/libquery_engine-darwin-x64.dylib.node'),
       // Dev fallback
-      path.join(__dirname, '../../node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node'),
-      path.join(__dirname, '../../../node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node'),
-      path.join(__dirname, '../../node_modules/.prisma/client/libquery_engine-darwin-x64.dylib.node'),
-      path.join(__dirname, '../../../node_modules/.prisma/client/libquery_engine-darwin-x64.dylib.node'),
+      path.join(
+        __dirname,
+        '../../node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node',
+      ),
+      path.join(
+        __dirname,
+        '../../../node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node',
+      ),
+      path.join(
+        __dirname,
+        '../../node_modules/.prisma/client/libquery_engine-darwin-x64.dylib.node',
+      ),
+      path.join(
+        __dirname,
+        '../../../node_modules/.prisma/client/libquery_engine-darwin-x64.dylib.node',
+      ),
     );
   } else if (platform === 'win32') {
     // Windows (x64 only)
@@ -71,12 +85,30 @@ if (!process.env.PRISMA_QUERY_ENGINE_LIBRARY) {
       path.join(__dirname, '../native/libquery_engine-linux-musl-openssl-3.0.x.so.node'),
       path.join(__dirname, '../native/libquery_engine-debian-openssl-3.0.x.so.node'),
       // Dev fallback
-      path.join(__dirname, '../../node_modules/.prisma/client/libquery_engine-linux-musl-arm64-openssl-3.0.x.so.node'),
-      path.join(__dirname, '../../../node_modules/.prisma/client/libquery_engine-linux-musl-arm64-openssl-3.0.x.so.node'),
-      path.join(__dirname, '../../node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node'),
-      path.join(__dirname, '../../../node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node'),
-      path.join(__dirname, '../../node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node'),
-      path.join(__dirname, '../../../node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node'),
+      path.join(
+        __dirname,
+        '../../node_modules/.prisma/client/libquery_engine-linux-musl-arm64-openssl-3.0.x.so.node',
+      ),
+      path.join(
+        __dirname,
+        '../../../node_modules/.prisma/client/libquery_engine-linux-musl-arm64-openssl-3.0.x.so.node',
+      ),
+      path.join(
+        __dirname,
+        '../../node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node',
+      ),
+      path.join(
+        __dirname,
+        '../../../node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node',
+      ),
+      path.join(
+        __dirname,
+        '../../node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node',
+      ),
+      path.join(
+        __dirname,
+        '../../../node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node',
+      ),
     );
   }
 
@@ -221,6 +253,7 @@ function setupFileIpc() {
 }
 
 app.whenReady().then(async () => {
+  appendLog('app', 'startup', { logFile: getLogFilePath('agent.log') }, 'agent.log');
   // Set macOS Dock icon explicitly (BrowserWindow icon param doesn't work on macOS)
   try {
     if (process.platform === 'darwin' && app.dock) {
@@ -234,6 +267,7 @@ app.whenReady().then(async () => {
   }
 
   await ensureDatabase();
+  await startAgentLocalService();
 
   // One-time tag category migration (after DB is ready)
   import('./services/tagging.service')
@@ -272,4 +306,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  stopAgentLocalService();
 });

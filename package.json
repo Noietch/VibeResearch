@@ -35,10 +35,15 @@
     "@nivo/line": "^0.99.0",
     "@prisma/client": "^6.4.1",
     "fuse.js": "^7.1.0",
+    "highlight.js": "^11.11.1",
     "https-proxy-agent": "^7.0.6",
     "pdf-parse": "^2.4.5",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
-    "sql.js": "^1.14.1"
+    "sql.js": "^1.14.1",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
@@ -54,6 +59,8 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@types/sql.js": "^1.4.9",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "@vitejs/plugin-react": "^4.4.1",
     "ai": "^6.0.116",
     "autoprefixer": "^10.4.27",
@@ -63,6 +70,7 @@
     "electron": "35.7.5",
     "electron-builder": "^25.1.8",
     "electron-rebuild": "^3.2.9",
+    "eslint": "^10.0.3",
     "framer-motion": "^12.4.7",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",

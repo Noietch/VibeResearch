@@ -88,6 +88,20 @@ export function setupModelsIpc() {
   });
 
   ipcMain.handle(
+    'models:getAgentConfigStatus',
+    async (_, tool: 'claude-code' | 'codex' | 'custom') => {
+      return modelsService.getAgentConfigStatus(tool);
+    },
+  );
+
+  ipcMain.handle(
+    'models:getAgentConfigContents',
+    async (_, tool: 'claude-code' | 'codex' | 'custom') => {
+      return modelsService.getAgentConfigContents(tool);
+    },
+  );
+
+  ipcMain.handle(
     'models:testConnection',
     async (
       _,

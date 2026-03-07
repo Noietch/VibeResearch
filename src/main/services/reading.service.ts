@@ -13,6 +13,57 @@ export interface ChatMessage {
   ts?: number;
 }
 
+export interface PaperAnalysis {
+  summary: string;
+  problem: string;
+  method: string;
+  contributions: string[];
+  evidence: string;
+  limitations: string[];
+  applications: string[];
+  questions: string[];
+  tags: string[];
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  try {
+    return JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function normalizeAnalysisPayload(
+  payload: Record<string, unknown> | null,
+  fallbackText: string,
+): PaperAnalysis {
+  return {
+    summary: normalizeString(payload?.summary) || fallbackText.trim(),
+    problem: normalizeString(payload?.problem),
+    method: normalizeString(payload?.method),
+    contributions: normalizeStringArray(payload?.contributions),
+    evidence: normalizeString(payload?.evidence),
+    limitations: normalizeStringArray(payload?.limitations),
+    applications: normalizeStringArray(payload?.applications),
+    questions: normalizeStringArray(payload?.questions),
+    tags: normalizeStringArray(payload?.tags),
+  };
+}
+
 export interface CreateReadingInput {
   paperId?: string;
   type: 'paper' | 'code';
@@ -278,6 +329,122 @@ export class ReadingService {
     }
 
     return fullText;
+  }
+
+  async analyzePaper(
+    input: { paperId: string; pdfUrl?: string },
+    onChunk: (chunk: string) => void,
+    signal?: AbortSignal,
+  ): Promise<{ noteId: string; content: PaperAnalysis }> {
+    const paper = await this.papersRepository.findById(input.paperId).catch(() => null);
+    if (!paper) {
+      throw new Error('Paper not found');
+    }
+
+    const modelConfig = getActiveModel('chat');
+    if (!modelConfig) {
+      throw new Error('No chat model configured. Please set up a chat model in Settings.');
+    }
+
+    const configWithKey = getModelWithKey(modelConfig.id);
+    if (!configWithKey?.apiKey) {
+      throw new Error('No API key configured for the chat model.');
+    }
+
+    const model = getLanguageModelFromConfig(configWithKey);
+
+    let pdfContext = '';
+    if (paper.shortId && (input.pdfUrl || paper.pdfPath)) {
+      try {
+        pdfContext = await getPaperExcerptCached(
+          input.paperId,
+          paper.shortId,
+          input.pdfUrl,
+          paper.pdfPath ?? undefined,
+          12000,
+        );
+      } catch {
+        pdfContext = '';
+      }
+    }
+
+    const systemPrompt = [
+      'You are a research paper analysis assistant.',
+      'Analyze the paper deeply and return ONLY valid JSON.',
+      'Do not output markdown, code fences, or explanatory prose outside the JSON object.',
+      'Be concrete, evidence-based, and concise.',
+      'Use the same language as the source paper unless the paper is unclear.',
+      'Return exactly these keys: summary, problem, method, contributions, evidence, limitations, applications, questions, tags.',
+      'contributions, limitations, applications, questions, tags must be JSON arrays of strings.',
+    ].join(' ');
+
+    const promptParts: string[] = [
+      `Title: ${paper.title}`,
+      ...(paper.authors?.length ? [`Authors: ${(paper.authors as string[]).join(', ')}`] : []),
+      ...(paper.year ? [`Year: ${paper.year}`] : []),
+      ...(paper.abstract ? [`Abstract:\n${paper.abstract}`] : []),
+      ...(pdfContext ? [`Paper excerpt:\n${pdfContext}`] : []),
+      'Return JSON in this shape:',
+      JSON.stringify(
+        {
+          summary: 'One concise paragraph',
+          problem: 'What problem the paper solves',
+          method: 'How it solves it',
+          contributions: ['Contribution 1', 'Contribution 2'],
+          evidence: 'What experiments/results support the claims',
+          limitations: ['Limitation 1'],
+          applications: ['Use case 1'],
+          questions: ['Open question 1'],
+          tags: ['tag-1', 'tag-2'],
+        },
+        null,
+        2,
+      ),
+    ];
+
+    const { textStream } = streamText({
+      model,
+      system: systemPrompt,
+      prompt: promptParts.join('\n\n'),
+      maxTokens: 4096,
+      abortSignal: signal,
+    });
+
+    let fullText = '';
+    for await (const chunk of textStream) {
+      fullText += chunk;
+      onChunk(chunk);
+    }
+
+    const parsed = parseJsonObject(fullText);
+    const content = normalizeAnalysisPayload(parsed, fullText);
+    const existing = (await this.readingRepository.listByPaper(input.paperId)).find((note) =>
+      note.title.startsWith('Analysis:'),
+    );
+
+    if (existing) {
+      const updated = await this.readingRepository.update(
+        existing.id,
+        content as unknown as Record<string, unknown>,
+      );
+      return {
+        noteId: updated.id,
+        content,
+      };
+    }
+
+    const created = await this.readingRepository.create({
+      paperId: input.paperId,
+      type: 'paper',
+      title: `Analysis: ${paper.title}`,
+      content: content as unknown as Record<string, unknown>,
+      version: 1,
+    });
+
+    return {
+      noteId: created.id,
+      content,
+    };
   }
 
   /**

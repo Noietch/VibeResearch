@@ -131,7 +131,12 @@ export function NotesPage() {
         if (readingNote) {
           setCurrentNoteId(readingNote.id);
           if (readingNote.content) {
-            setMarkdown(sectionsToMarkdown(readingNote.content));
+            const stringContent = Object.fromEntries(
+              Object.entries(readingNote.content)
+                .filter(([, value]) => typeof value === 'string')
+                .map(([key, value]) => [key, value as string]),
+            );
+            setMarkdown(sectionsToMarkdown(stringContent));
           }
         }
       })

@@ -7,6 +7,10 @@ import {
   type ModelConfig,
   type ModelKind,
   type ModelBackend,
+  type AgentToolKind,
+  type AgentConfigStatus,
+  type AgentConfigContents,
+  type CliTestDiagnostics,
   type ProviderKind,
   type CliConfig,
   type TokenUsageRecord,
@@ -190,7 +194,6 @@ function AddToolModal({ onAdd, onClose }: { onAdd: (t: CliConfig) => void; onClo
   const [command, setCommand] = useState('');
   const [provider, setProvider] = useState<ProviderKind>('anthropic');
   const [envVars, setEnvVars] = useState(PROVIDER_ENV_DEFAULTS['anthropic']);
-
   // ESC to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -328,7 +331,13 @@ function CliToolCard({
   onDelete: () => void;
 }) {
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    error?: string;
+    output?: string;
+    diagnostics?: CliTestDiagnostics;
+    logFile?: string;
+  } | null>(null);
   const [showEnv, setShowEnv] = useState(false);
 
   const providerLabel =
@@ -345,7 +354,7 @@ function CliToolCard({
       const res = await ipc.testCli(bin, extraArgs || undefined, tool.envVars || undefined);
       setTestResult(
         res.success
-          ? { success: true, error: undefined }
+          ? { success: true, error: undefined, output: res.output }
           : { success: false, error: res.error ?? 'Failed' },
       );
     } catch (e) {
@@ -450,7 +459,9 @@ function CliToolCard({
                 <X size={13} className="shrink-0 text-red-500" strokeWidth={2.5} />
               )}
               <span className="font-mono truncate">
-                {testResult.success ? 'Command found' : (testResult.error?.slice(0, 100) ?? 'Failed')}
+                {(testResult.success
+                  ? (testResult.output?.slice(0, 300) ?? 'Command found')
+                  : (testResult.error?.slice(0, 300) ?? 'Failed'))}
               </span>
             </motion.div>
           )}
@@ -845,6 +856,230 @@ const API_PROVIDER_OPTIONS: Array<{
   { id: 'custom', label: 'Custom (OpenAI-compatible)' },
 ];
 
+const AGENT_TOOL_OPTIONS: Array<{
+  id: AgentToolKind;
+  label: string;
+  defaultName: string;
+  defaultCommand: string;
+  configLabel: string;
+  configPlaceholder: string;
+  authLabel?: string;
+  authPlaceholder?: string;
+}> = [
+  {
+    id: 'claude-code',
+    label: 'Claude Code',
+    defaultName: 'Claude Code',
+    defaultCommand: 'claude',
+    configLabel: 'Claude Settings JSON',
+    configPlaceholder: `{
+  "theme": "system"
+}`,
+  },
+  {
+    id: 'codex',
+    label: 'Codex',
+    defaultName: 'Codex',
+    defaultCommand: 'codex',
+    configLabel: 'Codex Config TOML',
+    configPlaceholder: `model = "gpt-5"
+reasoning_effort = "high"`,
+    authLabel: 'Codex Auth JSON',
+    authPlaceholder: `{
+  "OPENAI_API_KEY": "..."
+}`,
+  },
+  {
+    id: 'custom',
+    label: 'Custom CLI',
+    defaultName: 'Custom Agent',
+    defaultCommand: '',
+    configLabel: 'Config File Content',
+    configPlaceholder: 'Optional config content managed by the app',
+    authLabel: 'Auth File Content',
+    authPlaceholder: 'Optional auth content managed by the app',
+  },
+];
+
+function getAgentToolMeta(tool: AgentToolKind) {
+  return AGENT_TOOL_OPTIONS.find((option) => option.id === tool) ?? AGENT_TOOL_OPTIONS[2];
+}
+
+function getAgentConfigFieldState(
+  tool: AgentToolKind,
+  status: AgentConfigStatus | null,
+  configContent: string,
+  authContent: string,
+) {
+  if (!status || tool === 'custom')
+    return [] as Array<{ label: string; source: 'app' | 'system' | 'missing'; path: string }>;
+
+  if (tool === 'claude-code') {
+    const file = status.files[0];
+    return [
+      {
+        label: 'Claude settings',
+        source: configContent.trim() ? 'app' : file?.exists ? 'system' : 'missing',
+        path: file?.path ?? '~/.claude/settings.json',
+      },
+    ];
+  }
+
+  const configFile = status.files.find((file) => file.path.endsWith('config.toml'));
+  const authFile = status.files.find((file) => file.path.endsWith('auth.json'));
+  return [
+    {
+      label: 'Codex config',
+      source: configContent.trim() ? 'app' : configFile?.exists ? 'system' : 'missing',
+      path: configFile?.path ?? '~/.codex/config.toml',
+    },
+    {
+      label: 'Codex auth',
+      source: authContent.trim() ? 'app' : authFile?.exists ? 'system' : 'missing',
+      path: authFile?.path ?? '~/.codex/auth.json',
+    },
+  ];
+}
+
+function AgentConfigHint({
+  tool,
+  configContent,
+  authContent,
+}: {
+  tool: AgentToolKind;
+  configContent: string;
+  authContent: string;
+}) {
+  const [status, setStatus] = useState<AgentConfigStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (tool === 'custom') {
+      setStatus(null);
+      return;
+    }
+    ipc.getAgentConfigStatus(tool).then((result) => {
+      if (!cancelled) setStatus(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tool]);
+
+  if (tool === 'custom') return null;
+
+  const entries = getAgentConfigFieldState(tool, status, configContent, authContent);
+  if (!status || entries.length === 0) {
+    return (
+      <div className="rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2 text-xs text-notion-text-tertiary">
+        Checking local agent config files…
+      </div>
+    );
+  }
+
+  const missingEntries = entries.filter((entry) => entry.source === 'missing');
+  const usingSystemEntries = entries.filter((entry) => entry.source === 'system');
+  const usingAppEntries = entries.filter((entry) => entry.source === 'app');
+
+  if (missingEntries.length > 0) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        Missing required agent config: {missingEntries.map((entry) => entry.path).join(' · ')}.
+        Paste it here or add it under your home directory.
+      </div>
+    );
+  }
+
+  if (usingAppEntries.length > 0) {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+        Using app-managed agent config. System files stay as fallback only for any field you leave
+        empty.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+      Auto-reading system config from {usingSystemEntries.map((entry) => entry.path).join(' · ')}.
+    </div>
+  );
+}
+
+function CliDiagnosticsPanel({
+  diagnostics,
+  logFile,
+}: {
+  diagnostics?: CliTestDiagnostics;
+  logFile?: string;
+}) {
+  if (!diagnostics) return null;
+
+  const blocks = [
+    diagnostics.structuredOutput
+      ? { label: 'Structured output', value: diagnostics.structuredOutput }
+      : null,
+    diagnostics.stdout ? { label: 'Raw stdout / JSONL', value: diagnostics.stdout } : null,
+    diagnostics.stderr ? { label: 'Raw stderr', value: diagnostics.stderr } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+
+  return (
+    <details className="mt-2 rounded-lg border border-notion-border bg-white/70">
+      <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-notion-text-secondary">
+        Show CLI diagnostics
+      </summary>
+      <div className="space-y-2 border-t border-notion-border px-3 py-3">
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          Diagnostics preview in the frontend is still under development. Please use the saved log
+          and stdout/stderr files as the source of truth for now.
+        </div>
+        <div className="text-[11px] text-notion-text-tertiary">
+          <span className="font-medium text-notion-text-secondary">Command:</span>{' '}
+          {diagnostics.command} {diagnostics.args.join(' ')}
+          {diagnostics.timedOut
+            ? ' · timed out'
+            : diagnostics.exitCode !== undefined
+              ? ` · exit ${String(diagnostics.exitCode)}`
+              : ''}
+        </div>
+        {blocks.map((block) => (
+          <div key={block.label}>
+            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-notion-text-tertiary">
+              {block.label}
+            </div>
+            <pre className="max-h-56 overflow-auto rounded-md bg-notion-sidebar px-3 py-2 text-[11px] leading-5 text-notion-text whitespace-pre-wrap break-words">
+              {block.value}
+            </pre>
+          </div>
+        ))}
+        {logFile && (
+          <div className="text-[11px] text-notion-text-tertiary">
+            <span className="font-medium text-notion-text-secondary">Log file:</span> {logFile}
+          </div>
+        )}
+        {diagnostics.stdoutFile && (
+          <div className="text-[11px] text-notion-text-tertiary">
+            <span className="font-medium text-notion-text-secondary">Stdout file:</span>{' '}
+            {diagnostics.stdoutFile}
+          </div>
+        )}
+        {diagnostics.stderrFile && (
+          <div className="text-[11px] text-notion-text-tertiary">
+            <span className="font-medium text-notion-text-secondary">Stderr file:</span>{' '}
+            {diagnostics.stderrFile}
+          </div>
+        )}
+        {diagnostics.structuredOutputFile && (
+          <div className="text-[11px] text-notion-text-tertiary">
+            <span className="font-medium text-notion-text-secondary">Structured file:</span>{' '}
+            {diagnostics.structuredOutputFile}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function makeModelId() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -855,7 +1090,10 @@ function AddModelModal({
   onClose,
 }: {
   defaultKind: ModelKind;
-  onAdd: (config: Omit<ModelConfig, 'hasApiKey'> & { apiKey?: string }) => void;
+  onAdd: (
+    config: Omit<ModelConfig, 'hasApiKey'> & { apiKey?: string },
+    activateKind?: ModelKind,
+  ) => void;
   onClose: () => void;
 }) {
   const backend = KIND_BACKEND[defaultKind];
@@ -864,12 +1102,24 @@ function AddModelModal({
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseURL, setBaseURL] = useState('');
-  const [command, setCommand] = useState('');
+  const [agentTool, setAgentTool] = useState<AgentToolKind>(
+    defaultKind === 'agent' ? 'claude-code' : 'custom',
+  );
+  const [command, setCommand] = useState(defaultKind === 'agent' ? 'claude' : '');
   const [envVars, setEnvVars] = useState('');
+  const [configContent, setConfigContent] = useState('');
+  const [authContent, setAuthContent] = useState('');
+  const [systemAgentContents, setSystemAgentContents] = useState<AgentConfigContents | null>(null);
   const [showKey, setShowKey] = useState(false);
   const [providerOpen, setProviderOpen] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    error?: string;
+    output?: string;
+    diagnostics?: CliTestDiagnostics;
+    logFile?: string;
+  } | null>(null);
   // ESC to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -879,41 +1129,89 @@ function AddModelModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    if (defaultKind !== 'agent') return;
+    const meta = getAgentToolMeta(agentTool);
+    setCommand((prev) => (prev.trim() ? prev : meta.defaultCommand));
+    setName((prev) => (prev.trim() ? prev : meta.defaultName));
+  }, [agentTool, defaultKind]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (backend !== 'cli' || agentTool === 'custom') {
+      setSystemAgentContents(null);
+      return;
+    }
+    ipc.getAgentConfigContents(agentTool).then((contents) => {
+      if (!cancelled) setSystemAgentContents(contents);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [backend, agentTool]);
+
+  const displayedConfigContent = configContent || systemAgentContents?.configContent || '';
+  const displayedAuthContent = authContent || systemAgentContents?.authContent || '';
+
   const handleAdd = async () => {
     const displayName =
       name.trim() || (backend === 'api' ? `${provider}/${model}` : command.split(' ')[0]);
     if (!displayName) return;
-    await onAdd({
-      id: makeModelId(),
-      name: displayName,
-      kind: defaultKind,
-      backend,
-      ...(backend === 'api'
-        ? {
-            provider,
-            model,
-            apiKey: apiKey.trim() || undefined,
-            baseURL: baseURL.trim() || undefined,
-          }
-        : {}),
-      ...(backend === 'cli' ? { command: command.trim(), envVars: envVars.trim() } : {}),
-    });
+    await onAdd(
+      {
+        id: makeModelId(),
+        name: displayName,
+        backend,
+        ...(backend === 'api'
+          ? {
+              provider,
+              model,
+              apiKey: apiKey.trim() || undefined,
+              baseURL: baseURL.trim() || undefined,
+            }
+          : {}),
+        ...(backend === 'cli'
+          ? {
+              command: command.trim(),
+              envVars: envVars.trim(),
+              agentTool: defaultKind === 'agent' ? agentTool : undefined,
+              configContent: configContent.trim() || undefined,
+              authContent: authContent.trim() || undefined,
+            }
+          : {}),
+      },
+      defaultKind,
+    );
     onClose();
   };
 
   const isValid = backend === 'api' ? !!model.trim() : !!command.trim();
 
   const handleTest = async () => {
-    if (backend !== 'api' || !model.trim()) return;
+    if (backend === 'api') {
+      if (!model.trim()) return;
+    } else if (!command.trim()) {
+      return;
+    }
+
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await ipc.testModelConnection({
-        provider,
-        model: model.trim(),
-        apiKey: apiKey.trim() || undefined,
-        baseURL: baseURL.trim() || undefined,
-      });
+      const result =
+        backend === 'api'
+          ? await ipc.testModelConnection({
+              provider,
+              model: model.trim(),
+              apiKey: apiKey.trim() || undefined,
+              baseURL: baseURL.trim() || undefined,
+            })
+          : await ipc.testAgentCli({
+              command: command.trim(),
+              envVars: envVars.trim() || undefined,
+              agentTool,
+              configContent: configContent.trim() || undefined,
+              authContent: authContent.trim() || undefined,
+            });
       setTestResult(result);
     } catch (err) {
       setTestResult({ success: false, error: err instanceof Error ? err.message : String(err) });
@@ -942,7 +1240,9 @@ function AddModelModal({
             Add {MODEL_KIND_META[defaultKind].label} Model
           </h2>
           <p className="mb-4 text-xs text-notion-text-tertiary">
-            {backend === 'cli' ? 'CLI subprocess' : 'API direct'}
+            {backend === 'cli'
+              ? 'CLI subprocess'
+              : 'API direct · saved once, reusable across Lightweight and Chat'}
           </p>
 
           <div className="space-y-4">
@@ -1064,6 +1364,34 @@ function AddModelModal({
               </>
             ) : (
               <>
+                {defaultKind === 'agent' && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Agent Preset
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {AGENT_TOOL_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setAgentTool(option.id);
+                            setCommand(option.defaultCommand);
+                            if (!name.trim()) setName(option.defaultName);
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                            agentTool === option.id
+                              ? 'border-notion-text bg-notion-text text-white'
+                              : 'border-notion-border text-notion-text hover:bg-notion-sidebar'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* CLI Command */}
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
@@ -1089,35 +1417,86 @@ function AddModelModal({
                     className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
+                {defaultKind === 'agent' && (
+                  <>
+                    <AgentConfigHint
+                      tool={agentTool}
+                      configContent={configContent}
+                      authContent={authContent}
+                    />
+                    {!configContent.trim() && !!systemAgentContents?.configContent && (
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                        Showing config loaded from the system file. It will only be saved into the
+                        app if you edit this field.
+                      </div>
+                    )}
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                        {getAgentToolMeta(agentTool).configLabel}{' '}
+                        <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                      </label>
+                      <textarea
+                        value={displayedConfigContent}
+                        onChange={(e) => setConfigContent(e.target.value)}
+                        rows={6}
+                        placeholder={getAgentToolMeta(agentTool).configPlaceholder}
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                    {getAgentToolMeta(agentTool).authLabel && (
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                          {getAgentToolMeta(agentTool).authLabel}{' '}
+                          <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                        </label>
+                        <textarea
+                          value={displayedAuthContent}
+                          onChange={(e) => setAuthContent(e.target.value)}
+                          rows={5}
+                          placeholder={getAgentToolMeta(agentTool).authPlaceholder}
+                          className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
 
           {/* Test result */}
-          <AnimatePresence>
-            {testResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
-                className={`mt-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
-                  testResult.success
-                    ? 'border-green-200 bg-green-50 text-green-700'
-                    : 'border-red-200 bg-red-50 text-red-600'
-                }`}
-              >
-                {testResult.success ? (
-                  <Check size={15} className="mt-px shrink-0 text-green-600" strokeWidth={2.5} />
-                ) : (
-                  <X size={15} className="mt-px shrink-0 text-red-500" strokeWidth={2.5} />
-                )}
-                <span className="leading-snug">
-                  {testResult.success ? 'Connection successful!' : (testResult.error || 'Connection failed')}
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {testResult && (
+            <div>
+              <AnimatePresence>
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.15 }}
+                  className={`mt-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
+                    testResult.success
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-red-200 bg-red-50 text-red-600'
+                  }`}
+                >
+                  {testResult.success ? (
+                    <Check size={15} className="mt-px shrink-0 text-green-600" strokeWidth={2.5} />
+                  ) : (
+                    <X size={15} className="mt-px shrink-0 text-red-500" strokeWidth={2.5} />
+                  )}
+                  <span className="leading-snug">
+                    {testResult.success
+                      ? (testResult.output || 'Connection successful!')
+                      : (testResult.error || 'Connection failed')}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+              <CliDiagnosticsPanel
+                diagnostics={testResult.diagnostics}
+                logFile={testResult.logFile}
+              />
+            </div>
+          )}
 
           <div className="mt-5 flex justify-end gap-2">
             <button
@@ -1126,10 +1505,10 @@ function AddModelModal({
             >
               Cancel
             </button>
-            {backend === 'api' && (
+            {(backend === 'api' || backend === 'cli') && (
               <button
                 onClick={handleTest}
-                disabled={testing || !model.trim()}
+                disabled={testing || (backend === 'api' ? !model.trim() : !command.trim())}
                 className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
               >
                 {testing ? (
@@ -1175,12 +1554,22 @@ function EditModelModal({
   const [modelName, setModelName] = useState(model.model ?? '');
   const [apiKey, setApiKey] = useState('');
   const [baseURL, setBaseURL] = useState(model.baseURL ?? '');
+  const [agentTool, setAgentTool] = useState<AgentToolKind>(model.agentTool ?? 'custom');
   const [command, setCommand] = useState(model.command ?? '');
   const [envVars, setEnvVars] = useState(model.envVars ?? '');
+  const [configContent, setConfigContent] = useState(model.configContent ?? '');
+  const [authContent, setAuthContent] = useState(model.authContent ?? '');
+  const [systemAgentContents, setSystemAgentContents] = useState<AgentConfigContents | null>(null);
   const [showKey, setShowKey] = useState(false);
   const [providerOpen, setProviderOpen] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    error?: string;
+    output?: string;
+    diagnostics?: CliTestDiagnostics;
+    logFile?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Load API key on mount
@@ -1194,6 +1583,23 @@ function EditModelModal({
       setLoading(false);
     }
   }, [model.id, backend]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (backend !== 'cli' || agentTool === 'custom') {
+      setSystemAgentContents(null);
+      return;
+    }
+    ipc.getAgentConfigContents(agentTool).then((contents) => {
+      if (!cancelled) setSystemAgentContents(contents);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [backend, agentTool]);
+
+  const displayedConfigContent = configContent || systemAgentContents?.configContent || '';
+  const displayedAuthContent = authContent || systemAgentContents?.authContent || '';
 
   // ESC to close
   useEffect(() => {
@@ -1211,7 +1617,6 @@ function EditModelModal({
     await onSave({
       id: model.id,
       name: displayName,
-      kind: model.kind,
       backend,
       ...(backend === 'api'
         ? {
@@ -1221,7 +1626,15 @@ function EditModelModal({
             baseURL: baseURL.trim() || undefined,
           }
         : {}),
-      ...(backend === 'cli' ? { command: command.trim(), envVars: envVars.trim() } : {}),
+      ...(backend === 'cli'
+        ? {
+            command: command.trim(),
+            envVars: envVars.trim(),
+            agentTool: model.backend === 'cli' ? agentTool : undefined,
+            configContent: configContent.trim() || undefined,
+            authContent: authContent.trim() || undefined,
+          }
+        : {}),
     });
     onClose();
   };
@@ -1229,16 +1642,30 @@ function EditModelModal({
   const isValid = backend === 'api' ? !!modelName.trim() : !!command.trim();
 
   const handleTest = async () => {
-    if (backend !== 'api' || !modelName.trim()) return;
+    if (backend === 'api') {
+      if (!modelName.trim()) return;
+    } else if (!command.trim()) {
+      return;
+    }
+
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await ipc.testModelConnection({
-        provider,
-        model: modelName.trim(),
-        apiKey: apiKey.trim() || undefined,
-        baseURL: baseURL.trim() || undefined,
-      });
+      const result =
+        backend === 'api'
+          ? await ipc.testModelConnection({
+              provider,
+              model: modelName.trim(),
+              apiKey: apiKey.trim() || undefined,
+              baseURL: baseURL.trim() || undefined,
+            })
+          : await ipc.testAgentCli({
+              command: command.trim(),
+              envVars: envVars.trim() || undefined,
+              agentTool,
+              configContent: configContent.trim() || undefined,
+              authContent: authContent.trim() || undefined,
+            });
       setTestResult(result);
     } catch (err) {
       setTestResult({ success: false, error: err instanceof Error ? err.message : String(err) });
@@ -1289,11 +1716,11 @@ function EditModelModal({
           transition={{ duration: 0.15 }}
           className="w-full max-w-lg rounded-2xl border border-notion-border bg-white p-6 shadow-xl"
         >
-          <h2 className="mb-1 text-base font-semibold text-notion-text">
-            Edit {MODEL_KIND_META[model.kind].label} Model
-          </h2>
+          <h2 className="mb-1 text-base font-semibold text-notion-text">Edit Model</h2>
           <p className="mb-4 text-xs text-notion-text-tertiary">
-            {backend === 'cli' ? 'CLI subprocess' : 'API direct'}
+            {backend === 'cli'
+              ? 'CLI subprocess'
+              : 'API direct · changes apply anywhere this model is selected'}
           </p>
 
           <div className="space-y-4">
@@ -1418,6 +1845,33 @@ function EditModelModal({
               </>
             ) : (
               <>
+                {model.backend === 'cli' && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Agent Preset
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {AGENT_TOOL_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setAgentTool(option.id);
+                            setCommand(option.defaultCommand);
+                            if (!name.trim()) setName(option.defaultName);
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                            agentTool === option.id
+                              ? 'border-notion-text bg-notion-text text-white'
+                              : 'border-notion-border text-notion-text hover:bg-notion-sidebar'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* CLI Command */}
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
@@ -1443,35 +1897,80 @@ function EditModelModal({
                     className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
+                {model.backend === 'cli' && (
+                  <>
+                    <AgentConfigHint
+                      tool={agentTool}
+                      configContent={configContent}
+                      authContent={authContent}
+                    />
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                        {getAgentToolMeta(agentTool).configLabel}{' '}
+                        <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                      </label>
+                      <textarea
+                        value={displayedConfigContent}
+                        onChange={(e) => setConfigContent(e.target.value)}
+                        rows={6}
+                        placeholder={getAgentToolMeta(agentTool).configPlaceholder}
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                    {getAgentToolMeta(agentTool).authLabel && (
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                          {getAgentToolMeta(agentTool).authLabel}{' '}
+                          <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                        </label>
+                        <textarea
+                          value={displayedAuthContent}
+                          onChange={(e) => setAuthContent(e.target.value)}
+                          rows={5}
+                          placeholder={getAgentToolMeta(agentTool).authPlaceholder}
+                          className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
 
           {/* Test result */}
-          <AnimatePresence>
-            {testResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
-                className={`mt-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
-                  testResult.success
-                    ? 'border-green-200 bg-green-50 text-green-700'
-                    : 'border-red-200 bg-red-50 text-red-600'
-                }`}
-              >
-                {testResult.success ? (
-                  <Check size={15} className="mt-px shrink-0 text-green-600" strokeWidth={2.5} />
-                ) : (
-                  <X size={15} className="mt-px shrink-0 text-red-500" strokeWidth={2.5} />
-                )}
-                <span className="leading-snug">
-                  {testResult.success ? 'Connection successful!' : (testResult.error || 'Connection failed')}
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {testResult && (
+            <div>
+              <AnimatePresence>
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.15 }}
+                  className={`mt-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
+                    testResult.success
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-red-200 bg-red-50 text-red-600'
+                  }`}
+                >
+                  {testResult.success ? (
+                    <Check size={15} className="mt-px shrink-0 text-green-600" strokeWidth={2.5} />
+                  ) : (
+                    <X size={15} className="mt-px shrink-0 text-red-500" strokeWidth={2.5} />
+                  )}
+                  <span className="leading-snug">
+                    {testResult.success
+                      ? (testResult.output || 'Connection successful!')
+                      : (testResult.error || 'Connection failed')}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+              <CliDiagnosticsPanel
+                diagnostics={testResult.diagnostics}
+                logFile={testResult.logFile}
+              />
+            </div>
+          )}
 
           <div className="mt-5 flex justify-end gap-2">
             <button
@@ -1480,10 +1979,10 @@ function EditModelModal({
             >
               Cancel
             </button>
-            {backend === 'api' && (
+            {(backend === 'api' || backend === 'cli') && (
               <button
                 onClick={handleTest}
-                disabled={testing || !modelName.trim()}
+                disabled={testing || (backend === 'api' ? !modelName.trim() : !command.trim())}
                 className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
               >
                 {testing ? (
@@ -1524,7 +2023,13 @@ function ModelCard({
   onDelete: () => void;
 }) {
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    error?: string;
+    output?: string;
+    diagnostics?: CliTestDiagnostics;
+    logFile?: string;
+  } | null>(null);
 
   const subtitle =
     model.backend === 'api'
@@ -1532,11 +2037,11 @@ function ModelCard({
       : (model.command ?? '—');
 
   const handleTest = async () => {
-    if (model.backend !== 'api') return;
     setTesting(true);
     setTestResult(null);
     try {
       const result = await ipc.testSavedModelConnection(model.id);
+      console.log('[agent-test-result]', model.id, result);
       setTestResult(result);
     } catch (err) {
       setTestResult({ success: false, error: err instanceof Error ? err.message : String(err) });
@@ -1565,7 +2070,7 @@ function ModelCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {model.backend === 'api' && (
+          {(model.backend === 'api' || model.backend === 'cli') && (
             <button
               onClick={handleTest}
               disabled={testing}
@@ -1606,30 +2111,46 @@ function ModelCard({
         </div>
       </div>
 
-      <AnimatePresence>
-        {testResult && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.15 }}
-            className={`mt-3 flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs ${
-              testResult.success
-                ? 'border-green-200 bg-green-50 text-green-700'
-                : 'border-red-200 bg-red-50 text-red-600'
-            }`}
-          >
-            {testResult.success ? (
-              <Check size={13} className="shrink-0 text-green-600" strokeWidth={2.5} />
-            ) : (
-              <X size={13} className="shrink-0 text-red-500" strokeWidth={2.5} />
-            )}
-            <span className="leading-snug">
-              {testResult.success ? 'Connection successful!' : (testResult.error || 'Connection failed')}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Test result */}
+      {testResult && (
+        <div>
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.15 }}
+              className={`mt-3 flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs ${
+                testResult.success
+                  ? 'border-green-200 bg-green-50 text-green-700'
+                  : 'border-red-200 bg-red-50 text-red-600'
+              }`}
+            >
+              {testResult.success ? (
+                <Check size={13} className="shrink-0 text-green-600" strokeWidth={2.5} />
+              ) : (
+                <X size={13} className="shrink-0 text-red-500" strokeWidth={2.5} />
+              )}
+              <span className="leading-snug">
+                {testResult.success
+                  ? (testResult.output || 'Connection successful!')
+                  : (testResult.error || 'Connection failed')}
+              </span>
+            </motion.div>
+          </AnimatePresence>
+          <CliDiagnosticsPanel diagnostics={testResult.diagnostics} logFile={testResult.logFile} />
+          <details className="mt-2 rounded-lg border border-notion-border bg-white/70">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-notion-text-secondary">
+              Show raw test result
+            </summary>
+            <div className="border-t border-notion-border px-3 py-3">
+              <pre className="max-h-56 overflow-auto rounded-md bg-notion-sidebar px-3 py-2 text-[11px] leading-5 text-notion-text whitespace-pre-wrap break-words">
+                {JSON.stringify(testResult, null, 2)}
+              </pre>
+            </div>
+          </details>
+        </div>
+      )}
     </div>
   );
 }
@@ -1699,6 +2220,10 @@ function ModelKindSection({
   );
 }
 
+function getModelsForKind(models: ModelConfig[], kind: ModelKind): ModelConfig[] {
+  return models.filter((model) => model.backend === KIND_BACKEND[kind]);
+}
+
 function ModelsSettings() {
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [activeIds, setActiveIds] = useState<Record<ModelKind, string | null>>({
@@ -1725,10 +2250,16 @@ function ModelsSettings() {
     load();
   }, []);
 
-  const handleAdd = async (config: Omit<ModelConfig, 'hasApiKey'> & { apiKey?: string }) => {
+  const handleAdd = async (
+    config: Omit<ModelConfig, 'hasApiKey'> & { apiKey?: string },
+    activateKind?: ModelKind,
+  ) => {
     try {
       setSaveError(null);
       await ipc.saveModel(config);
+      if (activateKind && !activeIds[activateKind]) {
+        await ipc.setActiveModel(activateKind, config.id);
+      }
       const [ms, ids] = await Promise.all([ipc.listModels(), ipc.getActiveModelIds()]);
       setModels(ms);
       setActiveIds(ids);
@@ -1760,7 +2291,8 @@ function ModelsSettings() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-notion-text-secondary">
-        Configure models for each role. You can add multiple and activate one per role.
+        Configure models for each role. API models are saved once and can be reused by both
+        Lightweight and Chat.
       </p>
       {saveError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-mono text-xs text-red-700">
@@ -1771,7 +2303,7 @@ function ModelsSettings() {
         <ModelKindSection
           key={kind}
           kind={kind}
-          models={models.filter((m) => m.kind === kind)}
+          models={getModelsForKind(models, kind)}
           activeId={activeIds[kind]}
           onSetActive={(id) => handleSetActive(kind, id)}
           onEdit={setEditingModel}
@@ -1814,11 +2346,43 @@ function UsageSettings() {
   const [records, setRecords] = useState<TokenUsageRecord[]>([]);
   const [summary, setSummary] = useState<TokenUsageSummary | null>(null);
   const [view, setView] = useState<'summary' | 'records'>('summary');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadUsage = useMemo(
+    () =>
+      async (showSpinner = false) => {
+        if (showSpinner) setRefreshing(true);
+        try {
+          const [nextRecords, nextSummary] = await Promise.all([
+            ipc.getTokenUsageRecords(),
+            ipc.getTokenUsageSummary(),
+          ]);
+          setRecords(nextRecords);
+          setSummary(nextSummary);
+        } finally {
+          if (showSpinner) setRefreshing(false);
+        }
+      },
+    [],
+  );
 
   useEffect(() => {
-    ipc.getTokenUsageRecords().then((r) => setRecords(r));
-    ipc.getTokenUsageSummary().then((s) => setSummary(s));
-  }, []);
+    loadUsage();
+
+    const interval = window.setInterval(() => {
+      loadUsage();
+    }, 5000);
+
+    const handleFocus = () => {
+      loadUsage();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [loadUsage]);
 
   const handleClear = async () => {
     if (confirm('Clear all token usage data?')) {
@@ -1868,6 +2432,44 @@ function UsageSettings() {
     return n.toString();
   };
 
+  const formatUsageLabel = (provider: string, model: string) => {
+    const normalizedProvider = provider.toLowerCase();
+    if (normalizedProvider === 'codex') {
+      return model && model !== 'codex' ? `Codex · ${model}` : 'Codex';
+    }
+    if (normalizedProvider === 'claude') {
+      return model && model !== 'claude' ? `Claude Code · ${model}` : 'Claude Code';
+    }
+    return `${provider}/${model}`;
+  };
+
+  const agentRecords = useMemo(
+    () => records.filter((record) => record.kind === 'agent'),
+    [records],
+  );
+  const agentSummary = summary?.byKind.agent;
+  const agentByModel = useMemo(() => {
+    const map = new Map<
+      string,
+      { total: number; calls: number; provider: string; model: string }
+    >();
+    for (const record of agentRecords) {
+      const key = formatUsageLabel(record.provider, record.model);
+      const current = map.get(key) ?? {
+        total: 0,
+        calls: 0,
+        provider: record.provider,
+        model: record.model,
+      };
+      current.total += record.totalTokens;
+      current.calls += 1;
+      map.set(key, current);
+    }
+    return Array.from(map.entries())
+      .map(([key, value]) => ({ key, ...value }))
+      .sort((left, right) => right.total - left.total);
+  }, [agentRecords]);
+
   const isEmpty = records.length === 0;
 
   return (
@@ -1904,10 +2506,106 @@ function UsageSettings() {
           <BarChart3 size={32} className="mb-3 text-notion-text-tertiary opacity-40" />
           <p className="text-sm font-medium text-notion-text-secondary">No usage data yet</p>
           <p className="mt-1 text-xs text-notion-text-tertiary">
-            Token usage will appear here after you make AI API calls.
+            Token usage will appear here after you make AI API calls or run an Agent.
           </p>
         </div>
       ) : null}
+
+      {/* Agent highlight */}
+      <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+              Agent Usage
+            </div>
+            <h3 className="mt-3 text-base font-semibold text-notion-text">
+              Codex / Claude Code consumption
+            </h3>
+            <p className="mt-1 text-sm text-notion-text-secondary">
+              Dedicated usage tracking for CLI-based agent runs.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => loadUsage(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white/80 px-3 py-2 text-xs font-medium text-violet-700 hover:bg-white disabled:opacity-50"
+              disabled={refreshing}
+            >
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+            <div className="rounded-xl bg-white/80 px-4 py-3 text-right shadow-sm ring-1 ring-violet-100">
+              <div className="text-2xl font-semibold tabular-nums text-violet-700">
+                {formatNumber(agentSummary?.total ?? 0)}
+              </div>
+              <div className="mt-0.5 text-xs text-notion-text-tertiary">agent tokens</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-violet-100 bg-white/80 px-4 py-3">
+            <div className="text-lg font-semibold tabular-nums text-violet-700">
+              {agentSummary?.calls ?? 0}
+            </div>
+            <div className="mt-0.5 text-xs text-notion-text-tertiary">Agent runs</div>
+          </div>
+          <div className="rounded-xl border border-violet-100 bg-white/80 px-4 py-3">
+            <div className="text-lg font-semibold tabular-nums text-fuchsia-700">
+              {formatNumber(agentSummary?.prompt ?? 0)}
+            </div>
+            <div className="mt-0.5 text-xs text-notion-text-tertiary">Prompt tokens</div>
+          </div>
+          <div className="rounded-xl border border-violet-100 bg-white/80 px-4 py-3">
+            <div className="text-lg font-semibold tabular-nums text-indigo-700">
+              {formatNumber(agentSummary?.completion ?? 0)}
+            </div>
+            <div className="mt-0.5 text-xs text-notion-text-tertiary">Completion tokens</div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-violet-100 bg-white/80">
+          <div className="border-b border-violet-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-violet-700">
+            Agent models
+          </div>
+          <div>
+            {agentByModel.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-notion-text-tertiary">
+                No agent usage recorded yet. Run Codex or Claude Code from the Agent panel, then
+                click Refresh.
+              </div>
+            ) : (
+              agentByModel.map((item, index) => {
+                const maxTotal = Math.max(...agentByModel.map((entry) => entry.total));
+                const pct = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+                return (
+                  <div
+                    key={item.key}
+                    className={`px-4 py-3 ${index < agentByModel.length - 1 ? 'border-b border-violet-100' : ''}`}
+                  >
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-mono text-xs text-notion-text">{item.key}</div>
+                        <div className="mt-0.5 text-xs text-notion-text-tertiary">
+                          {item.calls} run{item.calls !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold tabular-nums text-violet-700">
+                        {formatNumber(item.total)}
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-violet-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Line Chart */}
       {lineChartData.length > 0 && lineChartData[0].data.length > 0 && (
@@ -1989,7 +2687,6 @@ function UsageSettings() {
         </div>
       )}
 
-      {/* By Model / Records tabs */}
       {!isEmpty && (
         <>
           <div className="flex items-center gap-1 rounded-lg border border-notion-border bg-notion-sidebar p-1">
@@ -2010,32 +2707,34 @@ function UsageSettings() {
 
           {view === 'summary' && summary && (
             <div className="rounded-xl border border-notion-border bg-white">
-              {Object.entries(summary.byModel).map(([model, data], i, arr) => {
-                const maxTotal = Math.max(...Object.values(summary.byModel).map((d) => d.total));
-                const pct = maxTotal > 0 ? (data.total / maxTotal) * 100 : 0;
-                return (
-                  <div
-                    key={model}
-                    className={`px-4 py-3 ${i < arr.length - 1 ? 'border-b border-notion-border' : ''}`}
-                  >
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="font-mono text-xs text-notion-text">{model}</span>
-                      <div className="flex items-center gap-3 text-xs text-notion-text-secondary">
-                        <span>{data.calls} calls</span>
-                        <span className="font-semibold text-notion-text">
-                          {formatNumber(data.total)}
-                        </span>
+              {Object.entries(summary.byModel)
+                .sort(([, left], [, right]) => right.total - left.total)
+                .map(([model, data], i, arr) => {
+                  const maxTotal = Math.max(...Object.values(summary.byModel).map((d) => d.total));
+                  const pct = maxTotal > 0 ? (data.total / maxTotal) * 100 : 0;
+                  return (
+                    <div
+                      key={model}
+                      className={`px-4 py-3 ${i < arr.length - 1 ? 'border-b border-notion-border' : ''}`}
+                    >
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="font-mono text-xs text-notion-text">{model}</span>
+                        <div className="flex items-center gap-3 text-xs text-notion-text-secondary">
+                          <span>{data.calls} calls</span>
+                          <span className="font-semibold text-notion-text">
+                            {formatNumber(data.total)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-notion-sidebar">
+                        <div
+                          className="h-full rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                     </div>
-                    <div className="h-1 w-full overflow-hidden rounded-full bg-notion-sidebar">
-                      <div
-                        className="h-full rounded-full bg-blue-500 transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
 
@@ -2071,7 +2770,7 @@ function UsageSettings() {
                             {r.timestamp.slice(0, 16).replace('T', ' ')}
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-notion-text">
-                            {r.provider}/{r.model}
+                            {formatUsageLabel(r.provider, r.model)}
                           </td>
                           <td className="px-3 py-2 text-right text-xs tabular-nums text-notion-text-secondary">
                             {formatNumber(r.promptTokens)}

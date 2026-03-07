@@ -1,21 +1,24 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTabs } from '../../../hooks/use-tabs';
 import {
   ipc,
   onIpc,
   type PaperItem,
+  type PaperAnalysis,
   type ReadingNote,
   type TagInfo,
   type ModelConfig,
+  type TaggingStatus,
   type CliConfig,
-  type SourceEvent,
 } from '../../../hooks/use-ipc';
 import { WysiwygEditor } from '../../../components/wysiwyg-editor';
 import { PdfViewer } from '../../../components/pdf-viewer';
-import { LoadingSpinner } from '../../../components/loading-spinner';
+import { MarkdownContent } from '../../../components/markdown-content';
 import {
   ArrowLeft,
+  AlertTriangle,
+  CheckCircle2,
   Loader2,
   FileText,
   ExternalLink,
@@ -26,6 +29,8 @@ import {
   X,
   Trash2,
   Wand2,
+  RefreshCw,
+  FlaskConical,
   GitBranch,
   GitCommit,
   Download,
@@ -33,16 +38,21 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ArrowUp,
+  Search,
   Square,
   FilePenLine,
   Check,
   Star,
+  Tags,
   ChevronDown,
   FolderOpen,
   BookOpen,
   NotebookPen,
   Github,
   FolderDown,
+  Lightbulb,
+  Sparkles,
+  Target,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
@@ -104,6 +114,398 @@ function markdownToSections(md: string): Record<string, string> {
   return sections;
 }
 
+function isPaperAnalysis(value: unknown): value is PaperAnalysis {
+  if (!value || typeof value !== 'object') return false;
+  const source = value as Record<string, unknown>;
+  return [
+    'summary',
+    'problem',
+    'method',
+    'contributions',
+    'evidence',
+    'limitations',
+    'applications',
+    'questions',
+    'tags',
+  ].some((key) => key in source);
+}
+
+function normalizeAnalysis(value: unknown): PaperAnalysis {
+  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const toText = (input: unknown) => (typeof input === 'string' ? input : '');
+  const toList = (input: unknown) => {
+    if (Array.isArray(input)) {
+      return input.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
+    }
+    if (typeof input === 'string') {
+      return input
+        .split(/\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  return {
+    summary: toText(source.summary),
+    problem: toText(source.problem),
+    method: toText(source.method),
+    contributions: toList(source.contributions),
+    evidence: toText(source.evidence),
+    limitations: toList(source.limitations),
+    applications: toList(source.applications),
+    questions: toList(source.questions),
+    tags: toList(source.tags),
+  };
+}
+
+function AnalysisList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-notion-text-secondary">
+        {title}
+      </div>
+      <ul className="space-y-1.5 text-sm text-notion-text">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2">
+            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-notion-text-secondary" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AnalysisSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-purple-100 bg-white/90 p-4 shadow-sm">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-700/80">
+        {title}
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function AnalysisStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-purple-100 bg-white/80 px-3 py-2 shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-purple-500/80">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-semibold text-notion-text">{value}</div>
+    </div>
+  );
+}
+
+function AnalysisTagPill({ tag }: { tag: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+      {tag}
+    </span>
+  );
+}
+
+function analysisToDraft(analysis: PaperAnalysis) {
+  return {
+    summary: analysis.summary ?? '',
+    problem: analysis.problem ?? '',
+    method: analysis.method ?? '',
+    evidence: analysis.evidence ?? '',
+    contributions: (analysis.contributions ?? []).join('\n'),
+    limitations: (analysis.limitations ?? []).join('\n'),
+    applications: (analysis.applications ?? []).join('\n'),
+    questions: (analysis.questions ?? []).join('\n'),
+    tags: (analysis.tags ?? []).join(', '),
+  };
+}
+
+function draftToAnalysis(draft: ReturnType<typeof analysisToDraft>): PaperAnalysis {
+  const splitLines = (value: string) =>
+    value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const splitTags = (value: string) =>
+    value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  return {
+    summary: draft.summary.trim(),
+    problem: draft.problem.trim(),
+    method: draft.method.trim(),
+    evidence: draft.evidence.trim(),
+    contributions: splitLines(draft.contributions),
+    limitations: splitLines(draft.limitations),
+    applications: splitLines(draft.applications),
+    questions: splitLines(draft.questions),
+    tags: splitTags(draft.tags),
+  };
+}
+
+function AnalysisCard({
+  note,
+  onSaved,
+}: {
+  note: ReadingNote;
+  onSaved: (note: ReadingNote) => void;
+}) {
+  const analysis = normalizeAnalysis(note.content);
+  const contributions = analysis.contributions ?? [];
+  const limitations = analysis.limitations ?? [];
+  const applications = analysis.applications ?? [];
+  const questions = analysis.questions ?? [];
+  const tags = analysis.tags ?? [];
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState(() => analysisToDraft(analysis));
+  const summary = analysis.summary.trim();
+  const evidence = analysis.evidence.trim();
+  const insightCount =
+    contributions.length + limitations.length + applications.length + questions.length;
+  const coverageLabel =
+    insightCount >= 9
+      ? 'Deep read'
+      : insightCount >= 5
+        ? 'Solid pass'
+        : insightCount >= 2
+          ? 'Quick skim'
+          : 'Sparse';
+
+  useEffect(() => {
+    setDraft(analysisToDraft(analysis));
+  }, [note.id, note.updatedAt]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const next = draftToAnalysis(draft);
+      const updated = await ipc.updateReading(note.id, next as unknown as Record<string, unknown>);
+      onSaved(updated);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 via-white to-fuchsia-50/40 shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-purple-100/80 px-4 py-4">
+        <div>
+          <div className="inline-flex items-center gap-2 text-sm font-semibold text-purple-700">
+            <Sparkles size={14} />
+            AI Analysis
+          </div>
+          <div className="mt-1 text-xs text-notion-text-secondary">
+            Structured reading notes for this paper
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="hidden rounded-full border border-purple-200 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-purple-700 sm:block">
+            {coverageLabel}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setDraft(analysisToDraft(analysis));
+                setEditing((prev) => !prev);
+              }}
+              className="rounded-md border border-purple-200 bg-white px-2 py-1 text-[11px] font-medium text-purple-700 hover:bg-purple-50"
+            >
+              {editing ? 'Cancel' : 'Edit'}
+            </button>
+            {editing && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-md bg-purple-600 px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            )}
+            <div className="text-xs text-purple-600/80">Updated {formatDate(note.updatedAt)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="rounded-2xl border border-purple-100 bg-white/95 p-4 shadow-sm">
+            <div className="mb-2 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-600/90">
+              <Sparkles size={13} />
+              TL;DR
+            </div>
+            {editing ? (
+              <textarea
+                value={draft.summary}
+                onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))}
+                className="min-h-[120px] w-full rounded-xl border border-purple-100 bg-white/90 p-3 text-sm leading-relaxed text-notion-text shadow-sm outline-none"
+              />
+            ) : summary ? (
+              <div className="text-sm leading-7 text-notion-text">
+                <MarkdownContent content={summary} />
+              </div>
+            ) : (
+              <div className="text-sm text-notion-text-tertiary">No summary yet.</div>
+            )}
+
+            {!editing && tags.length > 0 && (
+              <div className="mt-4 border-t border-purple-100 pt-3">
+                <div className="mb-2 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-600/90">
+                  <Tags size={13} />
+                  Tags
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <AnalysisTagPill key={tag} tag={tag} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+            <AnalysisStat label="Coverage" value={coverageLabel} />
+            <AnalysisStat label="Contributions" value={`${contributions.length} points`} />
+            <AnalysisStat label="Risks" value={`${limitations.length} caveats`} />
+            <AnalysisStat label="Next Steps" value={`${questions.length} questions`} />
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(analysis.problem || editing) && (
+            <AnalysisSection title="Problem">
+              {editing ? (
+                <textarea
+                  value={draft.problem}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, problem: e.target.value }))}
+                  className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
+                />
+              ) : (
+                <MarkdownContent
+                  content={analysis.problem}
+                  proseClassName="prose prose-sm max-w-none break-words prose-p:my-1 prose-headings:my-2"
+                />
+              )}
+            </AnalysisSection>
+          )}
+          {(analysis.method || editing) && (
+            <AnalysisSection title="Method">
+              {editing ? (
+                <textarea
+                  value={draft.method}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, method: e.target.value }))}
+                  className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
+                />
+              ) : (
+                <MarkdownContent
+                  content={analysis.method}
+                  proseClassName="prose prose-sm max-w-none break-words prose-p:my-1 prose-headings:my-2"
+                />
+              )}
+            </AnalysisSection>
+          )}
+
+          {evidence && !editing && (
+            <AnalysisSection title="Evidence">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                <CheckCircle2 size={12} />
+                Supporting signals from the paper
+              </div>
+              <MarkdownContent
+                content={analysis.evidence}
+                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1 prose-headings:my-2"
+              />
+            </AnalysisSection>
+          )}
+
+          {(contributions.length > 0 || editing) && (
+            <AnalysisSection title="Contributions">
+              {!editing && (
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
+                  <Target size={12} />
+                  What this paper adds
+                </div>
+              )}
+              {editing ? (
+                <textarea
+                  value={draft.contributions}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, contributions: e.target.value }))}
+                  className="min-h-[120px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
+                />
+              ) : (
+                <AnalysisList title="" items={contributions} />
+              )}
+            </AnalysisSection>
+          )}
+
+          {applications.length > 0 && !editing && (
+            <AnalysisSection title="Applications">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                <Lightbulb size={12} />
+                Where this may be useful
+              </div>
+              <AnalysisList title="" items={applications} />
+            </AnalysisSection>
+          )}
+
+          {(limitations.length > 0 || editing) && (
+            <AnalysisSection title="Limitations">
+              {!editing && (
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700">
+                  <AlertTriangle size={12} />
+                  What to be careful about
+                </div>
+              )}
+              {editing ? (
+                <textarea
+                  value={draft.limitations}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, limitations: e.target.value }))}
+                  className="min-h-[120px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
+                />
+              ) : (
+                <AnalysisList title="" items={limitations} />
+              )}
+            </AnalysisSection>
+          )}
+        </div>
+
+        {!editing && (questions.length > 0 || tags.length > 0) && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {questions.length > 0 && (
+              <AnalysisSection title="Open Questions">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700">
+                  <Search size={12} />
+                  Good follow-up directions
+                </div>
+                <AnalysisList title="" items={questions} />
+              </AnalysisSection>
+            )}
+
+            {tags.length > 0 && (
+              <AnalysisSection title="Research Signals">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700">
+                  <FlaskConical size={12} />
+                  Themes extracted from the paper
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <AnalysisTagPill key={tag} tag={tag} />
+                  ))}
+                </div>
+              </AnalysisSection>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── StarRating ───────────────────────────────────────────────────────────────
 
 function StarRating({
@@ -151,13 +553,20 @@ function ChatBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words ${
           isUser
             ? 'rounded-br-sm bg-notion-text text-white'
             : 'rounded-bl-sm bg-notion-sidebar text-notion-text'
         }`}
       >
-        {msg.content}
+        {isUser ? (
+          <div className="whitespace-pre-wrap">{msg.content}</div>
+        ) : (
+          <MarkdownContent
+            content={msg.content}
+            proseClassName="prose prose-sm max-w-none break-words text-inherit prose-p:my-2 prose-headings:my-3 prose-headings:text-inherit prose-strong:text-inherit prose-code:text-inherit prose-code:bg-black/5 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/5 prose-pre:text-inherit prose-blockquote:text-inherit prose-li:my-1"
+          />
+        )}
       </div>
     </div>
   );
@@ -289,6 +698,19 @@ function TagEditor({
   const [allTags, setAllTags] = useState<TagInfo[]>([]);
   const [saving, setSaving] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
+  const [organizing, setOrganizing] = useState(false);
+  const [taggingStatus, setTaggingStatus] = useState<TaggingStatus | null>(null);
+
+  const stageLabel: Record<NonNullable<TaggingStatus['stage']>, string> = {
+    idle: 'Idle',
+    building_prompt: 'Preparing',
+    requesting_model: 'Requesting model',
+    streaming: 'Streaming output',
+    parsing: 'Parsing tags',
+    saving: 'Saving tags',
+    done: 'Done',
+    error: 'Error',
+  };
 
   // Load all tags for autocomplete
   useEffect(() => {
@@ -298,13 +720,27 @@ function TagEditor({
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onIpc('tagging:status', (_event, status) => {
+      const nextStatus = status as TaggingStatus;
+      if (nextStatus.currentPaperId === paper.id || (!nextStatus.active && autoTagging)) {
+        setTaggingStatus(nextStatus);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [paper.id, autoTagging]);
+
   // Group categorized tags by category
   const categorizedTags = paper.categorizedTags || [];
   const tagsByCategory: Record<TagCategory, CategorizedTag[]> = {
-    domain: categorizedTags.filter((t) => t.category === 'domain'),
-    method: categorizedTags.filter((t) => t.category === 'method'),
-    topic: categorizedTags.filter((t) => t.category === 'topic'),
+    domain: categorizedTags.filter((t): t is CategorizedTag => t.category === 'domain'),
+    method: categorizedTags.filter((t): t is CategorizedTag => t.category === 'method'),
+    topic: categorizedTags.filter((t): t is CategorizedTag => t.category === 'topic'),
   };
+
+  // Filter out system tags from counts
+  const visibleTags = categorizedTags.filter((t) => !EXCLUDED_TAGS.includes(t.name.toLowerCase()));
 
   const handleAddTag = async (tagName: string, category: TagCategory) => {
     if (!tagName.trim()) return;
@@ -343,13 +779,37 @@ function TagEditor({
     setAutoTagging(true);
     try {
       const result = await ipc.tagPaper(paper.id);
-      // Reload paper to get updated tags
-      const updated = await ipc.getPaper(paper.id);
+      onUpdate({
+        ...paper,
+        categorizedTags: result,
+        tagNames: result.map((tag) => tag.name),
+      });
+
+      const updated = await ipc.getPaper(paper.id).catch(() => null);
       if (updated) onUpdate(updated);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Auto-tagging failed');
     } finally {
       setAutoTagging(false);
+    }
+  };
+
+  const handleOrganize = async () => {
+    setOrganizing(true);
+    try {
+      const result = await ipc.organizePaperTags(paper.id);
+      onUpdate({
+        ...paper,
+        categorizedTags: result,
+        tagNames: result.map((tag) => tag.name),
+      });
+
+      const updated = await ipc.getPaper(paper.id).catch(() => null);
+      if (updated) onUpdate(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to organize tags');
+    } finally {
+      setOrganizing(false);
     }
   };
 
@@ -371,10 +831,50 @@ function TagEditor({
             {autoTagging ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
             Auto Tag
           </button>
+          {visibleTags.length > 0 && (
+            <button
+              onClick={handleOrganize}
+              disabled={organizing || saving}
+              className="inline-flex items-center gap-1.5 rounded-md border border-notion-border px-2.5 py-1 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar hover:text-notion-text disabled:opacity-40"
+            >
+              {organizing ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <RefreshCw size={12} />
+              )}
+              Organize
+            </button>
+          )}
         </div>
       </div>
 
       <div className="space-y-3">
+        {autoTagging && taggingStatus && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            <div className="flex items-center gap-2 font-medium">
+              <Loader2 size={12} className="animate-spin" />
+              <span>{taggingStatus.message || 'Auto-tagging in progress…'}</span>
+            </div>
+            {taggingStatus.currentPaperTitle && (
+              <div className="mt-1 text-blue-600/80">{taggingStatus.currentPaperTitle}</div>
+            )}
+            {taggingStatus.stage && taggingStatus.stage !== 'idle' && (
+              <div className="mt-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                {stageLabel[taggingStatus.stage]}
+              </div>
+            )}
+            {taggingStatus.partialText?.trim() && (
+              <div className="mt-2 rounded border border-blue-200 bg-white/80 p-2">
+                <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-blue-500">
+                  Model Output
+                </div>
+                <pre className="max-h-36 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-slate-700">
+                  {taggingStatus.partialText}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
         {TAG_CATEGORIES.map((category) => (
           <CategoryTagRow
             key={category}
@@ -383,7 +883,7 @@ function TagEditor({
             allTags={allTags}
             onAdd={handleAddTag}
             onRemove={handleRemoveTag}
-            saving={saving || autoTagging}
+            saving={saving || autoTagging || organizing}
           />
         ))}
       </div>
@@ -400,11 +900,14 @@ export function OverviewPage() {
 
   const [paper, setPaper] = useState<PaperItem | null>(null);
   const [notes, setNotes] = useState<ReadingNote[]>([]);
-  const [sourceEvents, setSourceEvents] = useState<SourceEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [paperDir, setPaperDir] = useState<string | null>(null);
   const [activeCli, setActiveCli] = useState<CliConfig | null>(null);
+  const [analysisStreaming, setAnalysisStreaming] = useState(false);
+  const [analysisStreamText, setAnalysisStreamText] = useState('');
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const analysisSessionRef = useRef<string | null>(null);
 
   // Clone repo modal
   const [showCloneModal, setShowCloneModal] = useState(false);
@@ -424,19 +927,6 @@ export function OverviewPage() {
       .catch(() => undefined);
   }, []);
 
-  // Handle ESC key for Clone Repo Modal
-  useEffect(() => {
-    if (!showCloneModal) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowCloneModal(false);
-        setRepoUrl('');
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showCloneModal]);
-
   useEffect(() => {
     if (!shortId) return;
 
@@ -446,23 +936,61 @@ export function OverviewPage() {
         setPaperDir(`${settings.papersDir}/${p.shortId}`);
         const shortTitle = p.title.replace(/^\[\d{4}\.\d{4,5}\]\s*/, '').slice(0, 30) || p.shortId;
         updateTabLabel(location.pathname, shortTitle);
-        return Promise.all([ipc.listReading(p.id), ipc.getSourceEvents(p.id)]);
+        return ipc.listReading(p.id);
       })
-      .then(([readingNotes, events]) => {
+      .then((readingNotes) => {
         setNotes(readingNotes);
-        setSourceEvents(events);
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, [shortId]);
 
   // Separate notes by type
-  const readingNotes = notes.filter((n) => !n.title.startsWith('Chat:'));
+  const analysisNote = notes.find(
+    (n) => n.title.startsWith('Analysis:') && isPaperAnalysis(n.content),
+  );
+  const readingNotes = notes.filter(
+    (n) => !n.title.startsWith('Chat:') && !n.title.startsWith('Analysis:'),
+  );
   const chatNotes = notes.filter((n) => n.title.startsWith('Chat:'));
+
+  useEffect(() => {
+    const offOutput = onIpc('analysis:output', (_event, payload) => {
+      const data = payload as { sessionId?: string; chunk?: string };
+      if (data.sessionId !== analysisSessionRef.current || !data.chunk) return;
+      setAnalysisStreamText((prev) => prev + data.chunk);
+    });
+
+    const offDone = onIpc('analysis:done', async (_event, payload) => {
+      const data = payload as { sessionId?: string };
+      if (data.sessionId !== analysisSessionRef.current || !paper) return;
+      setAnalysisStreaming(false);
+      const updated = await ipc.listReading(paper.id).catch(() => null);
+      if (updated) setNotes(updated);
+    });
+
+    const offError = onIpc('analysis:error', (_event, payload) => {
+      const data = payload as { sessionId?: string; error?: string };
+      if (data.sessionId !== analysisSessionRef.current) return;
+      setAnalysisStreaming(false);
+      setAnalysisError(data.error ?? 'Analysis failed');
+    });
+
+    return () => {
+      offOutput();
+      offDone();
+      offError();
+    };
+  }, [paper]);
 
   const handleOpenReader = useCallback(() => {
     if (!paper) return;
     openTab(`/papers/${paper.shortId}/reader`);
+  }, [paper, openTab]);
+
+  const handleStartConversation = useCallback(() => {
+    if (!paper) return;
+    openTab(`/papers/${paper.shortId}/reader?panel=chat`);
   }, [paper, openTab]);
 
   const handleOpenNotes = useCallback(() => {
@@ -498,13 +1026,14 @@ export function OverviewPage() {
     setCloning(true);
     try {
       const parts = activeCli.command.trim().split(/\s+/);
+      const prompt = `Clone the repository at ${repoUrl} into the ./code directory`;
+      const args =
+        parts[0] === 'codex'
+          ? [...parts.slice(1), 'exec', prompt]
+          : [...parts.slice(1), '-p', prompt];
       await ipc.runCli({
         tool: parts[0],
-        args: [
-          ...parts.slice(1),
-          '-p',
-          `Clone the repository at ${repoUrl} into the ./code directory`,
-        ],
+        args,
         sessionId: `clone-${Date.now()}`,
         cwd: paperDir,
         envVars: activeCli.envVars || undefined,
@@ -534,6 +1063,25 @@ export function OverviewPage() {
     }
   }, [paper, notes.length]);
 
+  const handleAnalyzePaper = useCallback(async () => {
+    if (!paper) return;
+    const sessionId = `analysis-${Date.now()}`;
+    analysisSessionRef.current = sessionId;
+    setAnalysisStreaming(true);
+    setAnalysisStreamText('');
+    setAnalysisError(null);
+    try {
+      await ipc.analyzePaper({
+        sessionId,
+        paperId: paper.id,
+        pdfUrl: inferPdfUrl(paper) ?? undefined,
+      });
+    } catch (err) {
+      setAnalysisStreaming(false);
+      setAnalysisError(err instanceof Error ? err.message : 'Analysis failed');
+    }
+  }, [paper]);
+
   const handleDeletePaper = useCallback(async () => {
     if (!paper) return;
     if (!confirm(`Delete "${paper.title}"? This action cannot be undone.`)) return;
@@ -560,7 +1108,7 @@ export function OverviewPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <LoadingSpinner size="md" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-notion-border border-t-notion-text" />
       </div>
     );
   }
@@ -620,18 +1168,24 @@ export function OverviewPage() {
               </button>
             )}
             <button
-              onClick={() => {
-                if (!activeCli) {
-                  alert('Please configure a CLI tool in Settings first.');
-                  return;
-                }
-                setShowCloneModal(true);
-              }}
+              onClick={handleAnalyzePaper}
+              disabled={analysisStreaming}
+              className="inline-flex items-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2.5 text-sm font-medium text-notion-text shadow-sm transition-all hover:bg-notion-sidebar disabled:opacity-40"
+            >
+              {analysisStreaming ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              Analyze
+            </button>
+            <button
+              onClick={() => setShowCloneModal(true)}
+              disabled={!activeCli}
               className="inline-flex items-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2.5 text-sm font-medium text-notion-text shadow-sm transition-all hover:bg-notion-sidebar disabled:opacity-40"
             >
               <Github size={16} />
               Clone Repo
-              {!activeCli && <span className="text-xs text-notion-text-tertiary">(需配置CLI)</span>}
             </button>
             <button
               onClick={handleDeletePaper}
@@ -661,73 +1215,6 @@ export function OverviewPage() {
             </div>
           )}
 
-          {/* Import Sources */}
-          {sourceEvents.length > 0 && (
-            <div className="rounded-xl border border-notion-border p-5">
-              <h2 className="text-sm font-semibold text-notion-text-secondary uppercase tracking-wider mb-3">
-                Import History
-              </h2>
-              <div className="space-y-2">
-                {sourceEvents.map((event) => (
-                  <div key={event.id} className="flex items-center gap-3 text-sm">
-                    <div
-                      className={clsx(
-                        'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg',
-                        event.source === 'chrome' && 'bg-yellow-50',
-                        event.source === 'arxiv' && 'bg-red-50',
-                        event.source === 'manual' && 'bg-blue-50',
-                      )}
-                    >
-                      {event.source === 'chrome' && (
-                        <FolderOpen size={14} className="text-yellow-600" />
-                      )}
-                      {event.source === 'arxiv' && <FileText size={14} className="text-red-600" />}
-                      {event.source === 'manual' && (
-                        <FilePenLine size={14} className="text-blue-600" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-notion-text-secondary">
-                        Imported from <span className="font-medium capitalize">{event.source}</span>
-                      </span>
-                      <span className="text-notion-text-tertiary ml-2">
-                        {formatDate(event.importedAt)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Rating */}
-          <div className="rounded-xl border border-notion-border p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Star size={14} className="text-notion-text-secondary" />
-                <h2 className="text-sm font-semibold text-notion-text-secondary uppercase tracking-wider">
-                  Rating
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <StarRating
-                  rating={paper.rating ?? null}
-                  onChange={async (r) => {
-                    try {
-                      const updated = await ipc.updatePaperRating(paper.id, r);
-                      setPaper(updated);
-                    } catch {
-                      alert('Failed to update rating');
-                    }
-                  }}
-                />
-                {paper.rating && (
-                  <span className="text-sm text-notion-text-secondary">{paper.rating}/5</span>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* Tags */}
           <TagEditor paper={paper} onUpdate={setPaper} />
 
@@ -743,12 +1230,55 @@ export function OverviewPage() {
             </div>
           )}
 
+          {(analysisNote || analysisStreaming || analysisError) && (
+            <div className="space-y-3">
+              {analysisNote && isPaperAnalysis(analysisNote.content) && (
+                <AnalysisCard
+                  note={analysisNote}
+                  onSaved={(updated) =>
+                    setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)))
+                  }
+                />
+              )}
+              {analysisStreaming && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-700">
+                    <Loader2 size={14} className="animate-spin" />
+                    Analyzing paper...
+                  </div>
+                  <div className="max-h-64 overflow-auto rounded-lg border border-blue-100 bg-white/80 p-3 text-slate-700">
+                    {analysisStreamText ? (
+                      <MarkdownContent
+                        content={analysisStreamText}
+                        proseClassName="prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-3 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
+                      />
+                    ) : (
+                      <div className="text-xs text-slate-500">Waiting for model output...</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {analysisError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  {analysisError}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Reading Notes */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-notion-text-secondary uppercase tracking-wider">
                 Reading Notes
               </h2>
+              <button
+                onClick={handleCreateNote}
+                className="inline-flex items-center gap-1.5 rounded-md border border-notion-border px-2.5 py-1 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar hover:text-notion-text"
+              >
+                <Plus size={12} />
+                New Note
+              </button>
             </div>
             {readingNotes.length === 0 ? (
               <div className="rounded-xl border border-dashed border-notion-border py-8 text-center">
@@ -765,17 +1295,15 @@ export function OverviewPage() {
             ) : (
               <div className="space-y-2">
                 {readingNotes.map((note) => (
-                  <div
+                  <button
                     key={note.id}
-                    className="flex items-center gap-4 rounded-lg border border-notion-border px-4 py-3 transition-colors hover:bg-notion-sidebar/50"
+                    onClick={() => openTab(`/papers/${paper.shortId}/notes?noteId=${note.id}`)}
+                    className="w-full flex items-center gap-4 rounded-lg border border-notion-border px-4 py-3 text-left transition-colors hover:bg-notion-sidebar/50"
                   >
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50">
                       <FileText size={16} className="text-purple-600" />
                     </div>
-                    <button
-                      onClick={() => openTab(`/papers/${paper.shortId}/notes?noteId=${note.id}`)}
-                      className="flex-1 min-w-0 text-left"
-                    >
+                    <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-notion-text truncate">
                         {note.title}
                       </div>
@@ -783,24 +1311,8 @@ export function OverviewPage() {
                         <Calendar size={11} />
                         {formatDate(note.updatedAt)}
                       </div>
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!confirm(`Delete "${note.title}"?`)) return;
-                        try {
-                          await ipc.deleteReading(note.id);
-                          setNotes((prev) => prev.filter((n) => n.id !== note.id));
-                        } catch {
-                          alert('Failed to delete note');
-                        }
-                      }}
-                      className="flex-shrink-0 rounded-md p-1.5 text-notion-text-tertiary transition-colors hover:bg-red-50 hover:text-red-600"
-                      title="Delete note"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                    </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -820,7 +1332,7 @@ export function OverviewPage() {
                 />
                 <p className="text-sm text-notion-text-tertiary">No chat history yet</p>
                 <button
-                  onClick={handleOpenReader}
+                  onClick={handleStartConversation}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
                 >
                   <BookOpen size={14} />
@@ -830,17 +1342,17 @@ export function OverviewPage() {
             ) : (
               <div className="space-y-2">
                 {chatNotes.map((note) => (
-                  <div
+                  <button
                     key={note.id}
-                    className="flex items-center gap-4 rounded-lg border border-notion-border px-4 py-3 transition-colors hover:bg-notion-sidebar/50"
+                    onClick={() =>
+                      openTab(`/papers/${paper.shortId}/reader?panel=chat&chatId=${note.id}`)
+                    }
+                    className="w-full flex items-center gap-4 rounded-lg border border-notion-border px-4 py-3 text-left transition-colors hover:bg-notion-sidebar/50"
                   >
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">
                       <MessageSquare size={16} className="text-blue-600" />
                     </div>
-                    <button
-                      onClick={() => openTab(`/papers/${paper.shortId}/reader?chatId=${note.id}`)}
-                      className="flex-1 min-w-0 text-left"
-                    >
+                    <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-notion-text truncate">
                         {note.title.replace('Chat: ', '')}
                       </div>
@@ -848,24 +1360,8 @@ export function OverviewPage() {
                         <Calendar size={11} />
                         {formatDate(note.updatedAt)}
                       </div>
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!confirm(`Delete "${note.title.replace('Chat: ', '')}"?`)) return;
-                        try {
-                          await ipc.deleteReading(note.id);
-                          setNotes((prev) => prev.filter((n) => n.id !== note.id));
-                        } catch {
-                          alert('Failed to delete chat');
-                        }
-                      }}
-                      className="flex-shrink-0 rounded-md p-1.5 text-notion-text-tertiary transition-colors hover:bg-red-50 hover:text-red-600"
-                      title="Delete chat"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                    </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -874,77 +1370,61 @@ export function OverviewPage() {
       </div>
 
       {/* Clone Repo Modal */}
-      <AnimatePresence>
-        {showCloneModal && (
-          <motion.div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <motion.div
-              className="w-full max-w-md rounded-xl border border-notion-border bg-white p-6 shadow-xl"
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.15 }}
-            >
-              <h3 className="text-base font-semibold text-notion-text mb-4">Clone Repository</h3>
+      {showCloneModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl border border-notion-border bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold text-notion-text mb-4">Clone Repository</h3>
 
-              {detectedRepo && (
-                <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
-                  <p className="text-xs text-green-700">Detected repository:</p>
-                  <p className="text-sm font-mono text-green-800 break-all">{detectedRepo}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-notion-text">Repository URL</label>
-                <input
-                  type="text"
-                  value={repoUrl || detectedRepo || ''}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/user/repo"
-                  className="w-full rounded-lg border border-notion-border px-3 py-2 text-sm focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-                <p className="text-xs text-notion-text-tertiary">
-                  Will be cloned to {paperDir}/code
-                </p>
+            {detectedRepo && (
+              <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                <p className="text-xs text-green-700">Detected repository:</p>
+                <p className="text-sm font-mono text-green-800 break-all">{detectedRepo}</p>
               </div>
+            )}
 
-              <div className="mt-6 flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setShowCloneModal(false);
-                    setRepoUrl('');
-                  }}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCloneRepo}
-                  disabled={cloning || (!repoUrl.trim() && !detectedRepo)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-                >
-                  {cloning ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Cloning...
-                    </>
-                  ) : (
-                    <>
-                      <FolderDown size={14} />
-                      Clone
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-notion-text">Repository URL</label>
+              <input
+                type="text"
+                value={repoUrl || detectedRepo || ''}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                placeholder="https://github.com/user/repo"
+                className="w-full rounded-lg border border-notion-border px-3 py-2 text-sm focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              <p className="text-xs text-notion-text-tertiary">Will be cloned to {paperDir}/code</p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowCloneModal(false);
+                  setRepoUrl('');
+                }}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCloneRepo}
+                disabled={cloning || (!repoUrl.trim() && !detectedRepo)}
+                className="inline-flex items-center gap-2 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              >
+                {cloning ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Cloning...
+                  </>
+                ) : (
+                  <>
+                    <FolderDown size={14} />
+                    Clone
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -14,6 +14,59 @@ import { spawnSync } from 'child_process';
 import { getProxy, getProxyScope } from '../store/app-settings-store';
 import { proxyFetch } from './proxy-fetch';
 
+function isOfficialOpenAIBaseUrl(baseURL?: string): boolean {
+  if (!baseURL) return true;
+  try {
+    const url = new URL(baseURL);
+    return url.hostname === 'api.openai.com';
+  } catch {
+    return false;
+  }
+}
+
+function shouldUseOpenAIChatCompatibility(providerId: string, baseURL?: string): boolean {
+  if (providerId === 'custom') return true;
+  if (providerId === 'openai' && !isOfficialOpenAIBaseUrl(baseURL)) return true;
+  return false;
+}
+
+function formatModelRequestError(
+  err: unknown,
+  context: {
+    kind: ModelKind;
+    provider?: string;
+    model?: string;
+    baseURL?: string;
+  },
+): Error {
+  const provider = context.provider ?? 'unknown-provider';
+  const model = context.model ?? 'unknown-model';
+  const baseURL = context.baseURL ? ` @ ${context.baseURL}` : '';
+  const prefix = `${context.kind} model request failed (${provider}/${model}${baseURL})`;
+
+  if (err instanceof Error) {
+    const cause = err.cause;
+    if (cause && typeof cause === 'object') {
+      const maybeStatus =
+        'statusCode' in cause ? cause.statusCode : 'status' in cause ? cause.status : null;
+      const maybeText =
+        'responseBody' in cause ? cause.responseBody : 'body' in cause ? cause.body : null;
+      if (typeof maybeStatus === 'number') {
+        const suffix =
+          typeof maybeText === 'string' && maybeText.trim()
+            ? `: HTTP ${maybeStatus} ${maybeText.trim()}`
+            : `: HTTP ${maybeStatus}`;
+        return new Error(`${prefix}${suffix}`);
+      }
+    }
+
+    const message = err.message?.trim() || String(err);
+    return new Error(`${prefix}: ${message}`);
+  }
+
+  return new Error(`${prefix}: ${String(err)}`);
+}
+
 /** Get a custom fetch function with proxy support if configured */
 function getProxyFetch(): typeof fetch | undefined {
   const scope = getProxyScope();
@@ -49,8 +102,11 @@ import {
   type ModelConfig,
   type ModelKind,
 } from '../store/model-config-store';
-import { getDecryptedEnvVars } from '../store/cli-tools-store';
-import { getShellPath } from './cli-runner.service';
+import {
+  buildNonInteractiveCliArgs,
+  getShellPath,
+  parseStructuredCliOutput,
+} from './cli-runner.service';
 import { recordTokenUsage } from '../store/token-usage-store';
 import fs from 'fs/promises';
 import path from 'path';
@@ -96,7 +152,7 @@ export function getLanguageModel(config: ProviderConfig & { apiKey?: string }): 
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return provider(model);
+      return shouldUseOpenAIChatCompatibility(id, baseURL) ? provider.chat(model) : provider(model);
     }
     case 'gemini': {
       const provider = createGoogleGenerativeAI({
@@ -112,7 +168,7 @@ export function getLanguageModel(config: ProviderConfig & { apiKey?: string }): 
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return provider(model);
+      return provider.chat(model);
     }
     default:
       throw new Error(`Unknown provider: ${id}`);
@@ -313,7 +369,9 @@ export function getLanguageModelFromConfig(
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return p(model);
+      return shouldUseOpenAIChatCompatibility(provider ?? 'openai', baseURL)
+        ? p.chat(model)
+        : p(model);
     }
     case 'gemini': {
       const p = createGoogleGenerativeAI({
@@ -329,7 +387,7 @@ export function getLanguageModelFromConfig(
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return p(model);
+      return p.chat(model);
     }
     default:
       throw new Error(`Unknown provider: ${provider}`);
@@ -341,7 +399,7 @@ export function getLanguageModelFromConfig(
  */
 async function generateWithCli(
   command: string,
-  envVarsId: string | undefined,
+  envVars: string | undefined,
   systemPrompt: string,
   userPrompt: string,
 ): Promise<string> {
@@ -353,14 +411,11 @@ async function generateWithCli(
   delete env.CLAUDECODE; // Avoid nested session errors
 
   // Decrypt and inject env vars if provided
-  if (envVarsId) {
-    const decryptedEnv = getDecryptedEnvVars(envVarsId);
-    if (decryptedEnv) {
-      for (const pair of decryptedEnv.trim().split(/\s+/)) {
-        const eq = pair.indexOf('=');
-        if (eq > 0) {
-          env[pair.slice(0, eq)] = pair.slice(eq + 1);
-        }
+  if (envVars) {
+    for (const pair of envVars.trim().split(/\s+/)) {
+      const eq = pair.indexOf('=');
+      if (eq > 0) {
+        env[pair.slice(0, eq)] = pair.slice(eq + 1);
       }
     }
   }
@@ -371,7 +426,10 @@ async function generateWithCli(
   // Parse command into binary and args (handle "claude --dangerously-skip-permissions" etc.)
   const cmdParts = command.trim().split(/\s+/);
   const binary = cmdParts[0];
-  const cmdArgs = [...cmdParts.slice(1), '-p', fullPrompt];
+  const cmdArgs =
+    binary === 'codex'
+      ? [...cmdParts.slice(1), 'exec', fullPrompt]
+      : [...cmdParts.slice(1), '-p', fullPrompt];
 
   try {
     // Use spawnSync with array args to avoid command injection
@@ -390,7 +448,20 @@ async function generateWithCli(
       throw new Error(`CLI exited with code ${result.status}: ${result.stderr}`);
     }
 
-    return result.stdout.trim();
+    const parsed = parseStructuredCliOutput(binary, result.stdout.trim());
+    if (parsed.usage) {
+      recordTokenUsage({
+        timestamp: new Date().toISOString(),
+        provider: binary,
+        model: parsed.usage.model ?? command,
+        promptTokens: parsed.usage.promptTokens,
+        completionTokens: parsed.usage.completionTokens,
+        totalTokens: parsed.usage.totalTokens,
+        kind: 'agent',
+      });
+    }
+
+    return parsed.text.trim() || result.stdout.trim();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`CLI execution failed: ${msg}`);
@@ -401,6 +472,7 @@ export async function generateWithModelKind(
   kind: ModelKind,
   systemPrompt: string,
   userPrompt: string,
+  options: { strictSelection?: boolean } = {},
 ): Promise<string> {
   const modelConfig = getActiveModel(kind);
 
@@ -410,36 +482,125 @@ export async function generateWithModelKind(
       const configWithKey = getModelWithKey(modelConfig.id);
       if (configWithKey && configWithKey.apiKey) {
         const model = getLanguageModelFromConfig(configWithKey);
-        const result = await generateText({
-          model,
-          system: systemPrompt,
-          prompt: userPrompt,
-          maxOutputTokens: kind === 'lightweight' ? 1024 : 4096,
-          abortSignal: AbortSignal.timeout(120_000),
-        });
-        recordUsage(
-          result,
-          configWithKey.provider ?? 'unknown',
-          configWithKey.model ?? 'unknown',
-          kind,
-        );
-        return result.text;
+        try {
+          const result = await generateText({
+            model,
+            system: systemPrompt,
+            prompt: userPrompt,
+            maxOutputTokens: kind === 'lightweight' ? 1024 : 4096,
+            abortSignal: AbortSignal.timeout(120_000),
+          });
+          recordUsage(
+            result,
+            configWithKey.provider ?? 'unknown',
+            configWithKey.model ?? 'unknown',
+            kind,
+          );
+          return result.text;
+        } catch (err) {
+          throw formatModelRequestError(err, {
+            kind,
+            provider: configWithKey.provider,
+            model: configWithKey.model,
+            baseURL: configWithKey.baseURL,
+          });
+        }
       }
+
+      throw new Error(
+        `No API key configured for the selected ${kind} model. Please check Settings > Models.`,
+      );
     }
 
     // CLI backend
     if (modelConfig.backend === 'cli' && modelConfig.command) {
-      return generateWithCli(
-        modelConfig.command,
-        modelConfig.id, // use model id to lookup encrypted env vars
-        systemPrompt,
-        userPrompt,
-      );
+      return generateWithCli(modelConfig.command, modelConfig.envVars, systemPrompt, userPrompt);
     }
+  }
+
+  if (options.strictSelection) {
+    throw new Error(`No usable ${kind} model selected. Please check Settings > Models.`);
   }
 
   // Fallback to active provider
   return generateWithActiveProvider(systemPrompt, userPrompt);
+}
+
+export async function streamGenerateWithModelKind(
+  kind: ModelKind,
+  systemPrompt: string,
+  userPrompt: string,
+  onChunk: (chunk: string) => void,
+  signal?: AbortSignal,
+  options: { strictSelection?: boolean } = {},
+): Promise<string> {
+  const modelConfig = getActiveModel(kind);
+
+  if (modelConfig?.backend === 'api') {
+    const configWithKey = getModelWithKey(modelConfig.id);
+    if (configWithKey?.apiKey) {
+      const model = getLanguageModelFromConfig(configWithKey);
+      try {
+        const { textStream } = streamText({
+          model,
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxTokens: kind === 'lightweight' ? 1024 : 4096,
+          abortSignal: signal,
+        });
+
+        let fullText = '';
+        for await (const chunk of textStream) {
+          fullText += chunk;
+          onChunk(chunk);
+        }
+        return fullText;
+      } catch (err) {
+        throw formatModelRequestError(err, {
+          kind,
+          provider: configWithKey.provider,
+          model: configWithKey.model,
+          baseURL: configWithKey.baseURL,
+        });
+      }
+    }
+
+    throw new Error(
+      `No API key configured for the selected ${kind} model. Please check Settings > Models.`,
+    );
+  }
+
+  if (options.strictSelection) {
+    throw new Error(`No usable ${kind} model selected. Please check Settings > Models.`);
+  }
+
+  const text = await generateWithModelKind(kind, systemPrompt, userPrompt, options);
+  if (text) {
+    onChunk(text);
+  }
+  return text;
+}
+
+export function getSelectedModelInfo(kind: ModelKind): {
+  id: string;
+  backend: 'api' | 'cli';
+  provider?: string;
+  model?: string;
+  baseURL?: string;
+  hasApiKey: boolean;
+} | null {
+  const modelConfig = getActiveModel(kind);
+  if (!modelConfig) return null;
+
+  const configWithKey = getModelWithKey(modelConfig.id);
+  return {
+    id: modelConfig.id,
+    backend: modelConfig.backend,
+    provider: modelConfig.provider,
+    model: modelConfig.model,
+    baseURL: modelConfig.baseURL,
+    hasApiKey: !!configWithKey?.apiKey,
+  };
 }
 
 export { streamText, getActiveProvider };
@@ -479,7 +640,9 @@ export async function testApiConnection(params: {
           baseURL,
           ...(proxyFetch ? { fetch: proxyFetch } : {}),
         });
-        languageModel = p(model);
+        languageModel = shouldUseOpenAIChatCompatibility(provider, baseURL)
+          ? p.chat(model)
+          : p(model);
         break;
       }
       case 'gemini': {
@@ -500,7 +663,7 @@ export async function testApiConnection(params: {
           baseURL,
           ...(proxyFetch ? { fetch: proxyFetch } : {}),
         });
-        languageModel = p(model);
+        languageModel = p.chat(model);
         break;
       }
       default:

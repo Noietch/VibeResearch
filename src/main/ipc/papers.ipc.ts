@@ -84,6 +84,20 @@ export function setupPapersIpc() {
     }
   });
 
+  ipcMain.handle(
+    'papers:importLocalPdf',
+    async (_, filePath: string): Promise<IpcResult<unknown>> => {
+      try {
+        const result = await getPapersService().importLocalPdf(filePath);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:importLocalPdf] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
   ipcMain.handle('papers:getById', async (_, id: string): Promise<IpcResult<unknown>> => {
     try {
       const result = await getPapersService().getById(id);

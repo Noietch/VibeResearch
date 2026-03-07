@@ -383,8 +383,8 @@ export function PapersByTag({
   const handleBatchAutoTag = useCallback(async () => {
     try {
       await ipc.tagUntagged();
-    } catch {
-      // silent
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Auto-tagging failed');
     }
   }, []);
 
@@ -694,8 +694,14 @@ export function PapersByTag({
           >
             <Loader2 size={14} className="animate-spin text-purple-600" />
             <span className="text-sm text-purple-700">
-              Auto-tagging in progress... {taggingStatus.completed}/{taggingStatus.total}
+              {taggingStatus.message || 'Auto-tagging in progress...'} {taggingStatus.completed}/
+              {taggingStatus.total}
             </span>
+            {taggingStatus.currentPaperTitle && (
+              <span className="truncate text-xs text-purple-600">
+                {taggingStatus.currentPaperTitle}
+              </span>
+            )}
             <button
               onClick={() => ipc.cancelTagging()}
               className="ml-auto text-xs font-medium text-purple-600 hover:text-purple-800"

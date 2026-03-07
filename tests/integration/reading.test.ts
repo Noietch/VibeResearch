@@ -28,7 +28,6 @@ function setupTestStorage() {
       {
         id: 'test-chat',
         name: 'Test Chat',
-        kind: 'chat',
         backend: 'api',
         provider: 'custom',
         model: TEST_CHAT_MODEL,

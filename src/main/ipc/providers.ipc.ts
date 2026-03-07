@@ -104,6 +104,22 @@ export function setupProvidersIpc() {
     }
   });
 
+  ipcMain.handle('settings:selectPdfFile', async (): Promise<IpcResult<string | null>> => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        title: 'Select PDF File',
+        filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+      });
+      if (result.canceled || result.filePaths.length === 0) return ok(null);
+      return ok(result.filePaths[0]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[settings:selectPdfFile] Error:', msg);
+      return err(msg);
+    }
+  });
+
   ipcMain.handle('settings:setEditor', async (_, cmd: string): Promise<IpcResult<unknown>> => {
     try {
       const result = providersService.setEditor(cmd);

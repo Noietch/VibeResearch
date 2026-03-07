@@ -5,7 +5,7 @@
 
 declare global {
   interface Window {
-    electronAPI: {
+    electronAPI?: {
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
       on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
       off: (channel: string, listener: (...args: unknown[]) => void) => void;
@@ -15,15 +15,25 @@ declare global {
   }
 }
 
+function getElectronAPI() {
+  return typeof window === 'undefined' ? undefined : window.electronAPI;
+}
+
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  if (!window.electronAPI) throw new Error('electronAPI not available (not running in Electron)');
-  const result = await window.electronAPI.invoke(channel, ...args);
-  // Unwrap IpcResult envelope { success, data, error } if present
-  if (result !== null && typeof result === 'object' && 'success' in (result as object)) {
-    const r = result as { success: boolean; data?: T; error?: string };
-    if (!r.success) throw new Error(r.error ?? 'IPC error');
-    return r.data as T;
+  const electronAPI = getElectronAPI();
+  if (!electronAPI) {
+    return Promise.reject(
+      new Error(`IPC unavailable for channel \"${channel}\": Electron preload API not found.`),
+    );
   }
+
+  const result = await electronAPI.invoke(channel, ...args);
+  if (result !== null && typeof result === 'object' && 'success' in (result as object)) {
+    const ipcResult = result as { success: boolean; data?: T; error?: string };
+    if (!ipcResult.success) throw new Error(ipcResult.error ?? 'IPC error');
+    return ipcResult.data as T;
+  }
+
   return result as T;
 }
 
@@ -79,6 +89,17 @@ export interface TaggingStatus {
   completed: number;
   failed: number;
   currentPaperId: string | null;
+  currentPaperTitle?: string | null;
+  stage?:
+    | 'idle'
+    | 'building_prompt'
+    | 'requesting_model'
+    | 'streaming'
+    | 'parsing'
+    | 'saving'
+    | 'done'
+    | 'error';
+  partialText?: string;
   message: string;
 }
 
@@ -131,10 +152,22 @@ export interface ReadingNote {
   id: string;
   title: string;
   contentJson: string;
-  content: Record<string, string>;
+  content: Record<string, unknown>;
   chatNoteId?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PaperAnalysis {
+  summary: string;
+  problem: string;
+  method: string;
+  contributions: string[];
+  evidence: string;
+  limitations: string[];
+  applications: string[];
+  questions: string[];
+  tags: string[];
 }
 
 export interface ProjectTodo {
@@ -213,6 +246,7 @@ export type ProviderKind = 'anthropic' | 'openai' | 'gemini' | 'custom';
 
 export type ModelKind = 'agent' | 'lightweight' | 'chat';
 export type ModelBackend = 'api' | 'cli';
+export type AgentToolKind = 'claude-code' | 'codex' | 'custom';
 
 export interface ProxyScope {
   pdfDownload: boolean;
@@ -249,16 +283,49 @@ export interface TokenUsageSummary {
   lastUpdated: string | null;
 }
 
+export interface AgentConfigFileStatus {
+  label: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface AgentConfigStatus {
+  tool: AgentToolKind;
+  files: AgentConfigFileStatus[];
+  missingRequired: boolean;
+}
+
+export interface AgentConfigContents {
+  tool: AgentToolKind;
+  configContent?: string;
+  authContent?: string;
+}
+
+export interface CliTestDiagnostics {
+  command: string;
+  args: string[];
+  exitCode?: number | null;
+  timedOut?: boolean;
+  stdout?: string;
+  stderr?: string;
+  structuredOutput?: string;
+  stdoutFile?: string;
+  stderrFile?: string;
+  structuredOutputFile?: string;
+}
+
 export interface ModelConfig {
   id: string;
   name: string;
-  kind: ModelKind;
   backend: ModelBackend;
   provider?: 'anthropic' | 'openai' | 'gemini' | 'custom';
   model?: string;
   baseURL?: string;
   command?: string;
   envVars?: string;
+  agentTool?: AgentToolKind;
+  configContent?: string;
+  authContent?: string;
   hasApiKey?: boolean;
 }
 
@@ -282,6 +349,7 @@ export const ipc = {
   }) => invoke<PaperItem[]>('papers:list', query ?? {}),
   listTodayPapers: () => invoke<PaperItem[]>('papers:listToday'),
   createPaper: (input: Record<string, unknown>) => invoke<PaperItem>('papers:create', input),
+  importLocalPdf: (filePath: string) => invoke<PaperItem>('papers:importLocalPdf', filePath),
   downloadPaper: (input: string, tags?: string[]) =>
     invoke<{
       paper: PaperItem;
@@ -334,6 +402,10 @@ export const ipc = {
   deleteReading: (id: string) => invoke<ReadingNote>('reading:delete', id),
   saveChat: (input: { paperId: string; noteId: string | null; messages: unknown[] }) =>
     invoke<{ id: string }>('reading:saveChat', input),
+  analyzePaper: (input: { sessionId: string; paperId: string; pdfUrl?: string }) =>
+    invoke<{ sessionId: string; started: boolean }>('reading:analyze', input),
+  killAnalysis: (sessionId: string) =>
+    invoke<{ killed: boolean }>('reading:analyzeKill', sessionId),
   chat: (input: { sessionId: string; paperId: string; messages: unknown[]; pdfUrl?: string }) =>
     invoke<{ sessionId: string; started: boolean }>('reading:chat', input),
   killChat: (sessionId: string) => invoke<{ killed: boolean }>('reading:chatKill', sessionId),
@@ -404,13 +476,18 @@ export const ipc = {
 
   // App settings
   getSettings: () =>
-    invoke<{ papersDir: string; editorCommand: string; proxy?: string; proxyScope?: ProxyScope }>('settings:get'),
+    invoke<{ papersDir: string; editorCommand: string; proxy?: string; proxyScope?: ProxyScope }>(
+      'settings:get',
+    ),
   setPapersDir: (dir: string) => invoke<{ success: boolean }>('settings:setPapersDir', dir),
   setEditor: (cmd: string) => invoke<{ success: boolean }>('settings:setEditor', cmd),
   setProxy: (proxy: string | undefined) => invoke<{ success: boolean }>('settings:setProxy', proxy),
-  setProxyScope: (scope: ProxyScope) => invoke<{ success: boolean }>('settings:setProxyScope', scope),
-  testProxy: (proxyUrl?: string) => invoke<{ hasProxy: boolean; results: ProxyTestResult[] }>('settings:testProxy', proxyUrl),
+  setProxyScope: (scope: ProxyScope) =>
+    invoke<{ success: boolean }>('settings:setProxyScope', scope),
+  testProxy: (proxyUrl?: string) =>
+    invoke<{ hasProxy: boolean; results: ProxyTestResult[] }>('settings:testProxy', proxyUrl),
   selectFolder: () => invoke<string | null>('settings:selectFolder'),
+  selectPdfFile: () => invoke<string | null>('settings:selectPdfFile'),
   getStorageRoot: () => invoke<string>('settings:getStorageRoot'),
 
   // Shell
@@ -420,12 +497,28 @@ export const ipc = {
   // CLI tools
   detectCliTools: () => invoke<CliTool[]>('cli:detect'),
   testCli: (command: string, extraArgs?: string, envVars?: string) =>
-    invoke<{ success: boolean; output?: string; error?: string }>(
-      'cli:test',
-      command,
-      extraArgs,
-      envVars,
-    ),
+    invoke<{
+      success: boolean;
+      output?: string;
+      error?: string;
+      diagnostics?: CliTestDiagnostics;
+      logFile?: string;
+    }>('cli:test', command, extraArgs, envVars),
+  testAgentCli: (options: {
+    command: string;
+    extraArgs?: string;
+    envVars?: string;
+    agentTool?: AgentToolKind;
+    configContent?: string;
+    authContent?: string;
+  }) =>
+    invoke<{
+      success: boolean;
+      output?: string;
+      error?: string;
+      diagnostics?: CliTestDiagnostics;
+      logFile?: string;
+    }>('cli:testAgent', options),
   runCli: (options: {
     tool: string;
     args: string[];
@@ -433,6 +526,9 @@ export const ipc = {
     cwd?: string;
     envVars?: string;
     useProxy?: boolean;
+    displayLabel?: string;
+    homeFiles?: Array<{ relativePath: string; content: string }>;
+    modelId?: string;
   }) => invoke<{ sessionId: string; started: boolean }>('cli:run', options),
   killCli: (sessionId: string) => invoke<{ killed: boolean }>('cli:kill', sessionId),
 
@@ -450,8 +546,18 @@ export const ipc = {
   setActiveModel: (kind: ModelKind, id: string) =>
     invoke<{ success: boolean }>('models:setActive', kind, id),
   testSavedModelConnection: (id: string) =>
-    invoke<{ success: boolean; error?: string }>('models:testSavedConnection', id),
+    invoke<{
+      success: boolean;
+      error?: string;
+      output?: string;
+      diagnostics?: CliTestDiagnostics;
+      logFile?: string;
+    }>('models:testSavedConnection', id),
   getModelApiKey: (id: string) => invoke<string | null>('models:getApiKey', id),
+  getAgentConfigStatus: (tool: AgentToolKind) =>
+    invoke<AgentConfigStatus>('models:getAgentConfigStatus', tool),
+  getAgentConfigContents: (tool: AgentToolKind) =>
+    invoke<AgentConfigContents>('models:getAgentConfigContents', tool),
   testModelConnection: (params: {
     provider: 'anthropic' | 'openai' | 'gemini' | 'custom';
     model: string;
@@ -491,6 +597,10 @@ export const ipc = {
 
 /** Subscribe to IPC events from main process */
 export function onIpc(channel: string, listener: (...args: unknown[]) => void): () => void {
-  if (!window.electronAPI) return () => {};
-  return window.electronAPI.on(channel, listener);
+  const electronAPI = getElectronAPI();
+  if (!electronAPI) {
+    return () => undefined;
+  }
+
+  return electronAPI.on(channel, listener);
 }
