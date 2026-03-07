@@ -28,6 +28,17 @@
 - **Test Design**: Build passes, delete functionality triggers confirmation dialog before removing items.
 - **Validation**: `npm run build` succeeds.
 
+### fix: PDF viewer navigation detection and return button
+
+- **Scope**: `src/renderer/components/pdf-viewer.tsx`
+- **Changes**:
+  1. **Navigation detection** — Added `iframeRef` and `navigatedAway` state to detect when user clicks links inside PDF iframe that navigate away.
+  2. **Toolbar** — Added toolbar that appears on hover or when navigated away, with external link, refresh, and back buttons.
+  3. **Overlay** — When navigation is detected, shows overlay with "返回 PDF" button to reload the original PDF.
+  4. **Security handling** — Uses try/catch on `contentWindow.location` access to detect cross-origin navigation (security error = navigated away).
+- **Test Design**: Manual testing - clicking links inside PDF shows overlay with return button.
+- **Validation**: `npm run build` succeeds.
+
 
 ## 2026-03-07 (session 19)
 
