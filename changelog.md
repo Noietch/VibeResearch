@@ -32,6 +32,17 @@
   - Added patterns: `*.tmp`, `release_notes.md`, `scripts/test-*.mjs`, `scripts/restore-*.mjs`, `test-*.cjs`, `test-*.mjs`
 - **Rationale**: Prevent accidental commits of temporary development files
 
+### Build: Reduce App Bundle Size by 17%
+
+- **Scope**: `scripts/build-main.mjs`, `electron-builder.yml`
+- **Changes**:
+  - Disabled source maps in production build (saves ~3.6MB)
+  - Excluded `@napi-rs/canvas` from bundle (saves ~23MB, not needed for Electron)
+  - Limited Electron languages to English and Chinese only (saves ~15MB)
+  - Added exclusion patterns for `.map`, `.bak`, `README.md`, `LICENSE` files
+- **Rationale**: Reduce DMG size for faster downloads and installs
+- **Results**: arm64: 196M → 162M (-17%), x64: 201M → 166M (-17%)
+
 
 ## 2026-03-07 (session 6)
 

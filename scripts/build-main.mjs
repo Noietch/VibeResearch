@@ -77,7 +77,7 @@ await build({
   external,
   alias,
   tsconfig: path.join(root, 'tsconfig.main.json'),
-  sourcemap: true,
+  sourcemap: false, // Disable source maps for production (saves ~3.6MB)
   logLevel: 'info',
 });
 
@@ -91,7 +91,7 @@ await build({
   outfile: path.join(root, 'dist/main/preload.js'),
   external: ['electron'],
   tsconfig: path.join(root, 'tsconfig.main.json'),
-  sourcemap: true,
+  sourcemap: false, // Disable source maps for production
   logLevel: 'info',
 });
 

@@ -13,6 +13,14 @@ files:
   - dist/**/*
   - package.json
   - node_modules/@prisma/client/**/*
+  # Exclude unnecessary files
+  - "!**/*.map"
+  - "!**/*.bak"
+  - "!**/README.md"
+  - "!**/CHANGELOG.md"
+  - "!**/LICENSE"
+  # Exclude @napi-rs/canvas - not needed for Electron (charts render in browser)
+  - "!node_modules/@napi-rs/**/*"
 
 # electron-builder ignores hidden dirs (starting with .) in files config.
 # Use extraResources to include _prisma (copy of .prisma) outside asar,
@@ -38,6 +46,10 @@ mac:
         - arm64
         - x64
   icon: assets/icon.icns
+  # Only include English and Chinese language resources
+  electronLanguages:
+    - en
+    - zh_CN
 
 win:
   target:
@@ -45,6 +57,9 @@ win:
       arch:
         - x64
   icon: assets/icon.ico
+  electronLanguages:
+    - en
+    - zh_CN
 
 linux:
   target:
@@ -53,6 +68,9 @@ linux:
         - x64
   icon: assets/icon.png
   category: Office
+  electronLanguages:
+    - en
+    - zh_CN
 
 nsis:
   oneClick: false
