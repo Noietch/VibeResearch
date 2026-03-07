@@ -14,6 +14,7 @@ import {
 } from '../../../hooks/use-ipc';
 import { WysiwygEditor } from '../../../components/wysiwyg-editor';
 import { PdfViewer } from '../../../components/pdf-viewer';
+import { MarkdownContent } from '../../../components/markdown-content';
 import {
   ArrowLeft,
   Loader2,
@@ -292,9 +293,9 @@ function AnalysisCard({
           />
         ) : (
           analysis.summary && (
-            <p className="max-w-3xl whitespace-pre-wrap text-[15px] leading-7 text-notion-text">
-              {analysis.summary}
-            </p>
+            <div className="max-w-3xl text-[15px] leading-7 text-notion-text">
+              <MarkdownContent content={analysis.summary} />
+            </div>
           )
         )}
       </div>
@@ -309,9 +310,10 @@ function AnalysisCard({
                 className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
               />
             ) : (
-              <p className="whitespace-pre-wrap text-sm leading-6 text-notion-text">
-                {analysis.problem}
-              </p>
+              <MarkdownContent
+                content={analysis.problem}
+                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1"
+              />
             )}
           </AnalysisSection>
         )}
@@ -324,9 +326,10 @@ function AnalysisCard({
                 className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
               />
             ) : (
-              <p className="whitespace-pre-wrap text-sm leading-6 text-notion-text">
-                {analysis.method}
-              </p>
+              <MarkdownContent
+                content={analysis.method}
+                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1"
+              />
             )}
           </AnalysisSection>
         )}
@@ -339,9 +342,10 @@ function AnalysisCard({
                 className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
               />
             ) : (
-              <p className="whitespace-pre-wrap text-sm leading-6 text-notion-text">
-                {analysis.evidence}
-              </p>
+              <MarkdownContent
+                content={analysis.evidence}
+                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1"
+              />
             )}
           </AnalysisSection>
         )}
@@ -472,13 +476,20 @@ function ChatBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words ${
           isUser
             ? 'rounded-br-sm bg-notion-text text-white'
             : 'rounded-bl-sm bg-notion-sidebar text-notion-text'
         }`}
       >
-        {msg.content}
+        {isUser ? (
+          <div className="whitespace-pre-wrap">{msg.content}</div>
+        ) : (
+          <MarkdownContent
+            content={msg.content}
+            proseClassName="prose prose-sm max-w-none break-words text-inherit prose-p:my-2 prose-headings:my-3 prose-headings:text-inherit prose-strong:text-inherit prose-code:text-inherit prose-code:bg-black/5 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/5 prose-pre:text-inherit prose-blockquote:text-inherit prose-li:my-1"
+          />
+        )}
       </div>
     </div>
   );
@@ -901,6 +912,11 @@ export function OverviewPage() {
     openTab(`/papers/${paper.shortId}/reader`);
   }, [paper, openTab]);
 
+  const handleStartConversation = useCallback(() => {
+    if (!paper) return;
+    openTab(`/papers/${paper.shortId}/reader?panel=chat`);
+  }, [paper, openTab]);
+
   const handleOpenNotes = useCallback(() => {
     if (!paper) return;
     openTab(`/papers/${paper.shortId}/notes`);
@@ -1154,9 +1170,16 @@ export function OverviewPage() {
                     <Loader2 size={14} className="animate-spin" />
                     Analyzing paper...
                   </div>
-                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-blue-100 bg-white/80 p-3 font-mono text-xs leading-5 text-slate-700">
-                    {analysisStreamText || 'Waiting for model output...'}
-                  </pre>
+                  <div className="max-h-64 overflow-auto rounded-lg border border-blue-100 bg-white/80 p-3 text-slate-700">
+                    {analysisStreamText ? (
+                      <MarkdownContent
+                        content={analysisStreamText}
+                        proseClassName="prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-3 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
+                      />
+                    ) : (
+                      <div className="text-xs text-slate-500">Waiting for model output...</div>
+                    )}
+                  </div>
                 </div>
               )}
               {analysisError && (
@@ -1233,7 +1256,7 @@ export function OverviewPage() {
                 />
                 <p className="text-sm text-notion-text-tertiary">No chat history yet</p>
                 <button
-                  onClick={handleOpenReader}
+                  onClick={handleStartConversation}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
                 >
                   <BookOpen size={14} />
@@ -1245,7 +1268,9 @@ export function OverviewPage() {
                 {chatNotes.map((note) => (
                   <button
                     key={note.id}
-                    onClick={() => openTab(`/papers/${paper.shortId}/reader?chatId=${note.id}`)}
+                    onClick={() =>
+                      openTab(`/papers/${paper.shortId}/reader?panel=chat&chatId=${note.id}`)
+                    }
                     className="w-full flex items-center gap-4 rounded-lg border border-notion-border px-4 py-3 text-left transition-colors hover:bg-notion-sidebar/50"
                   >
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">

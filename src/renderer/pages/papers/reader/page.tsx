@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useTabs } from '../../../hooks/use-tabs';
 import { PdfViewer } from '../../../components/pdf-viewer';
+import { MarkdownContent } from '../../../components/markdown-content';
 import {
   ipc,
   onIpc,
@@ -217,7 +218,7 @@ function ReaderAnalysisCard({
         ) : (
           analysis.summary && (
             <div className="rounded-lg bg-white/90 p-3 text-sm leading-relaxed text-notion-text shadow-sm">
-              {analysis.summary}
+              <MarkdownContent content={analysis.summary} />
             </div>
           )
         )}
@@ -230,7 +231,10 @@ function ReaderAnalysisCard({
                 className="min-h-[84px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
               />
             ) : (
-              <p className="text-sm leading-relaxed text-notion-text">{analysis.problem}</p>
+              <MarkdownContent
+                content={analysis.problem}
+                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1"
+              />
             )}
           </ReaderAnalysisSection>
         )}
@@ -243,7 +247,10 @@ function ReaderAnalysisCard({
                 className="min-h-[84px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
               />
             ) : (
-              <p className="text-sm leading-relaxed text-notion-text">{analysis.method}</p>
+              <MarkdownContent
+                content={analysis.method}
+                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1"
+              />
             )}
           </ReaderAnalysisSection>
         )}
@@ -423,13 +430,20 @@ function ChatBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words ${
           isUser
             ? 'rounded-br-sm bg-notion-text text-white'
             : 'rounded-bl-sm bg-notion-sidebar text-notion-text'
         }`}
       >
-        {msg.content}
+        {isUser ? (
+          <div className="whitespace-pre-wrap">{msg.content}</div>
+        ) : (
+          <MarkdownContent
+            content={msg.content}
+            proseClassName="prose prose-sm max-w-none break-words text-inherit prose-p:my-2 prose-headings:my-3 prose-headings:text-inherit prose-strong:text-inherit prose-code:text-inherit prose-code:bg-black/5 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/5 prose-pre:text-inherit prose-blockquote:text-inherit prose-li:my-1"
+          />
+        )}
       </div>
     </div>
   );
@@ -490,6 +504,13 @@ export function ReaderPage() {
 
   const MIN_WIDTH = 20;
   const MAX_WIDTH = 60;
+  const activePanel = searchParams.get('panel');
+
+  useEffect(() => {
+    if (activePanel === 'chat') {
+      setChatCollapsed(false);
+    }
+  }, [activePanel]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -1053,9 +1074,16 @@ export function ReaderPage() {
                     <Loader2 size={14} className="animate-spin" />
                     Analyzing paper...
                   </div>
-                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-blue-100 bg-white/80 p-3 font-mono text-xs leading-5 text-slate-700">
-                    {analysisStreamText || 'Waiting for model output...'}
-                  </pre>
+                  <div className="max-h-56 overflow-auto rounded-lg border border-blue-100 bg-white/80 p-3 text-slate-700">
+                    {analysisStreamText ? (
+                      <MarkdownContent
+                        content={analysisStreamText}
+                        proseClassName="prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-3 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
+                      />
+                    ) : (
+                      <div className="text-xs text-slate-500">Waiting for model output...</div>
+                    )}
+                  </div>
                 </div>
               )}
               {analysisError && (
@@ -1102,8 +1130,11 @@ export function ReaderPage() {
               )}
               {streamingContent && (
                 <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-notion-sidebar px-3.5 py-2.5 text-sm leading-relaxed text-notion-text whitespace-pre-wrap break-words">
-                    {streamingContent}
+                  <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-notion-sidebar px-3.5 py-2.5 text-sm leading-relaxed text-notion-text break-words">
+                    <MarkdownContent
+                      content={streamingContent}
+                      proseClassName="prose prose-sm max-w-none break-words text-inherit prose-p:my-2 prose-headings:my-3 prose-headings:text-inherit prose-strong:text-inherit prose-code:text-inherit prose-code:bg-black/5 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/5 prose-pre:text-inherit prose-blockquote:text-inherit prose-li:my-1"
+                    />
                     <span className="ml-1 inline-block h-3 w-0.5 animate-pulse bg-notion-text-tertiary align-middle" />
                   </div>
                 </div>
