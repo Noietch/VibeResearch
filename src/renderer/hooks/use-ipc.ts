@@ -5,7 +5,7 @@
 
 declare global {
   interface Window {
-    electronAPI: {
+    electronAPI?: {
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
       on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
       off: (channel: string, listener: (...args: unknown[]) => void) => void;
@@ -15,15 +15,25 @@ declare global {
   }
 }
 
+function getElectronAPI() {
+  return typeof window === 'undefined' ? undefined : window.electronAPI;
+}
+
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  if (!window.electronAPI) throw new Error('electronAPI not available (not running in Electron)');
-  const result = await window.electronAPI.invoke(channel, ...args);
-  // Unwrap IpcResult envelope { success, data, error } if present
-  if (result !== null && typeof result === 'object' && 'success' in (result as object)) {
-    const r = result as { success: boolean; data?: T; error?: string };
-    if (!r.success) throw new Error(r.error ?? 'IPC error');
-    return r.data as T;
+  const electronAPI = getElectronAPI();
+  if (!electronAPI) {
+    return Promise.reject(
+      new Error(`IPC unavailable for channel \"${channel}\": Electron preload API not found.`),
+    );
   }
+
+  const result = await electronAPI.invoke(channel, ...args);
+  if (result !== null && typeof result === 'object' && 'success' in (result as object)) {
+    const ipcResult = result as { success: boolean; data?: T; error?: string };
+    if (!ipcResult.success) throw new Error(ipcResult.error ?? 'IPC error');
+    return ipcResult.data as T;
+  }
+
   return result as T;
 }
 
@@ -491,6 +501,10 @@ export const ipc = {
 
 /** Subscribe to IPC events from main process */
 export function onIpc(channel: string, listener: (...args: unknown[]) => void): () => void {
-  if (!window.electronAPI) return () => {};
-  return window.electronAPI.on(channel, listener);
+  const electronAPI = getElectronAPI();
+  if (!electronAPI) {
+    return () => undefined;
+  }
+
+  return electronAPI.on(channel, listener);
 }
