@@ -151,8 +151,10 @@ export async function scanChromeHistory(days: number | null = 1): Promise<ScanRe
       }
       const sql = `SELECT title, url FROM urls WHERE ${whereClause} ORDER BY last_visit_time DESC LIMIT 500;`;
 
-      const { stdout: which } = await execAsync('which sqlite3');
-      const sqlite3Path = which.trim();
+      // Use 'where' on Windows, 'which' on Unix
+      const whichCmd = process.platform === 'win32' ? 'where sqlite3' : 'which sqlite3';
+      const { stdout: which } = await execAsync(whichCmd);
+      const sqlite3Path = which.trim().split('\n')[0]; // Take first result on Windows
       const { stdout: output } = await execAsync(
         `"${sqlite3Path}" -separator "|||" "${tmpPath}" "${sql}"`,
         { timeout: 15000 },
@@ -342,9 +344,10 @@ export async function importChromeHistoryAuto(days: number | null = 1) {
       }
       const sql = `SELECT title, url FROM urls WHERE ${whereClause} ORDER BY last_visit_time DESC LIMIT 500;`;
 
-      // Use system sqlite3 CLI — no native addon needed
-      const { stdout: which } = await execAsync('which sqlite3');
-      const sqlite3Path = which.trim();
+      // Use 'where' on Windows, 'which' on Unix
+      const whichCmd = process.platform === 'win32' ? 'where sqlite3' : 'which sqlite3';
+      const { stdout: which } = await execAsync(whichCmd);
+      const sqlite3Path = which.trim().split('\n')[0]; // Take first result on Windows
       const { stdout: output } = await execAsync(
         `"${sqlite3Path}" -separator "|||" "${tmpPath}" "${sql}"`,
         { timeout: 15000 },

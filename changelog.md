@@ -2,11 +2,17 @@
 
 ## 2026-03-07 (session 33)
 
-### fix: Correct Windows binary target name in Prisma schema
+### fix: Windows initialization issues for Prisma and Chrome import
 
-- **Scope**: `prisma/schema.prisma`
-- **Problem**: Windows users got "@prisma/client did not initialize yet" error because `binaryTargets` included `"windows"` which is not a valid Prisma binary target name.
-- **Fix**: Changed `"windows"` to `"windows-x64"` and added `"windows-arm64"` for complete Windows support.
+- **Scope**: `prisma/schema.prisma`, `package.json`, `src/main/services/ingest.service.ts`
+- **Problem**: On fresh Windows machines, `npm install` followed by "Import Chrome" caused "@prisma/client did not initialize yet" error.
+  1. `binaryTargets` had invalid `"windows"` (should be `"windows-x64"` or `"windows-arm64"`)
+  2. `postinstall` script didn't run `prisma generate`, so @prisma/client was never initialized
+  3. `which sqlite3` command doesn't work on Windows (should use `where sqlite3`)
+- **Fix**:
+  1. Changed `binaryTargets` from `"windows"` to `"windows-x64", "windows-arm64"`
+  2. Added `prisma generate` to `postinstall` script
+  3. Changed `which sqlite3` to use `where` on Windows platform
 
 ## 2026-03-07 (session 32)
 

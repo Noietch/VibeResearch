@@ -19,7 +19,7 @@
     "release:mac": "bash scripts/build-release.sh",
     "release:win": "powershell -ExecutionPolicy Bypass -File scripts/build-release-win.ps1",
     "release:linux": "bash scripts/build-release-linux.sh",
-    "postinstall": "electron-rebuild -f -w better-sqlite3 || true",
+    "postinstall": "prisma generate && electron-rebuild -f -w better-sqlite3 || true",
     "precommit:check": "vitest run tests/integration/papers.test.ts tests/integration/reading.test.ts tests/integration/projects.test.ts",
     "test": "vitest run",
     "test:watch": "vitest",
