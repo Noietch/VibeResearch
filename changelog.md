@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-07 (session 33)
+
+### fix: Correct Windows binary target name in Prisma schema
+
+- **Scope**: `prisma/schema.prisma`
+- **Problem**: Windows users got "@prisma/client did not initialize yet" error because `binaryTargets` included `"windows"` which is not a valid Prisma binary target name.
+- **Fix**: Changed `"windows"` to `"windows-x64"` and added `"windows-arm64"` for complete Windows support.
+
 ## 2026-03-07 (session 32)
 
 ### fix: Allow papersDir to be saved anywhere, not just under home directory
