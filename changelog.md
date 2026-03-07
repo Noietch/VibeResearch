@@ -2,6 +2,16 @@
 
 ## 2026-03-07 (session 7)
 
+### UI: App Initialization Loading Screen
+
+- **Scope**: `src/renderer/index.html`
+- **Changes**:
+  - Added loading screen with app logo, spinner, and "Loading..." text
+  - Uses same sidebar background color (#f7f7f5) and logo SVG as the main app
+  - Logo fade-in animation, spinner rotation, and text delayed fade-in
+  - Replaced by React app once mounted, eliminating white flash on startup
+- **Rationale**: App showed blank white screen during initialization, causing poor UX
+
 ### Security: Fix Command Injection Vulnerabilities
 
 - **Scope**: `src/main/services/ai-provider.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/main/ipc/cli-tools.ipc.ts`, `src/main/services/cli-runner.service.ts`
