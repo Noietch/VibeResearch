@@ -41,3 +41,11 @@ tests/tmp/
 .secrets
 *.secret
 .test-env
+
+# Temporary / Development files
+*.tmp
+release_notes.md
+scripts/test-*.mjs
+scripts/restore-*.mjs
+test-*.cjs
+test-*.mjs
