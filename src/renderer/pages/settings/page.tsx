@@ -2103,6 +2103,33 @@ function UsageSettings() {
     return n.toString();
   };
 
+  const agentRecords = useMemo(
+    () => records.filter((record) => record.kind === 'agent'),
+    [records],
+  );
+  const agentSummary = summary?.byKind.agent;
+  const agentByModel = useMemo(() => {
+    const map = new Map<
+      string,
+      { total: number; calls: number; provider: string; model: string }
+    >();
+    for (const record of agentRecords) {
+      const key = `${record.provider}/${record.model}`;
+      const current = map.get(key) ?? {
+        total: 0,
+        calls: 0,
+        provider: record.provider,
+        model: record.model,
+      };
+      current.total += record.totalTokens;
+      current.calls += 1;
+      map.set(key, current);
+    }
+    return Array.from(map.entries())
+      .map(([key, value]) => ({ key, ...value }))
+      .sort((left, right) => right.total - left.total);
+  }, [agentRecords]);
+
   const isEmpty = records.length === 0;
 
   return (
@@ -2139,10 +2166,92 @@ function UsageSettings() {
           <BarChart3 size={32} className="mb-3 text-notion-text-tertiary opacity-40" />
           <p className="text-sm font-medium text-notion-text-secondary">No usage data yet</p>
           <p className="mt-1 text-xs text-notion-text-tertiary">
-            Token usage will appear here after you make AI API calls.
+            Token usage will appear here after you make AI API calls or run an Agent.
           </p>
         </div>
       ) : null}
+
+      {/* Agent highlight */}
+      {!!agentSummary && agentRecords.length > 0 && (
+        <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                Agent Usage
+              </div>
+              <h3 className="mt-3 text-base font-semibold text-notion-text">
+                Codex / Claude Code consumption
+              </h3>
+              <p className="mt-1 text-sm text-notion-text-secondary">
+                Dedicated usage tracking for CLI-based agent runs.
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/80 px-4 py-3 text-right shadow-sm ring-1 ring-violet-100">
+              <div className="text-2xl font-semibold tabular-nums text-violet-700">
+                {formatNumber(agentSummary.total)}
+              </div>
+              <div className="mt-0.5 text-xs text-notion-text-tertiary">agent tokens</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-violet-100 bg-white/80 px-4 py-3">
+              <div className="text-lg font-semibold tabular-nums text-violet-700">
+                {agentSummary.calls}
+              </div>
+              <div className="mt-0.5 text-xs text-notion-text-tertiary">Agent runs</div>
+            </div>
+            <div className="rounded-xl border border-violet-100 bg-white/80 px-4 py-3">
+              <div className="text-lg font-semibold tabular-nums text-fuchsia-700">
+                {formatNumber(agentSummary.prompt)}
+              </div>
+              <div className="mt-0.5 text-xs text-notion-text-tertiary">Prompt tokens</div>
+            </div>
+            <div className="rounded-xl border border-violet-100 bg-white/80 px-4 py-3">
+              <div className="text-lg font-semibold tabular-nums text-indigo-700">
+                {formatNumber(agentSummary.completion)}
+              </div>
+              <div className="mt-0.5 text-xs text-notion-text-tertiary">Completion tokens</div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-violet-100 bg-white/80">
+            <div className="border-b border-violet-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-violet-700">
+              Agent models
+            </div>
+            <div>
+              {agentByModel.map((item, index) => {
+                const maxTotal = Math.max(...agentByModel.map((entry) => entry.total));
+                const pct = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+                return (
+                  <div
+                    key={item.key}
+                    className={`px-4 py-3 ${index < agentByModel.length - 1 ? 'border-b border-violet-100' : ''}`}
+                  >
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-mono text-xs text-notion-text">{item.key}</div>
+                        <div className="mt-0.5 text-xs text-notion-text-tertiary">
+                          {item.calls} run{item.calls !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold tabular-nums text-violet-700">
+                        {formatNumber(item.total)}
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-violet-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Line Chart */}
       {lineChartData.length > 0 && lineChartData[0].data.length > 0 && (
