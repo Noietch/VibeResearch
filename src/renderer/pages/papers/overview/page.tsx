@@ -620,12 +620,18 @@ export function OverviewPage() {
               </button>
             )}
             <button
-              onClick={() => setShowCloneModal(true)}
-              disabled={!activeCli}
+              onClick={() => {
+                if (!activeCli) {
+                  alert('Please configure a CLI tool in Settings first.');
+                  return;
+                }
+                setShowCloneModal(true);
+              }}
               className="inline-flex items-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2.5 text-sm font-medium text-notion-text shadow-sm transition-all hover:bg-notion-sidebar disabled:opacity-40"
             >
               <Github size={16} />
               Clone Repo
+              {!activeCli && <span className="text-xs text-notion-text-tertiary">(需配置CLI)</span>}
             </button>
             <button
               onClick={handleDeletePaper}
