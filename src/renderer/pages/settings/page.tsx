@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ipc,
@@ -9,6 +9,8 @@ import {
   type ModelBackend,
   type ProviderKind,
   type CliConfig,
+  type TokenUsageRecord,
+  type TokenUsageSummary,
 } from '../../hooks/use-ipc';
 import {
   Settings,
@@ -26,7 +28,12 @@ import {
   Cpu,
   Zap,
   MessageSquare,
+  Globe,
+  BarChart3,
+  Trash,
+  Pencil,
 } from 'lucide-react';
+import { ResponsiveLine } from '@nivo/line';
 import { ModelCombobox } from '../../components/model-combobox';
 
 // ─── Editor SVG Icons ─────────────────────────────────────────────────────────
@@ -90,7 +97,7 @@ const EDITOR_OPTIONS = [
   { id: 'custom', name: 'Custom', command: '', Icon: Code2 },
 ] as const;
 
-type Tab = 'models' | 'storage' | 'editor';
+type Tab = 'models' | 'storage' | 'editor' | 'proxy';
 
 // ─── Provider selector ───────────────────────────────────────────────────────
 
@@ -1081,15 +1088,351 @@ function AddModelModal({
   );
 }
 
+// ─── Edit Model Modal ──────────────────────────────────────────────────────────
+
+function EditModelModal({
+  model,
+  onSave,
+  onClose,
+}: {
+  model: ModelConfig;
+  onSave: (config: Omit<ModelConfig, 'hasApiKey'> & { apiKey?: string }) => void;
+  onClose: () => void;
+}) {
+  const backend = model.backend;
+  const [name, setName] = useState(model.name);
+  const [provider, setProvider] = useState<'anthropic' | 'openai' | 'gemini' | 'custom'>(
+    model.provider ?? 'openai'
+  );
+  const [modelName, setModelName] = useState(model.model ?? '');
+  const [apiKey, setApiKey] = useState('');
+  const [baseURL, setBaseURL] = useState(model.baseURL ?? '');
+  const [command, setCommand] = useState(model.command ?? '');
+  const [envVars, setEnvVars] = useState(model.envVars ?? '');
+  const [showKey, setShowKey] = useState(true);
+  const [providerOpen, setProviderOpen] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load API key on mount
+  useEffect(() => {
+    if (backend === 'api') {
+      ipc.getModelApiKey(model.id).then((key) => {
+        setApiKey(key ?? '');
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+  }, [model.id, backend]);
+
+  // ESC to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const handleSave = async () => {
+    const displayName = name.trim() || (backend === 'api' ? `${provider}/${modelName}` : command.split(' ')[0]);
+    if (!displayName) return;
+    await onSave({
+      id: model.id,
+      name: displayName,
+      kind: model.kind,
+      backend,
+      ...(backend === 'api'
+        ? {
+            provider,
+            model: modelName,
+            apiKey: apiKey.trim() || undefined,
+            baseURL: baseURL.trim() || undefined,
+          }
+        : {}),
+      ...(backend === 'cli' ? { command: command.trim(), envVars: envVars.trim() } : {}),
+    });
+    onClose();
+  };
+
+  const isValid = backend === 'api' ? !!modelName.trim() : !!command.trim();
+
+  const handleTest = async () => {
+    if (backend !== 'api' || !modelName.trim()) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await ipc.testModelConnection({
+        provider,
+        model: modelName.trim(),
+        apiKey: apiKey.trim() || undefined,
+        baseURL: baseURL.trim() || undefined,
+      });
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({ success: false, error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.15 }}
+            className="w-full max-w-lg rounded-2xl border border-notion-border bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-notion-text-tertiary" />
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.15 }}
+          className="w-full max-w-lg rounded-2xl border border-notion-border bg-white p-6 shadow-xl"
+        >
+          <h2 className="mb-1 text-base font-semibold text-notion-text">
+            Edit {MODEL_KIND_META[model.kind].label} Model
+          </h2>
+          <p className="mb-4 text-xs text-notion-text-tertiary">
+            {backend === 'cli' ? 'CLI subprocess' : 'API direct'}
+          </p>
+
+          <div className="space-y-4">
+            {/* Name */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                Name <span className="font-normal text-notion-text-tertiary">(optional)</span>
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={
+                  backend === 'api'
+                    ? `e.g. ${provider}/${modelName || 'model-name'}`
+                    : 'e.g. Claude Code'
+                }
+                className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            {backend === 'api' ? (
+              <>
+                {/* Provider */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                    Provider
+                  </label>
+                  <div className="relative" data-provider-select>
+                    <button
+                      type="button"
+                      onClick={() => setProviderOpen((o) => !o)}
+                      className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text transition-colors hover:border-blue-300 focus:outline-none"
+                    >
+                      <span>{API_PROVIDER_OPTIONS.find((p) => p.id === provider)?.label}</span>
+                      <ChevronDown
+                        size={14}
+                        className={`text-notion-text-tertiary transition-transform ${providerOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {providerOpen && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-notion-border bg-white shadow-lg">
+                        {API_PROVIDER_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setProvider(opt.id);
+                              setProviderOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors hover:bg-notion-sidebar ${provider === opt.id ? 'bg-blue-50 text-blue-700' : 'text-notion-text'}`}
+                          >
+                            {opt.label}
+                            {provider === opt.id && <Check size={13} className="text-blue-600" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Model */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                    Model ID
+                  </label>
+                  <ModelCombobox value={modelName} onChange={setModelName} placeholder="选择或输入模型ID" />
+                </div>
+
+                {/* API Key */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                    API Key{' '}
+                    <span className="font-normal text-notion-text-tertiary">
+                      (optional if set via env)
+                    </span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showKey ? 'text' : 'password'}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="sk-..."
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 pr-10 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey((p) => !p)}
+                      className="absolute right-3 text-notion-text-tertiary hover:text-notion-text"
+                    >
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Base URL (optional override) */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                    Base URL{' '}
+                    <span className="font-normal text-notion-text-tertiary">
+                      (optional, for proxy/custom endpoint)
+                    </span>
+                  </label>
+                  <input
+                    value={baseURL}
+                    onChange={(e) => setBaseURL(e.target.value)}
+                    placeholder={
+                      provider === 'anthropic'
+                        ? 'https://api.anthropic.com (default)'
+                        : provider === 'openai'
+                          ? 'https://api.openai.com/v1 (default)'
+                          : provider === 'gemini'
+                            ? 'https://generativelanguage.googleapis.com (default)'
+                            : 'https://your-proxy.example.com/v1'
+                    }
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* CLI Command */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                    Command
+                  </label>
+                  <input
+                    value={command}
+                    onChange={(e) => setCommand(e.target.value)}
+                    placeholder="e.g. claude --dangerously-skip-permissions"
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                {/* Env Vars */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                    Environment Variables{' '}
+                    <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                  </label>
+                  <input
+                    value={envVars}
+                    onChange={(e) => setEnvVars(e.target.value)}
+                    placeholder="ANTHROPIC_API_KEY=sk-..."
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Test result */}
+          {testResult && (
+            <div
+              className={`mt-3 rounded-lg px-3 py-2 text-sm ${testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}
+            >
+              {testResult.success
+                ? '✓ Connection successful!'
+                : `✗ ${testResult.error || 'Connection failed'}`}
+            </div>
+          )}
+
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-notion-border px-4 py-2 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
+            >
+              Cancel
+            </button>
+            {backend === 'api' && (
+              <button
+                onClick={handleTest}
+                disabled={testing || !modelName.trim()}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
+              >
+                {testing ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 size={14} className="animate-spin" />
+                    Testing...
+                  </span>
+                ) : (
+                  'Test Connection'
+                )}
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={!isValid}
+              className="rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+            >
+              Save
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 function ModelCard({
   model,
   isActive,
   onSetActive,
+  onEdit,
   onDelete,
 }: {
   model: ModelConfig;
   isActive: boolean;
   onSetActive: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [testing, setTesting] = useState(false);
@@ -1129,11 +1472,6 @@ function ModelCard({
                 Active
               </span>
             )}
-            {model.backend === 'api' && model.hasApiKey && (
-              <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-2xs font-medium text-green-700">
-                Key saved
-              </span>
-            )}
           </div>
           <p className="mt-0.5 truncate font-mono text-xs text-notion-text-tertiary">{subtitle}</p>
         </div>
@@ -1164,6 +1502,13 @@ function ModelCard({
             </button>
           )}
           <button
+            onClick={onEdit}
+            className="rounded-lg p-1.5 text-notion-text-tertiary transition-colors hover:bg-notion-sidebar hover:text-notion-text"
+            title="Edit"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
             onClick={onDelete}
             className="rounded-lg p-1.5 text-notion-text-tertiary transition-colors hover:bg-red-50 hover:text-red-500"
             title="Delete"
@@ -1193,6 +1538,7 @@ function ModelKindSection({
   models,
   activeId,
   onSetActive,
+  onEdit,
   onDelete,
   onAdd,
 }: {
@@ -1200,6 +1546,7 @@ function ModelKindSection({
   models: ModelConfig[];
   activeId: string | null;
   onSetActive: (id: string) => void;
+  onEdit: (model: ModelConfig) => void;
   onDelete: (id: string) => void;
   onAdd: (kind: ModelKind) => void;
 }) {
@@ -1241,6 +1588,7 @@ function ModelKindSection({
                 model={m}
                 isActive={m.id === activeId}
                 onSetActive={() => onSetActive(m.id)}
+                onEdit={() => onEdit(m)}
                 onDelete={() => onDelete(m.id)}
               />
             ))}
@@ -1260,6 +1608,7 @@ function ModelsSettings() {
   });
   const [loading, setLoading] = useState(true);
   const [addingKind, setAddingKind] = useState<ModelKind | null>(null);
+  const [editingModel, setEditingModel] = useState<ModelConfig | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const load = async () => {
@@ -1325,6 +1674,7 @@ function ModelsSettings() {
           models={models.filter((m) => m.kind === kind)}
           activeId={activeIds[kind]}
           onSetActive={(id) => handleSetActive(kind, id)}
+          onEdit={setEditingModel}
           onDelete={handleDelete}
           onAdd={setAddingKind}
         />
@@ -1336,11 +1686,378 @@ function ModelsSettings() {
           onClose={() => setAddingKind(null)}
         />
       )}
+      {editingModel && (
+        <EditModelModal
+          model={editingModel}
+          onSave={handleAdd}
+          onClose={() => setEditingModel(null)}
+        />
+      )}
+
+      {/* Usage section */}
+      <div className="mt-8">
+        <div className="mb-4 border-t border-notion-border pt-6">
+          <h2 className="text-sm font-semibold text-notion-text">Token Usage</h2>
+          <p className="mt-0.5 text-xs text-notion-text-tertiary">API call statistics across all models</p>
+        </div>
+        <UsageSettings />
+      </div>
     </div>
   );
 }
 
-// ─── Settings Page ────────────────────────────────────────────────────────────
+// ─── Usage Settings ──────────────────────────────────────────────────────────
+
+function UsageSettings() {
+  const [records, setRecords] = useState<TokenUsageRecord[]>([]);
+  const [summary, setSummary] = useState<TokenUsageSummary | null>(null);
+  const [view, setView] = useState<'summary' | 'records'>('summary');
+
+  useEffect(() => {
+    ipc.getTokenUsageRecords().then((r) => setRecords(r));
+    ipc.getTokenUsageSummary().then((s) => setSummary(s));
+  }, []);
+
+  const handleClear = async () => {
+    if (confirm('Clear all token usage data?')) {
+      await ipc.clearTokenUsage();
+      setRecords([]);
+      setSummary(null);
+    }
+  };
+
+  // Group records by hour for line chart (nivo format)
+  const lineChartData = useMemo(() => {
+    const byHour: Record<string, Record<string, number>> = {};
+    const modelSet = new Set<string>();
+
+    for (const r of records) {
+      const hour = r.timestamp.slice(0, 13); // YYYY-MM-DDTHH
+      const modelKey = `${r.provider}/${r.model}`;
+      modelSet.add(modelKey);
+
+      if (!byHour[hour]) {
+        byHour[hour] = {};
+      }
+      if (!byHour[hour][modelKey]) {
+        byHour[hour][modelKey] = 0;
+      }
+      byHour[hour][modelKey] += r.totalTokens;
+    }
+
+    const sortedHours = Object.keys(byHour).sort().slice(-48); // last 48 hours
+
+    return Array.from(modelSet)
+      .slice(0, 6)
+      .map((model) => ({
+        id: model,
+        data: sortedHours.map((hour) => ({
+          x: hour,
+          y: byHour[hour][model] || 0,
+        })),
+      }));
+  }, [records]);
+
+  const nivoColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+  const formatNumber = (n: number) => {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toString();
+  };
+
+  const isEmpty = records.length === 0;
+
+  return (
+    <div className="space-y-5">
+      {/* Summary stats */}
+      {summary && !isEmpty ? (
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Total Tokens', value: formatNumber(summary.totalTokens), accent: 'text-blue-600' },
+            { label: 'API Calls', value: String(summary.totalCalls), accent: 'text-emerald-600' },
+            { label: 'Prompt', value: formatNumber(summary.totalPromptTokens), accent: 'text-amber-600' },
+            { label: 'Completion', value: formatNumber(summary.totalCompletionTokens), accent: 'text-purple-600' },
+          ].map(({ label, value, accent }) => (
+            <div key={label} className="rounded-xl border border-notion-border bg-white px-4 py-3">
+              <div className={`text-xl font-semibold tabular-nums ${accent}`}>{value}</div>
+              <div className="mt-0.5 text-xs text-notion-text-tertiary">{label}</div>
+            </div>
+          ))}
+        </div>
+      ) : isEmpty ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-notion-border bg-notion-sidebar py-12 text-center">
+          <BarChart3 size={32} className="mb-3 text-notion-text-tertiary opacity-40" />
+          <p className="text-sm font-medium text-notion-text-secondary">No usage data yet</p>
+          <p className="mt-1 text-xs text-notion-text-tertiary">
+            Token usage will appear here after you make AI API calls.
+          </p>
+        </div>
+      ) : null}
+
+      {/* Line Chart */}
+      {lineChartData.length > 0 && lineChartData[0].data.length > 0 && (
+        <div className="rounded-xl border border-notion-border bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-notion-text-tertiary">
+              Token Usage · Last 48h
+            </h3>
+          </div>
+          <div style={{ height: 220 }}>
+            <ResponsiveLine
+              data={lineChartData}
+              margin={{ top: 10, right: 100, bottom: 44, left: 52 }}
+              xScale={{ type: 'point' }}
+              yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+              curve="monotoneX"
+              axisTop={null}
+              axisRight={null}
+              axisBottom={{
+                tickSize: 0,
+                tickPadding: 8,
+                tickRotation: -40,
+                format: (v: string) => v.slice(11, 16),
+                tickValues: 'every 4 hours',
+              }}
+              axisLeft={{
+                tickSize: 0,
+                tickPadding: 8,
+                tickRotation: 0,
+                format: (v: number) => formatNumber(v),
+              }}
+              theme={{
+                axis: {
+                  ticks: { text: { fontSize: 10, fill: '#9ca3af' } },
+                },
+                grid: { line: { stroke: '#f3f4f6', strokeWidth: 1 } },
+              }}
+              colors={nivoColors}
+              lineWidth={2}
+              pointSize={0}
+              enableArea={true}
+              areaOpacity={0.08}
+              useMesh={true}
+              animate={true}
+              motionConfig="gentle"
+              enableGridX={false}
+              legends={[
+                {
+                  anchor: 'bottom-right',
+                  direction: 'column',
+                  justify: false,
+                  translateX: 92,
+                  translateY: 0,
+                  itemsSpacing: 3,
+                  itemDirection: 'left-to-right',
+                  itemWidth: 80,
+                  itemHeight: 16,
+                  itemOpacity: 0.8,
+                  symbolSize: 8,
+                  symbolShape: 'circle',
+                },
+              ]}
+              tooltip={({ point }) => (
+                <div className="rounded-lg border border-notion-border bg-white px-3 py-2 shadow-md">
+                  <div className="mb-1 text-xs font-semibold text-notion-text">{point.seriesId}</div>
+                  <div className="text-xs text-notion-text-secondary">
+                    {(point.data.x as string).slice(11, 16)}{' '}
+                    <span className="font-semibold text-notion-text">
+                      {formatNumber(point.data.y as number)}
+                    </span>{' '}
+                    tokens
+                  </div>
+                </div>
+              )}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* By Model / Records tabs */}
+      {!isEmpty && (
+        <>
+          <div className="flex items-center gap-1 rounded-lg border border-notion-border bg-notion-sidebar p-1">
+            {(['summary', 'records'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+                  view === v
+                    ? 'bg-white text-notion-text shadow-sm'
+                    : 'text-notion-text-secondary hover:text-notion-text'
+                }`}
+              >
+                {v === 'summary' ? 'By Model' : 'Records'}
+              </button>
+            ))}
+          </div>
+
+          {view === 'summary' && summary && (
+            <div className="rounded-xl border border-notion-border bg-white">
+              {Object.entries(summary.byModel).map(([model, data], i, arr) => {
+                const maxTotal = Math.max(...Object.values(summary.byModel).map((d) => d.total));
+                const pct = maxTotal > 0 ? (data.total / maxTotal) * 100 : 0;
+                return (
+                  <div
+                    key={model}
+                    className={`px-4 py-3 ${i < arr.length - 1 ? 'border-b border-notion-border' : ''}`}
+                  >
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="font-mono text-xs text-notion-text">{model}</span>
+                      <div className="flex items-center gap-3 text-xs text-notion-text-secondary">
+                        <span>{data.calls} calls</span>
+                        <span className="font-semibold text-notion-text">
+                          {formatNumber(data.total)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-notion-sidebar">
+                      <div
+                        className="h-full rounded-full bg-blue-500 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {view === 'records' && (
+            <div className="rounded-xl border border-notion-border bg-white">
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b border-notion-border">
+                      {['Time', 'Model', 'Prompt', 'Completion', 'Total'].map((h, i) => (
+                        <th
+                          key={h}
+                          className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-notion-text-tertiary ${
+                            i >= 2 ? 'text-right' : 'text-left'
+                          }`}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records
+                      .slice()
+                      .reverse()
+                      .slice(0, 100)
+                      .map((r, i) => (
+                        <tr
+                          key={i}
+                          className="border-b border-notion-border last:border-0 hover:bg-notion-sidebar/50"
+                        >
+                          <td className="px-3 py-2 font-mono text-xs text-notion-text-tertiary">
+                            {r.timestamp.slice(0, 16).replace('T', ' ')}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-notion-text">
+                            {r.provider}/{r.model}
+                          </td>
+                          <td className="px-3 py-2 text-right text-xs tabular-nums text-notion-text-secondary">
+                            {formatNumber(r.promptTokens)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-xs tabular-nums text-notion-text-secondary">
+                            {formatNumber(r.completionTokens)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-xs tabular-nums font-semibold text-notion-text">
+                            {formatNumber(r.totalTokens)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Clear button */}
+      {!isEmpty && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleClear}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-notion-text-tertiary transition-colors hover:bg-red-50 hover:text-red-600"
+          >
+            <Trash size={12} />
+            Clear data
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Proxy Settings ──────────────────────────────────────────────────────────
+
+function ProxySettings() {
+  const [proxy, setProxy] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    ipc
+      .getSettings()
+      .then((s) => {
+        setProxy(s.proxy ?? '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await ipc.setProxy(proxy.trim() || undefined);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // silent
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <p className="mb-5 text-sm text-notion-text-secondary">
+        Configure HTTP or SOCKS proxy for network requests.
+      </p>
+      <div className="rounded-xl border border-notion-border bg-white p-5">
+        <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+          HTTP/SOCKS Proxy <span className="font-normal text-notion-text-tertiary">(optional)</span>
+        </label>
+        <input
+          value={proxy}
+          onChange={(e) => setProxy(e.target.value)}
+          placeholder="e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080"
+          className="w-full rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        />
+        <p className="mt-2 text-xs text-notion-text-tertiary">
+          Used for PDF downloads, CLI tools, and AI API calls.
+        </p>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:opacity-80 disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : saved ? (
+              <Check size={14} />
+            ) : null}
+            {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('models');
@@ -1349,6 +2066,7 @@ export function SettingsPage() {
     { id: 'models', label: 'Models', icon: Cpu },
     { id: 'editor', label: 'Editor', icon: Code2 },
     { id: 'storage', label: 'Storage', icon: HardDrive },
+    { id: 'proxy', label: 'Proxy', icon: Globe },
   ];
 
   return (
@@ -1404,6 +2122,7 @@ export function SettingsPage() {
         {activeTab === 'models' && <ModelsSettings />}
         {activeTab === 'editor' && <EditorSettings />}
         {activeTab === 'storage' && <StorageSettings />}
+        {activeTab === 'proxy' && <ProxySettings />}
       </div>
     </>
   );

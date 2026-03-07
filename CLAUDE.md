@@ -43,6 +43,17 @@ scripts/      # build-main.mjs, build-release.sh
    - Pre-commit checks are required.
    - Formatting, lint, and review-style static checks must pass.
 
+4. **Database schema changes require migration**
+   - When adding new features that modify `prisma/schema.prisma`, always run `npx prisma db push` to sync the database.
+   - Remind user to run migration if schema changes are detected.
+   - **Note**: Database path is `{VIBE_RESEARCH_STORAGE_DIR}/vibe-research.db` (defaults to `~/.vibe-research/vibe-research.db`). Update `.env` DATABASE_URL accordingly before running CLI commands.
+
+5. **Commit working code immediately**
+   - When a feature is functionally complete and passes type checks, commit it right away.
+   - Use `git add` and `git commit` promptly to preserve work.
+   - This prevents accidental loss of code from git operations (checkout, reset, etc.).
+   - Commit message format: `feat/fix/refactor: brief description`
+
 ## Expected coding sequence
 
 1. Create changelog entry for the coding session.
