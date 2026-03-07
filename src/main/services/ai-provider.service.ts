@@ -14,6 +14,22 @@ import { spawnSync } from 'child_process';
 import { getProxy, getProxyScope } from '../store/app-settings-store';
 import { proxyFetch } from './proxy-fetch';
 
+function isOfficialOpenAIBaseUrl(baseURL?: string): boolean {
+  if (!baseURL) return true;
+  try {
+    const url = new URL(baseURL);
+    return url.hostname === 'api.openai.com';
+  } catch {
+    return false;
+  }
+}
+
+function shouldUseOpenAIChatCompatibility(providerId: string, baseURL?: string): boolean {
+  if (providerId === 'custom') return true;
+  if (providerId === 'openai' && !isOfficialOpenAIBaseUrl(baseURL)) return true;
+  return false;
+}
+
 /** Get a custom fetch function with proxy support if configured */
 function getProxyFetch(): typeof fetch | undefined {
   const scope = getProxyScope();
@@ -99,7 +115,7 @@ export function getLanguageModel(config: ProviderConfig & { apiKey?: string }): 
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return provider(model);
+      return shouldUseOpenAIChatCompatibility(id, baseURL) ? provider.chat(model) : provider(model);
     }
     case 'gemini': {
       const provider = createGoogleGenerativeAI({
@@ -115,7 +131,7 @@ export function getLanguageModel(config: ProviderConfig & { apiKey?: string }): 
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return provider(model);
+      return provider.chat(model);
     }
     default:
       throw new Error(`Unknown provider: ${id}`);
@@ -316,7 +332,9 @@ export function getLanguageModelFromConfig(
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return p(model);
+      return shouldUseOpenAIChatCompatibility(provider ?? 'openai', baseURL)
+        ? p.chat(model)
+        : p(model);
     }
     case 'gemini': {
       const p = createGoogleGenerativeAI({
@@ -332,7 +350,7 @@ export function getLanguageModelFromConfig(
         baseURL,
         ...(proxyFetch ? { fetch: proxyFetch } : {}),
       });
-      return p(model);
+      return p.chat(model);
     }
     default:
       throw new Error(`Unknown provider: ${provider}`);
@@ -559,7 +577,9 @@ export async function testApiConnection(params: {
           baseURL,
           ...(proxyFetch ? { fetch: proxyFetch } : {}),
         });
-        languageModel = p(model);
+        languageModel = shouldUseOpenAIChatCompatibility(provider, baseURL)
+          ? p.chat(model)
+          : p(model);
         break;
       }
       case 'gemini': {
@@ -580,7 +600,7 @@ export async function testApiConnection(params: {
           baseURL,
           ...(proxyFetch ? { fetch: proxyFetch } : {}),
         });
-        languageModel = p(model);
+        languageModel = p.chat(model);
         break;
       }
       default:

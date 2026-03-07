@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { build } from 'esbuild';
+import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -98,3 +99,14 @@ await build({
 });
 
 console.log('Main process build complete.');
+
+const pdfWorkerSource = path.join(root, 'node_modules/pdf-parse/dist/worker/pdf.worker.mjs');
+const pdfWorkerTarget = path.join(root, 'dist/main/pdf.worker.mjs');
+
+try {
+  await fs.mkdir(path.dirname(pdfWorkerTarget), { recursive: true });
+  await fs.copyFile(pdfWorkerSource, pdfWorkerTarget);
+  console.log('Copied pdf.worker.mjs to dist/main.');
+} catch (error) {
+  console.warn('Failed to copy pdf.worker.mjs:', error);
+}
