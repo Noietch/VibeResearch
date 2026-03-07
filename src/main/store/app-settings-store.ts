@@ -6,14 +6,27 @@ import {
   getStorageDir,
 } from './storage-path';
 
+export interface ProxyScope {
+  pdfDownload: boolean; // PDF downloads from arxiv etc.
+  aiApi: boolean; // AI API calls (Anthropic, OpenAI, Gemini)
+  cliTools: boolean; // CLI tools (claude, codex, gemini)
+}
+
 interface AppSettings {
   papersDir: string;
   editorCommand: string; // e.g. "code" or "cursor"
   proxy?: string; // HTTP/SOCKS proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
+  proxyScope?: ProxyScope; // Where to use the proxy
   tagMigrationV1Done?: boolean;
 }
 
 const DEFAULT_PAPERS_DIR = getPapersBaseDir();
+
+const DEFAULT_PROXY_SCOPE: ProxyScope = {
+  pdfDownload: true,
+  aiApi: true,
+  cliTools: true,
+};
 
 function getSettingsPath(): string {
   return getAppSettingsPath();
@@ -76,6 +89,17 @@ export function getProxy(): string | undefined {
 export function setProxy(proxy: string | undefined) {
   const settings = load();
   settings.proxy = proxy;
+  save(settings);
+}
+
+export function getProxyScope(): ProxyScope {
+  const settings = load();
+  return { ...DEFAULT_PROXY_SCOPE, ...settings.proxyScope };
+}
+
+export function setProxyScope(scope: ProxyScope) {
+  const settings = load();
+  settings.proxyScope = scope;
   save(settings);
 }
 

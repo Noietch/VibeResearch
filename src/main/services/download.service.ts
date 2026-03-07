@@ -2,13 +2,14 @@ import path from 'path';
 import fs from 'fs/promises';
 import { PapersRepository } from '@db';
 import { extractArxivId } from '@shared';
-import { getPapersDir, getProxy } from '../store/app-settings-store';
+import { getPapersDir, getProxy, getProxyScope } from '../store/app-settings-store';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { Agent } from 'node:http';
 
 function getProxyAgent(): Agent | undefined {
   const proxy = getProxy();
-  if (!proxy) return undefined;
+  const scope = getProxyScope();
+  if (!proxy || !scope.pdfDownload) return undefined;
   return new HttpsProxyAgent(proxy) as unknown as Agent;
 }
 

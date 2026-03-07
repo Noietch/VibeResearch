@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-import { getProxy } from '../store/app-settings-store';
+import { getProxy, getProxyScope } from '../store/app-settings-store';
 
 export type CliToolName = 'claude' | 'codex' | 'gemini';
 
@@ -79,10 +79,11 @@ export function runCli(
   options: RunCliOptions = {},
 ): { kill: () => void } {
   const proxyUrl = getProxy();
+  const proxyScope = getProxyScope();
   const proxyEnv: Record<string, string> = {};
 
   // Inject proxy env vars if useProxy is true and proxy is configured
-  if (options.useProxy && proxyUrl) {
+  if (options.useProxy && proxyUrl && proxyScope.cliTools) {
     // Set common proxy environment variables
     proxyEnv.HTTP_PROXY = proxyUrl;
     proxyEnv.HTTPS_PROXY = proxyUrl;

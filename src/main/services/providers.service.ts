@@ -13,8 +13,12 @@ import {
   getEditorCommand,
   getProxy,
   setProxy,
+  getProxyScope,
+  setProxyScope,
   getStorageRoot as getStorageRootPath,
+  type ProxyScope,
 } from '../store/app-settings-store';
+import { testProxyConnectivity, type ProxyTestResult } from './proxy-test.service';
 
 export class ProvidersService {
   listProviders(): (ProviderConfig & { hasApiKey: boolean })[] {
@@ -73,6 +77,24 @@ export class ProvidersService {
 
   getProxyUrl(): string | undefined {
     return getProxy();
+  }
+
+  getProxyScopeSettings(): ProxyScope {
+    return getProxyScope();
+  }
+
+  setProxyScopeSettings(scope: ProxyScope): { success: boolean } {
+    setProxyScope(scope);
+    return { success: true };
+  }
+
+  async testProxy(): Promise<{ hasProxy: boolean; results: ProxyTestResult[] }> {
+    const proxy = getProxy();
+    const results = await testProxyConnectivity();
+    return {
+      hasProxy: !!proxy,
+      results,
+    };
   }
 
   getStorageRoot(): string {

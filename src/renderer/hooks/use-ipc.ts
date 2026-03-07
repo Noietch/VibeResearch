@@ -214,6 +214,20 @@ export type ProviderKind = 'anthropic' | 'openai' | 'gemini' | 'custom';
 export type ModelKind = 'agent' | 'lightweight' | 'chat';
 export type ModelBackend = 'api' | 'cli';
 
+export interface ProxyScope {
+  pdfDownload: boolean;
+  aiApi: boolean;
+  cliTools: boolean;
+}
+
+export interface ProxyTestResult {
+  url: string;
+  name: string;
+  success: boolean;
+  latency?: number;
+  error?: string;
+}
+
 export interface TokenUsageRecord {
   timestamp: string;
   provider: string;
@@ -390,10 +404,12 @@ export const ipc = {
 
   // App settings
   getSettings: () =>
-    invoke<{ papersDir: string; editorCommand: string; proxy?: string }>('settings:get'),
+    invoke<{ papersDir: string; editorCommand: string; proxy?: string; proxyScope?: ProxyScope }>('settings:get'),
   setPapersDir: (dir: string) => invoke<{ success: boolean }>('settings:setPapersDir', dir),
   setEditor: (cmd: string) => invoke<{ success: boolean }>('settings:setEditor', cmd),
   setProxy: (proxy: string | undefined) => invoke<{ success: boolean }>('settings:setProxy', proxy),
+  setProxyScope: (scope: ProxyScope) => invoke<{ success: boolean }>('settings:setProxyScope', scope),
+  testProxy: () => invoke<{ hasProxy: boolean; results: ProxyTestResult[] }>('settings:testProxy'),
   selectFolder: () => invoke<string | null>('settings:selectFolder'),
   getStorageRoot: () => invoke<string>('settings:getStorageRoot'),
 

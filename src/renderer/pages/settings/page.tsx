@@ -11,6 +11,8 @@ import {
   type CliConfig,
   type TokenUsageRecord,
   type TokenUsageSummary,
+  type ProxyScope,
+  type ProxyTestResult,
 } from '../../hooks/use-ipc';
 import {
   Settings,
@@ -33,6 +35,7 @@ import {
   Trash,
   Pencil,
   Wrench,
+  X,
 } from 'lucide-react';
 import { ResponsiveLine } from '@nivo/line';
 import { ModelCombobox } from '../../components/model-combobox';
@@ -2057,14 +2060,24 @@ function UsageSettings() {
 
 function ProxySettings() {
   const [proxy, setProxy] = useState('');
+  const [proxyScope, setProxyScope] = useState<ProxyScope>({
+    pdfDownload: true,
+    aiApi: true,
+    cliTools: true,
+  });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResults, setTestResults] = useState<ProxyTestResult[] | null>(null);
 
   useEffect(() => {
     ipc
       .getSettings()
       .then((s) => {
         setProxy(s.proxy ?? '');
+        if (s.proxyScope) {
+          setProxyScope(s.proxyScope as ProxyScope);
+        }
       })
       .catch(() => {});
   }, []);
@@ -2073,6 +2086,7 @@ function ProxySettings() {
     setSaving(true);
     try {
       await ipc.setProxy(proxy.trim() || undefined);
+      await ipc.setProxyScope(proxyScope);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
@@ -2080,6 +2094,23 @@ function ProxySettings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResults(null);
+    try {
+      const result = await ipc.testProxy();
+      setTestResults(result.results);
+    } catch {
+      // silent
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const toggleScope = (key: keyof ProxyScope) => {
+    setProxyScope((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -2097,10 +2128,89 @@ function ProxySettings() {
           placeholder="e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080"
           className="w-full rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
         />
-        <p className="mt-2 text-xs text-notion-text-tertiary">
-          Used for PDF downloads, CLI tools, and AI API calls.
-        </p>
 
+        {/* Proxy Scope Section */}
+        <div className="mt-4">
+          <label className="mb-2 block text-xs font-medium text-notion-text-secondary">
+            Use Proxy For
+          </label>
+          <div className="flex flex-wrap gap-4">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={proxyScope.pdfDownload}
+                onChange={() => toggleScope('pdfDownload')}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-notion-text">PDF Downloads</span>
+            </label>
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={proxyScope.aiApi}
+                onChange={() => toggleScope('aiApi')}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-notion-text">AI API Calls</span>
+            </label>
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={proxyScope.cliTools}
+                onChange={() => toggleScope('cliTools')}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-notion-text">CLI Tools</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Test Connection Button */}
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={handleTest}
+            disabled={testing || !proxy.trim()}
+            className="inline-flex items-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2 text-sm font-medium text-notion-text shadow-sm transition-all hover:bg-notion-sidebar disabled:opacity-40"
+          >
+            {testing ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Globe size={14} />
+            )}
+            Test Connection
+          </button>
+          {!proxy.trim() && (
+            <span className="text-xs text-notion-text-tertiary">Enter a proxy URL to test</span>
+          )}
+        </div>
+
+        {/* Test Results */}
+        {testResults && (
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-medium text-notion-text-secondary">Test Results</p>
+            {testResults.map((result) => (
+              <div
+                key={result.url}
+                className="flex items-center gap-3 rounded-lg bg-notion-sidebar px-3 py-2"
+              >
+                {result.success ? (
+                  <Check size={16} className="text-green-600" />
+                ) : (
+                  <X size={16} className="text-red-500" />
+                )}
+                <span className="text-sm font-medium text-notion-text">{result.name}</span>
+                {result.latency && (
+                  <span className="text-xs text-notion-text-tertiary">{result.latency}ms</span>
+                )}
+                {result.error && (
+                  <span className="text-xs text-red-500">{result.error}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Save Button */}
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleSave}

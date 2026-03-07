@@ -12,12 +12,13 @@ import {
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { Agent } from 'node:http';
 import { spawnSync } from 'child_process';
-import { getProxy } from '../store/app-settings-store';
+import { getProxy, getProxyScope } from '../store/app-settings-store';
 
 /** Get a custom fetch function with proxy support if configured */
 function getProxyFetch(): typeof fetch | undefined {
+  const scope = getProxyScope();
   const proxyUrl = getProxy();
-  if (!proxyUrl) return undefined;
+  if (!proxyUrl || !scope.aiApi) return undefined;
 
   const agent = new HttpsProxyAgent(proxyUrl) as unknown as Agent;
   const originalFetch = globalThis.fetch;

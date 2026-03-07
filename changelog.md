@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-07 (session 36)
+
+### feat: Add proxy test button and configurable proxy scope
+
+- **Scope**: `src/main/services/proxy-test.service.ts`, `src/main/store/app-settings-store.ts`, `src/main/services/download.service.ts`, `src/main/services/ai-provider.service.ts`, `src/main/services/cli-runner.service.ts`, `src/main/services/providers.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/renderer/pages/settings/page.tsx`, `src/renderer/hooks/use-ipc.ts`
+- **Problem**: Users had no way to verify if their proxy configuration actually works before using the app. The proxy was applied globally without the ability to control which features use it.
+- **Solution**:
+  1. Created `proxy-test.service.ts` - tests connectivity to Google, GitHub, YouTube via the configured proxy
+  2. Added `ProxyScope` interface to control where proxy is applied:
+     - `pdfDownload`: PDF downloads from arxiv etc.
+     - `aiApi`: AI API calls (Anthropic, OpenAI, Gemini)
+     - `cliTools`: CLI tools (claude, codex, gemini)
+  3. Updated download.service.ts, ai-provider.service.ts, cli-runner.service.ts to respect proxy scope
+  4. Added "Test Connection" button in Proxy Settings UI with real-time status indicators
+  5. Results show success/failure with latency for each endpoint
+
+
 ## 2026-03-07 (session 35)
 
 ### fix: Platform-specific Prisma engine loading on Windows

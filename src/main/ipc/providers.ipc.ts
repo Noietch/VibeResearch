@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { providersService } from '../services/providers.service';
 import { getShellPath } from '../services/cli-runner.service';
 import { type IpcResult, ok, err } from '@shared';
+import type { ProxyScope } from '../store/app-settings-store';
 
 export function setupProvidersIpc() {
   ipcMain.handle('providers:list', async (): Promise<IpcResult<unknown>> => {
@@ -127,6 +128,31 @@ export function setupProvidersIpc() {
       }
     },
   );
+
+  ipcMain.handle(
+    'settings:setProxyScope',
+    async (_, scope: ProxyScope): Promise<IpcResult<unknown>> => {
+      try {
+        const result = providersService.setProxyScopeSettings(scope);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[settings:setProxyScope] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle('settings:testProxy', async (): Promise<IpcResult<unknown>> => {
+    try {
+      const result = await providersService.testProxy();
+      return ok(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[settings:testProxy] Error:', msg);
+      return err(msg);
+    }
+  });
 
   ipcMain.handle('settings:getStorageRoot', async (): Promise<IpcResult<unknown>> => {
     try {
