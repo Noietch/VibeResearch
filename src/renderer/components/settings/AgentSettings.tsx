@@ -406,7 +406,7 @@ export function AgentSettings() {
                     value={newAgent.name}
                     onChange={(e) => setNewAgent((p) => ({ ...p, name: e.target.value }))}
                     placeholder="e.g. Aria"
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                   />
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {AGENT_NAME_SUGGESTIONS.map((n) => (
@@ -432,7 +432,7 @@ export function AgentSettings() {
                     value={newAgent.cliPath}
                     onChange={(e) => setNewAgent((p) => ({ ...p, cliPath: e.target.value }))}
                     placeholder="/usr/local/bin/claude"
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                   />
                 </div>
 
@@ -446,7 +446,7 @@ export function AgentSettings() {
                     value={newAgent.acpArgs}
                     onChange={(e) => setNewAgent((p) => ({ ...p, acpArgs: e.target.value }))}
                     placeholder="--experimental-acp"
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                   />
                   <p className="mt-1 text-xs text-notion-text-tertiary">
                     Arguments to enable ACP protocol mode. Different CLIs use different conventions.
@@ -463,7 +463,7 @@ export function AgentSettings() {
                     value={newAgent.defaultModel}
                     onChange={(e) => setNewAgent((p) => ({ ...p, defaultModel: e.target.value }))}
                     placeholder={newAgent.agentTool === 'codex' ? 'e.g. gpt-4o, o1' : 'e.g. claude-opus-4-5'}
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                   />
                   <p className="mt-1 text-xs text-notion-text-tertiary">
                     {newAgent.agentTool === 'codex'
@@ -488,7 +488,7 @@ export function AgentSettings() {
                         value={newAgent.apiKey}
                         onChange={(e) => setNewAgent((p) => ({ ...p, apiKey: e.target.value }))}
                         placeholder="sk-..."
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                       />
                       <p className="mt-1 text-xs text-notion-text-tertiary">
                         Your OpenAI API key for Code X authentication.
@@ -504,7 +504,7 @@ export function AgentSettings() {
                         value={newAgent.baseUrl}
                         onChange={(e) => setNewAgent((p) => ({ ...p, baseUrl: e.target.value }))}
                         placeholder="https://api.openai.com/v1"
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                       />
                       <p className="mt-1 text-xs text-notion-text-tertiary">
                         Custom API endpoint. Leave empty for default OpenAI endpoint.
@@ -523,7 +523,7 @@ export function AgentSettings() {
                     onChange={(e) => setNewAgent((p) => ({ ...p, extraEnvText: e.target.value }))}
                     placeholder={'ANTHROPIC_AUTH_TOKEN=your-token\nANTHROPIC_BASE_URL=https://...'}
                     rows={3}
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent resize-none"
                   />
                   <p className="mt-1 text-xs text-notion-text-tertiary">
                     One KEY=VALUE per line. Injected into the agent process environment.
@@ -559,7 +559,7 @@ export function AgentSettings() {
                         }
                         placeholder="Config file content (JSON/TOML/YAML)"
                         rows={3}
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent resize-none"
                       />
                     </div>
                     <div>
@@ -583,7 +583,7 @@ export function AgentSettings() {
                         }
                         placeholder="Auth file content"
                         rows={2}
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent resize-none"
                       />
                     </div>
                   </div>
@@ -600,8 +600,9 @@ export function AgentSettings() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="rounded-lg bg-notion-accent px-3 py-1.5 text-sm text-white hover:bg-notion-accent/90 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
                   >
+                    {saving && <Loader2 size={13} className="animate-spin" />}
                     {saving ? 'Adding...' : 'Add Agent'}
                   </button>
                 </div>
@@ -966,7 +967,7 @@ function EditAgentModal({
                   value={agent.name}
                   onChange={(e) => onUpdate({ name: e.target.value })}
                   placeholder="e.g. Aria"
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                 />
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {AGENT_NAME_SUGGESTIONS.map((n) => (
@@ -990,7 +991,7 @@ function EditAgentModal({
                   value={agent.cliPath || ''}
                   onChange={(e) => onUpdate({ cliPath: e.target.value })}
                   placeholder="/usr/local/bin/claude"
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                 />
               </div>
 
@@ -1005,7 +1006,7 @@ function EditAgentModal({
                     onUpdate({ acpArgs: e.target.value.split(' ').filter(Boolean) });
                   }}
                   placeholder="--experimental-acp"
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                 />
                 <p className="mt-1 text-xs text-notion-text-tertiary">
                   Arguments to enable ACP protocol mode.
@@ -1022,7 +1023,7 @@ function EditAgentModal({
                   value={agent.defaultModel || ''}
                   onChange={(e) => onUpdate({ defaultModel: e.target.value || undefined })}
                   placeholder={agent.agentTool === 'codex' ? 'e.g. gpt-4o, o1' : 'e.g. claude-opus-4-5'}
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                 />
                 <p className="mt-1 text-xs text-notion-text-tertiary">
                   {agent.agentTool === 'codex'
@@ -1047,7 +1048,7 @@ function EditAgentModal({
                       value={agent.apiKey || ''}
                       onChange={(e) => onUpdate({ apiKey: e.target.value })}
                       placeholder="sk-..."
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                     />
                     <p className="mt-1 text-xs text-notion-text-tertiary">
                       Your OpenAI API key for Code X authentication.
@@ -1063,7 +1064,7 @@ function EditAgentModal({
                       value={agent.baseUrl || ''}
                       onChange={(e) => onUpdate({ baseUrl: e.target.value })}
                       placeholder="https://api.openai.com/v1"
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                     />
                     <p className="mt-1 text-xs text-notion-text-tertiary">
                       Custom API endpoint. Leave empty for default OpenAI endpoint.
@@ -1085,7 +1086,7 @@ function EditAgentModal({
                   }}
                   placeholder={'ANTHROPIC_AUTH_TOKEN=your-token\nANTHROPIC_BASE_URL=https://...'}
                   rows={3}
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent resize-none"
                 />
                 <p className="mt-1 text-xs text-notion-text-tertiary">
                   One KEY=VALUE per line. Injected into the agent process environment.
@@ -1121,7 +1122,7 @@ function EditAgentModal({
                       onChange={(e) => onUpdate({ configContent: e.target.value })}
                       placeholder="Config file content (JSON/TOML/YAML)"
                       rows={3}
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent resize-none"
                     />
                   </div>
                   <div>
@@ -1145,7 +1146,7 @@ function EditAgentModal({
                       onChange={(e) => onUpdate({ authContent: e.target.value })}
                       placeholder="Auth file content"
                       rows={2}
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent resize-none"
                     />
                   </div>
                 </div>
@@ -1164,9 +1165,10 @@ function EditAgentModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-notion-accent px-3 py-1.5 text-sm text-white hover:bg-notion-accent/90 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                {saving ? 'Saving...' : 'Save'}
               </button>
             </div>
           </form>
@@ -1184,7 +1186,16 @@ function parseEnvText(text: string): Record<string, string> {
     const eq = trimmed.indexOf('=');
     if (eq < 1) continue;
     const key = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    // Remove trailing comma (JSON-style)
+    if (value.endsWith(',')) value = value.slice(0, -1).trim();
+    // Remove surrounding quotes (single or double)
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
     if (key) result[key] = value;
   }
   return result;
