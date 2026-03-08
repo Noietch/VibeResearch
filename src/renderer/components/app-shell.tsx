@@ -161,7 +161,7 @@ export function AppShell({
         ref={sidebarRef}
         onClick={handleSidebarClick}
         className={`notion-scrollbar flex flex-shrink-0 flex-col border-r border-notion-border bg-notion-sidebar overflow-y-auto transition-[width] duration-150 ease-out ${
-          isCollapsed ? 'w-[72px]' : 'w-60'
+          isCollapsed ? 'w-[72px] cursor-pointer' : 'w-60'
         }`}
       >
         {/* macOS traffic light spacer - only on macOS */}
