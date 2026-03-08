@@ -2,6 +2,17 @@
 
 ## 2026-03-08
 
+### feat: Add delete functionality for chat sessions
+
+- **Scope**: `src/main/ipc/reading.ipc.ts`, `src/renderer/pages/papers/reader/page.tsx`
+- **Problem**: Chat sessions (conversation records) could not be deleted, accumulating over time.
+- **Changes**:
+  - Added `reading:delete` IPC handler in `reading.ipc.ts` (was missing despite existing service method)
+  - Added `handleDeleteChat` function in reader page
+  - Added delete button (trash icon) to each chat item in the dropdown list
+  - Delete button appears on hover, properly stops propagation to prevent accidental selection
+  - Deleting currently active chat resets the message view
+
 ### fix: Add retry logic for PDF download during import
 
 - **Scope**: `src/main/services/ingest.service.ts`

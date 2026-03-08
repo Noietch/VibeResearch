@@ -935,6 +935,24 @@ export function ReaderPage() {
     setShowChatDropdown(false);
   }, [paper, currentChatId]);
 
+  const handleDeleteChat = useCallback(
+    async (chatId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!paper) return;
+      await ipc.deleteReading(chatId);
+      const updated = chatNotes.filter((c) => c.id !== chatId);
+      setChatNotes(updated);
+      if (chatId === currentChatId) {
+        setMessages([]);
+        setCurrentChatId(null);
+        currentChatIdRef.current = null;
+        setStreamingContent('');
+        setChatInput('');
+      }
+    },
+    [paper, chatNotes, currentChatId],
+  );
+
   const handleGenerateNotes = useCallback(async () => {
     if (!currentChatId || generatingNotes || generatedNoteId) return;
     setGeneratingNotes(true);
@@ -1260,18 +1278,27 @@ export function ReaderPage() {
               {chatNotes.length > 0 && (
                 <div className="border-t border-notion-border mt-1 pt-1">
                   {chatNotes.map((chat) => (
-                    <button
+                    <div
                       key={chat.id}
-                      onClick={() => handleSelectChat(chat)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-notion-sidebar ${
-                        chat.id === currentChatId
-                          ? 'bg-notion-sidebar text-blue-600'
-                          : 'text-notion-text'
+                      className={`group flex items-center gap-1 px-1 py-1 text-sm hover:bg-notion-sidebar ${
+                        chat.id === currentChatId ? 'bg-notion-sidebar text-blue-600' : 'text-notion-text'
                       }`}
                     >
-                      <MessageSquare size={14} className="text-notion-text-tertiary" />
-                      <span className="truncate">{chat.title.replace('Chat: ', '')}</span>
-                    </button>
+                      <button
+                        onClick={() => handleSelectChat(chat)}
+                        className="flex flex-1 items-center gap-2 px-2 py-1 text-left"
+                      >
+                        <MessageSquare size={14} className="text-notion-text-tertiary" />
+                        <span className="truncate">{chat.title.replace('Chat: ', '')}</span>
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteChat(chat.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-notion-text-tertiary hover:text-red-500 hover:bg-red-50 rounded"
+                        title="Delete chat"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

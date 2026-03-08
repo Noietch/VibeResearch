@@ -28,6 +28,10 @@ export function setupReadingIpc() {
     return getReadingService().listByPaper(paperId);
   });
 
+  ipcMain.handle('reading:delete', async (_, id: string) => {
+    return getReadingService().delete(id);
+  });
+
   ipcMain.handle(
     'reading:saveChat',
     async (_, input: { paperId: string; noteId: string | null; messages: unknown[] }) => {
