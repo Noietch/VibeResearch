@@ -2,6 +2,21 @@
 
 ## 2026-03-09
 
+### feat: Add "Scan Local Agents" auto-detection to AgentSettings
+
+**Scope**: `src/renderer/components/settings/AgentSettings.tsx`
+
+**Changes**:
+
+- Added "Scan Local Agents" button that calls `ipc.detectAgents()` to find locally installed CLI agents
+- Added Codex (`codex` CLI) to detection list alongside Claude Code, Gemini, Qwen, Goose
+- Detection auto-reads local config files (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.codex/auth.json`, `~/.gemini/settings.json`, etc.)
+- Parses API key, base URL, default model from config files (Claude: settings.json env vars + model; Codex: auth.json + config.toml)
+- Detected agents display in a card list with logo, name, CLI path, and config/auth/API key/model indicators
+- Already-added agents show "Already added" badge; new ones show one-click "Add" button (pre-fills all config including API credentials)
+- Empty scan results show a friendly "no agents found" message
+- Detection panel is dismissible with an X button and uses AnimatePresence animations
+
 ### fix: Change analysis banner to floating toast notification
 
 **Scope**: `src/renderer/components/app-shell.tsx`

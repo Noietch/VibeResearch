@@ -123,6 +123,11 @@ export interface DetectedAgentItem {
   name: string;
   cliPath: string;
   acpArgs: string[];
+  configContent?: string;
+  authContent?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  defaultModel?: string;
 }
 
 export interface AddAgentInput {
