@@ -2,6 +2,20 @@
 
 ## 2026-03-08
 
+### feat: Improved agent message typography and code highlighting
+
+**Scope**: `src/renderer/components/agent-todo/TextMessage.tsx`, `package.json`
+
+**Changes**:
+
+- **Custom markdown styles**: Added proper styling for all markdown elements (headings, paragraphs, lists, links, blockquotes) instead of relying on non-existent typography plugin.
+- **Syntax highlighting**: Added `react-syntax-highlighter` with `oneDark` theme for code blocks. Code blocks now show language label header and proper syntax highlighting.
+- **Inline code**: Styled with subtle background and purple text color.
+- **Better line height**: Increased line-height to 1.7 for better readability.
+- **Streaming text**: Improved streaming text appearance with better spacing.
+
+**Test design**: Run an agent task and verify markdown renders beautifully with syntax highlighting for code blocks.
+
 ### fix: Tool call card UI improvements
 
 **Scope**: `src/renderer/components/agent-todo/ToolCallCard.tsx`
