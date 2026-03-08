@@ -55,7 +55,8 @@ export function useAgentStream(todoId: string) {
 
       setMessages((prev) => {
         const idx = prev.findIndex((m) => m.msgId === message.msgId);
-        if (idx >= 0 && message.type === 'text') {
+        if (idx >= 0 && (message.type === 'text' || message.type === 'thought')) {
+          // Accumulate text for both 'text' and 'thought' message types
           const updated = [...prev];
           const existing = updated[idx];
           const existingContent = existing.content as { text: string };

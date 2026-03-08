@@ -2,6 +2,16 @@
 
 ## 2026-03-08
 
+### fix: Accumulate thought chunks in message stream
+
+**Scope**: `src/renderer/hooks/use-agent-stream.ts`
+
+**Changes**:
+
+- Fixed thought message chunks not being accumulated. Previously, each `agent_thought_chunk` from the backend was displayed as a separate message, causing cluttered output. Now thought messages are accumulated (same as text messages) by matching `msgId`, resulting in a single consolidated thought block per thinking session.
+
+**Test design**: Run an agent task and verify that thinking messages appear as one continuous block instead of many fragmented pieces.
+
 ### fix: Agent model selector and thought message display
 
 **Scope**: `src/renderer/pages/agent-todos/[id]/page.tsx`, `src/renderer/components/agent-todo/MessageStream.tsx`
