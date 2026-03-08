@@ -314,8 +314,9 @@ function AddToolModal({ onAdd, onClose }: { onAdd: (t: CliConfig) => void; onClo
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
-  , document.body);
+    </AnimatePresence>,
+    document.body,
+  );
 }
 
 // ─── CLI Tool card ────────────────────────────────────────────────────────────
@@ -1233,234 +1234,243 @@ function AddModelModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.15 }}
-          className="w-full max-w-lg rounded-2xl border border-notion-border bg-white p-6 shadow-xl"
+          className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-notion-border bg-white shadow-xl"
         >
-          <h2 className="mb-1 text-base font-semibold text-notion-text">
-            Add {MODEL_KIND_META[defaultKind].label} Model
-          </h2>
-          <p className="mb-4 text-xs text-notion-text-tertiary">
-            {backend === 'cli'
-              ? 'CLI subprocess'
-              : 'API direct · saved once, reusable across Lightweight and Chat'}
-          </p>
+          <div className="shrink-0 px-6 pt-6">
+            <h2 className="mb-1 text-base font-semibold text-notion-text">
+              Add {MODEL_KIND_META[defaultKind].label} Model
+            </h2>
+            <p className="mb-4 text-xs text-notion-text-tertiary">
+              {backend === 'cli'
+                ? 'CLI subprocess'
+                : 'API direct · saved once, reusable across Lightweight and Chat'}
+            </p>
+          </div>
 
-          <div className="space-y-4">
-            {/* Name */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                Name <span className="font-normal text-notion-text-tertiary">(optional)</span>
-              </label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={
-                  backend === 'api'
-                    ? `e.g. ${provider}/${model || 'model-name'}`
-                    : 'e.g. Claude Code'
-                }
-                className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6">
+            <div className="space-y-4 pb-4">
+              {/* Name */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                  Name <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                </label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={
+                    backend === 'api'
+                      ? `e.g. ${provider}/${model || 'model-name'}`
+                      : 'e.g. Claude Code'
+                  }
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
 
-            {backend === 'api' ? (
-              <>
-                {/* Provider */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Provider
-                  </label>
-                  <div className="relative" data-provider-select>
-                    <button
-                      type="button"
-                      onClick={() => setProviderOpen((o) => !o)}
-                      className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text transition-colors hover:border-blue-300 focus:outline-none"
-                    >
-                      <span>{API_PROVIDER_OPTIONS.find((p) => p.id === provider)?.label}</span>
-                      <ChevronDown
-                        size={14}
-                        className={`text-notion-text-tertiary transition-transform ${providerOpen ? 'rotate-180' : ''}`}
+              {backend === 'api' ? (
+                <>
+                  {/* Provider */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Provider
+                    </label>
+                    <div className="relative" data-provider-select>
+                      <button
+                        type="button"
+                        onClick={() => setProviderOpen((o) => !o)}
+                        className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text transition-colors hover:border-blue-300 focus:outline-none"
+                      >
+                        <span>{API_PROVIDER_OPTIONS.find((p) => p.id === provider)?.label}</span>
+                        <ChevronDown
+                          size={14}
+                          className={`text-notion-text-tertiary transition-transform ${providerOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                      {providerOpen && (
+                        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-notion-border bg-white shadow-lg">
+                          {API_PROVIDER_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                setProvider(opt.id);
+                                setModel('');
+                                setProviderOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors hover:bg-notion-sidebar ${provider === opt.id ? 'bg-blue-50 text-blue-700' : 'text-notion-text'}`}
+                            >
+                              {opt.label}
+                              {provider === opt.id && <Check size={13} className="text-blue-600" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Model */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Model ID
+                    </label>
+                    <ModelCombobox
+                      value={model}
+                      onChange={setModel}
+                      placeholder="选择或输入模型ID"
+                    />
+                  </div>
+
+                  {/* Base URL (optional override) */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Base URL{' '}
+                      <span className="font-normal text-notion-text-tertiary">
+                        (optional, for proxy/custom endpoint)
+                      </span>
+                    </label>
+                    <input
+                      value={baseURL}
+                      onChange={(e) => setBaseURL(e.target.value)}
+                      placeholder={
+                        provider === 'anthropic'
+                          ? 'https://api.anthropic.com (default)'
+                          : provider === 'openai'
+                            ? 'https://api.openai.com/v1 (default)'
+                            : provider === 'gemini'
+                              ? 'https://generativelanguage.googleapis.com (default)'
+                              : 'https://your-proxy.example.com/v1'
+                      }
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  {/* API Key */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      API Key{' '}
+                      <span className="font-normal text-notion-text-tertiary">
+                        (optional if set via env)
+                      </span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showKey ? 'text' : 'password'}
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 pr-10 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                       />
-                    </button>
-                    {providerOpen && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-notion-border bg-white shadow-lg">
-                        {API_PROVIDER_OPTIONS.map((opt) => (
+                      <button
+                        type="button"
+                        onClick={() => setShowKey((p) => !p)}
+                        className="absolute right-3 text-notion-text-tertiary hover:text-notion-text"
+                      >
+                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {defaultKind === 'agent' && (
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                        Agent Preset
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {AGENT_TOOL_OPTIONS.map((option) => (
                           <button
-                            key={opt.id}
+                            key={option.id}
                             type="button"
                             onClick={() => {
-                              setProvider(opt.id);
-                              setModel('');
-                              setProviderOpen(false);
+                              setAgentTool(option.id);
+                              setCommand(option.defaultCommand);
+                              if (!name.trim()) setName(option.defaultName);
                             }}
-                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors hover:bg-notion-sidebar ${provider === opt.id ? 'bg-blue-50 text-blue-700' : 'text-notion-text'}`}
+                            className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                              agentTool === option.id
+                                ? 'border-notion-text bg-notion-text text-white'
+                                : 'border-notion-border text-notion-text hover:bg-notion-sidebar'
+                            }`}
                           >
-                            {opt.label}
-                            {provider === opt.id && <Check size={13} className="text-blue-600" />}
+                            {option.label}
                           </button>
                         ))}
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  )}
 
-                {/* Model */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Model ID
-                  </label>
-                  <ModelCombobox value={model} onChange={setModel} placeholder="选择或输入模型ID" />
-                </div>
-
-                {/* Base URL (optional override) */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Base URL{' '}
-                    <span className="font-normal text-notion-text-tertiary">
-                      (optional, for proxy/custom endpoint)
-                    </span>
-                  </label>
-                  <input
-                    value={baseURL}
-                    onChange={(e) => setBaseURL(e.target.value)}
-                    placeholder={
-                      provider === 'anthropic'
-                        ? 'https://api.anthropic.com (default)'
-                        : provider === 'openai'
-                          ? 'https://api.openai.com/v1 (default)'
-                          : provider === 'gemini'
-                            ? 'https://generativelanguage.googleapis.com (default)'
-                            : 'https://your-proxy.example.com/v1'
-                    }
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                {/* API Key */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    API Key{' '}
-                    <span className="font-normal text-notion-text-tertiary">
-                      (optional if set via env)
-                    </span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showKey ? 'text' : 'password'}
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-..."
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 pr-10 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey((p) => !p)}
-                      className="absolute right-3 text-notion-text-tertiary hover:text-notion-text"
-                    >
-                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {defaultKind === 'agent' && (
+                  {/* CLI Command */}
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                      Agent Preset
+                      Command
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {AGENT_TOOL_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setAgentTool(option.id);
-                            setCommand(option.defaultCommand);
-                            if (!name.trim()) setName(option.defaultName);
-                          }}
-                          className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                            agentTool === option.id
-                              ? 'border-notion-text bg-notion-text text-white'
-                              : 'border-notion-border text-notion-text hover:bg-notion-sidebar'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* CLI Command */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Command
-                  </label>
-                  <input
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    placeholder="e.g. claude --dangerously-skip-permissions"
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-                {/* Env Vars */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Environment Variables{' '}
-                    <span className="font-normal text-notion-text-tertiary">(optional)</span>
-                  </label>
-                  <input
-                    value={envVars}
-                    onChange={(e) => setEnvVars(e.target.value)}
-                    placeholder="ANTHROPIC_API_KEY=sk-..."
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-                {defaultKind === 'agent' && (
-                  <>
-                    <AgentConfigHint
-                      tool={agentTool}
-                      configContent={configContent}
-                      authContent={authContent}
+                    <input
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      placeholder="e.g. claude --dangerously-skip-permissions"
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                     />
-                    {!configContent.trim() && !!systemAgentContents?.configContent && (
-                      <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                        Showing config loaded from the system file. It will only be saved into the
-                        app if you edit this field.
-                      </div>
-                    )}
-                    <div>
-                      <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                        {getAgentToolMeta(agentTool).configLabel}{' '}
-                        <span className="font-normal text-notion-text-tertiary">(optional)</span>
-                      </label>
-                      <textarea
-                        value={displayedConfigContent}
-                        onChange={(e) => setConfigContent(e.target.value)}
-                        rows={6}
-                        placeholder={getAgentToolMeta(agentTool).configPlaceholder}
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  </div>
+                  {/* Env Vars */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Environment Variables{' '}
+                      <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                    </label>
+                    <input
+                      value={envVars}
+                      onChange={(e) => setEnvVars(e.target.value)}
+                      placeholder="ANTHROPIC_API_KEY=sk-..."
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  {defaultKind === 'agent' && (
+                    <>
+                      <AgentConfigHint
+                        tool={agentTool}
+                        configContent={configContent}
+                        authContent={authContent}
                       />
-                    </div>
-                    {getAgentToolMeta(agentTool).authLabel && (
+                      {!configContent.trim() && !!systemAgentContents?.configContent && (
+                        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                          Showing config loaded from the system file. It will only be saved into the
+                          app if you edit this field.
+                        </div>
+                      )}
                       <div>
                         <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                          {getAgentToolMeta(agentTool).authLabel}{' '}
+                          {getAgentToolMeta(agentTool).configLabel}{' '}
                           <span className="font-normal text-notion-text-tertiary">(optional)</span>
                         </label>
                         <textarea
-                          value={displayedAuthContent}
-                          onChange={(e) => setAuthContent(e.target.value)}
-                          rows={5}
-                          placeholder={getAgentToolMeta(agentTool).authPlaceholder}
+                          value={displayedConfigContent}
+                          onChange={(e) => setConfigContent(e.target.value)}
+                          rows={6}
+                          placeholder={getAgentToolMeta(agentTool).configPlaceholder}
                           className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                         />
                       </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
+                      {getAgentToolMeta(agentTool).authLabel && (
+                        <div>
+                          <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                            {getAgentToolMeta(agentTool).authLabel}{' '}
+                            <span className="font-normal text-notion-text-tertiary">
+                              (optional)
+                            </span>
+                          </label>
+                          <textarea
+                            value={displayedAuthContent}
+                            onChange={(e) => setAuthContent(e.target.value)}
+                            rows={5}
+                            placeholder={getAgentToolMeta(agentTool).authPlaceholder}
+                            className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
@@ -1531,8 +1541,9 @@ function AddModelModal({
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
-  , document.body);
+    </AnimatePresence>,
+    document.body,
+  );
 }
 
 // ─── Edit Model Modal ──────────────────────────────────────────────────────────
@@ -1696,8 +1707,9 @@ function EditModelModal({
             </div>
           </motion.div>
         </motion.div>
-      </AnimatePresence>
-    , document.body);
+      </AnimatePresence>,
+      document.body,
+    );
   }
 
   return createPortal(
@@ -1727,230 +1739,233 @@ function EditModelModal({
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6">
             <div className="space-y-4 pb-4">
-            {/* Name */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                Name <span className="font-normal text-notion-text-tertiary">(optional)</span>
-              </label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={
-                  backend === 'api'
-                    ? `e.g. ${provider}/${modelName || 'model-name'}`
-                    : 'e.g. Claude Code'
-                }
-                className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
+              {/* Name */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                  Name <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                </label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={
+                    backend === 'api'
+                      ? `e.g. ${provider}/${modelName || 'model-name'}`
+                      : 'e.g. Claude Code'
+                  }
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
 
-            {backend === 'api' ? (
-              <>
-                {/* Provider */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Provider
-                  </label>
-                  <div className="relative" data-provider-select>
-                    <button
-                      type="button"
-                      onClick={() => setProviderOpen((o) => !o)}
-                      className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text transition-colors hover:border-blue-300 focus:outline-none"
-                    >
-                      <span>{API_PROVIDER_OPTIONS.find((p) => p.id === provider)?.label}</span>
-                      <ChevronDown
-                        size={14}
-                        className={`text-notion-text-tertiary transition-transform ${providerOpen ? 'rotate-180' : ''}`}
+              {backend === 'api' ? (
+                <>
+                  {/* Provider */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Provider
+                    </label>
+                    <div className="relative" data-provider-select>
+                      <button
+                        type="button"
+                        onClick={() => setProviderOpen((o) => !o)}
+                        className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text transition-colors hover:border-blue-300 focus:outline-none"
+                      >
+                        <span>{API_PROVIDER_OPTIONS.find((p) => p.id === provider)?.label}</span>
+                        <ChevronDown
+                          size={14}
+                          className={`text-notion-text-tertiary transition-transform ${providerOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                      {providerOpen && (
+                        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-notion-border bg-white shadow-lg">
+                          {API_PROVIDER_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                setProvider(opt.id);
+                                setProviderOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors hover:bg-notion-sidebar ${provider === opt.id ? 'bg-blue-50 text-blue-700' : 'text-notion-text'}`}
+                            >
+                              {opt.label}
+                              {provider === opt.id && <Check size={13} className="text-blue-600" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Model */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Model ID
+                    </label>
+                    <ModelCombobox
+                      value={modelName}
+                      onChange={setModelName}
+                      placeholder="选择或输入模型ID"
+                    />
+                  </div>
+
+                  {/* Base URL (optional override) */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Base URL{' '}
+                      <span className="font-normal text-notion-text-tertiary">
+                        (optional, for proxy/custom endpoint)
+                      </span>
+                    </label>
+                    <input
+                      value={baseURL}
+                      onChange={(e) => setBaseURL(e.target.value)}
+                      placeholder={
+                        provider === 'anthropic'
+                          ? 'https://api.anthropic.com (default)'
+                          : provider === 'openai'
+                            ? 'https://api.openai.com/v1 (default)'
+                            : provider === 'gemini'
+                              ? 'https://generativelanguage.googleapis.com (default)'
+                              : 'https://your-proxy.example.com/v1'
+                      }
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  {/* API Key */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      API Key{' '}
+                      <span className="font-normal text-notion-text-tertiary">
+                        (optional if set via env)
+                      </span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showKey ? 'text' : 'password'}
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 pr-10 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                       />
-                    </button>
-                    {providerOpen && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-notion-border bg-white shadow-lg">
-                        {API_PROVIDER_OPTIONS.map((opt) => (
+                      <button
+                        type="button"
+                        onClick={() => setShowKey((p) => !p)}
+                        className="absolute right-3 text-notion-text-tertiary hover:text-notion-text"
+                      >
+                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {model.backend === 'cli' && (
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                        Agent Preset
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {AGENT_TOOL_OPTIONS.map((option) => (
                           <button
-                            key={opt.id}
+                            key={option.id}
                             type="button"
                             onClick={() => {
-                              setProvider(opt.id);
-                              setProviderOpen(false);
+                              setAgentTool(option.id);
+                              setCommand(option.defaultCommand);
+                              if (!name.trim()) setName(option.defaultName);
                             }}
-                            className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors hover:bg-notion-sidebar ${provider === opt.id ? 'bg-blue-50 text-blue-700' : 'text-notion-text'}`}
+                            className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                              agentTool === option.id
+                                ? 'border-notion-text bg-notion-text text-white'
+                                : 'border-notion-border text-notion-text hover:bg-notion-sidebar'
+                            }`}
                           >
-                            {opt.label}
-                            {provider === opt.id && <Check size={13} className="text-blue-600" />}
+                            {option.label}
                           </button>
                         ))}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Model */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Model ID
-                  </label>
-                  <ModelCombobox
-                    value={modelName}
-                    onChange={setModelName}
-                    placeholder="选择或输入模型ID"
-                  />
-                </div>
-
-                {/* Base URL (optional override) */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Base URL{' '}
-                    <span className="font-normal text-notion-text-tertiary">
-                      (optional, for proxy/custom endpoint)
-                    </span>
-                  </label>
-                  <input
-                    value={baseURL}
-                    onChange={(e) => setBaseURL(e.target.value)}
-                    placeholder={
-                      provider === 'anthropic'
-                        ? 'https://api.anthropic.com (default)'
-                        : provider === 'openai'
-                          ? 'https://api.openai.com/v1 (default)'
-                          : provider === 'gemini'
-                            ? 'https://generativelanguage.googleapis.com (default)'
-                            : 'https://your-proxy.example.com/v1'
-                    }
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                {/* API Key */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    API Key{' '}
-                    <span className="font-normal text-notion-text-tertiary">
-                      (optional if set via env)
-                    </span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showKey ? 'text' : 'password'}
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-..."
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 pr-10 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey((p) => !p)}
-                      className="absolute right-3 text-notion-text-tertiary hover:text-notion-text"
-                    >
-                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {model.backend === 'cli' && (
+                    </div>
+                  )}
+                  {/* CLI Command */}
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                      Agent Preset
+                      Command
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {AGENT_TOOL_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setAgentTool(option.id);
-                            setCommand(option.defaultCommand);
-                            if (!name.trim()) setName(option.defaultName);
-                          }}
-                          className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                            agentTool === option.id
-                              ? 'border-notion-text bg-notion-text text-white'
-                              : 'border-notion-border text-notion-text hover:bg-notion-sidebar'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* CLI Command */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Command
-                  </label>
-                  <input
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    placeholder="e.g. claude --dangerously-skip-permissions"
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-                {/* Env Vars */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                    Environment Variables{' '}
-                    <span className="font-normal text-notion-text-tertiary">(optional)</span>
-                  </label>
-                  <input
-                    value={envVars}
-                    onChange={(e) => setEnvVars(e.target.value)}
-                    placeholder="ANTHROPIC_API_KEY=sk-..."
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-                {model.backend === 'cli' && (
-                  <>
-                    <AgentConfigHint
-                      tool={agentTool}
-                      configContent={configContent}
-                      authContent={authContent}
+                    <input
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      placeholder="e.g. claude --dangerously-skip-permissions"
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                     />
-                    <div>
-                      <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                        {getAgentToolMeta(agentTool).configLabel}{' '}
-                        <span className="font-normal text-notion-text-tertiary">(optional)</span>
-                      </label>
-                      <textarea
-                        value={displayedConfigContent}
-                        onChange={(e) => setConfigContent(e.target.value)}
-                        rows={6}
-                        placeholder={getAgentToolMeta(agentTool).configPlaceholder}
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  </div>
+                  {/* Env Vars */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                      Environment Variables{' '}
+                      <span className="font-normal text-notion-text-tertiary">(optional)</span>
+                    </label>
+                    <input
+                      value={envVars}
+                      onChange={(e) => setEnvVars(e.target.value)}
+                      placeholder="ANTHROPIC_API_KEY=sk-..."
+                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  {model.backend === 'cli' && (
+                    <>
+                      <AgentConfigHint
+                        tool={agentTool}
+                        configContent={configContent}
+                        authContent={authContent}
                       />
-                    </div>
-                    {getAgentToolMeta(agentTool).authLabel && (
                       <div>
                         <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                          {getAgentToolMeta(agentTool).authLabel}{' '}
+                          {getAgentToolMeta(agentTool).configLabel}{' '}
                           <span className="font-normal text-notion-text-tertiary">(optional)</span>
                         </label>
                         <textarea
-                          value={displayedAuthContent}
-                          onChange={(e) => setAuthContent(e.target.value)}
-                          rows={5}
-                          placeholder={getAgentToolMeta(agentTool).authPlaceholder}
+                          value={displayedConfigContent}
+                          onChange={(e) => setConfigContent(e.target.value)}
+                          rows={6}
+                          placeholder={getAgentToolMeta(agentTool).configPlaceholder}
                           className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                         />
                       </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
+                      {getAgentToolMeta(agentTool).authLabel && (
+                        <div>
+                          <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                            {getAgentToolMeta(agentTool).authLabel}{' '}
+                            <span className="font-normal text-notion-text-tertiary">
+                              (optional)
+                            </span>
+                          </label>
+                          <textarea
+                            value={displayedAuthContent}
+                            onChange={(e) => setAuthContent(e.target.value)}
+                            rows={5}
+                            placeholder={getAgentToolMeta(agentTool).authPlaceholder}
+                            className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* Test result */}
           {testResult && (
-            <div>
+            <div className="shrink-0 px-6">
               <AnimatePresence>
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
                   transition={{ duration: 0.15 }}
-                  className={`mt-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
+                  className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
                     testResult.success
                       ? 'border-green-200 bg-green-50 text-green-700'
                       : 'border-red-200 bg-red-50 text-red-600'
@@ -1975,7 +1990,7 @@ function EditModelModal({
             </div>
           )}
 
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="shrink-0 flex justify-end gap-2 border-t border-notion-border px-6 py-4">
             <button
               onClick={onClose}
               className="rounded-lg border border-notion-border px-4 py-2 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
@@ -2008,8 +2023,9 @@ function EditModelModal({
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
-  , document.body);
+    </AnimatePresence>,
+    document.body,
+  );
 }
 
 function ModelCard({

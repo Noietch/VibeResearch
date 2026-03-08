@@ -2,6 +2,16 @@
 
 ## 2026-03-08
 
+### fix: Clear stale pdfPath in DB when PDF file is missing
+
+- **Scope**: `src/db/repositories/papers.repository.ts`, `src/main/services/papers.service.ts`, `src/main/services/download.service.ts`, `src/main/index.ts`
+- **Problem**: `Error invoking remote method 'file:read': Error: File not found` — the DB held a `pdfPath` pointing to a file that no longer existed, causing the PDF viewer to crash instead of showing a download button.
+- **Fix**:
+  - `updatePdfPath` now accepts `string | null` to allow clearing the path
+  - Added `clearPdfPathByFilePath` repository method for lookup-by-path clearing
+  - `papers.service.ts` / `download.service.ts`: clear `pdfPath` in DB before deleting an invalid file, and also when a download fails
+  - `file:read` IPC handler: when `realpath()` fails (file missing), proactively clears the stale `pdfPath` from DB so the UI falls back to the download button
+
 ### feat: Add scroll functionality to Agent settings modal dialogs
 
 - **Scope**: `src/renderer/pages/settings/page.tsx`
