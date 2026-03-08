@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-08
+
+### feat: Add pre-commit lint check via lint-staged
+
+- **Scope**: `.lintstagedrc.json`, `.husky/pre-commit`
+- Changed lint-staged config from `prettier --write` (auto-fix) to `prettier --check` (block on error).
+- Pre-commit hook now blocks commits if any staged file fails formatting check.
+
 ## 2026-03-07 (session 37)
 
 ### feat: Redesign proxy settings UI and fix proxy not actually being applied
@@ -31,7 +39,6 @@
   4. Added "Test Connection" button in Proxy Settings UI with real-time status indicators
   5. Results show success/failure with latency for each endpoint
 
-
 ## 2026-03-07 (session 35)
 
 ### fix: Platform-specific Prisma engine loading on Windows
@@ -42,7 +49,6 @@
   1. Reorganized engine candidate selection to be platform-aware: first check current platform's binaries, only look at current platform's candidates.
   2. Added debug logging to show which engine is found.
   3. Removed `windows-arm64` from binaryTargets (not supported).
-
 
 ### fix: Simplify postinstall to ensure prisma generate runs correctly on Windows
 
