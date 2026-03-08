@@ -60,6 +60,7 @@ let currentStatus: TaggingStatus = {
   message: '',
 };
 let cancelRequested = false;
+let currentAbortController: AbortController | null = null;
 
 function broadcastTaggingStatus() {
   const wins = BrowserWindow ? BrowserWindow.getAllWindows() : [];
@@ -73,7 +74,14 @@ export function getTaggingStatus(): TaggingStatus {
 }
 
 export function cancelTagging() {
-  if (currentStatus.active) cancelRequested = true;
+  if (currentStatus.active) {
+    cancelRequested = true;
+    // Abort any ongoing API request
+    if (currentAbortController) {
+      currentAbortController.abort();
+      currentAbortController = null;
+    }
+  }
 }
 
 function updateSinglePaperStatus(
@@ -401,16 +409,24 @@ export async function tagPaper(
 
     let parsed: { domain: string[]; method: string[]; topic: string[] } | null = null;
 
+    // Create AbortController for this request (can be cancelled via cancelTagging)
+    const abortController = new AbortController();
+    currentAbortController = abortController;
+
     // Try structured output first (works for most providers via tool calling)
     try {
       const model = getLanguageModelFromConfig(configWithKey);
+      // Combine abort signal with timeout
+      const timeoutSignal = AbortSignal.timeout(120_000);
+      const signal = AbortSignal.any([abortController.signal, timeoutSignal]);
+
       const result = await generateText({
         model,
         system: TAGGING_SYSTEM_PROMPT,
         prompt: userPrompt,
         output: Output.object({ schema: structuredTaggingSchema }),
         maxOutputTokens: 1024,
-        abortSignal: AbortSignal.timeout(120_000),
+        abortSignal: signal,
       });
 
       appendLog(
@@ -453,7 +469,7 @@ export async function tagPaper(
         'lightweight',
         TAGGING_SYSTEM_PROMPT,
         userPrompt,
-        { strictSelection: true },
+        { strictSelection: true, signal: abortController.signal },
       );
 
       appendLog(

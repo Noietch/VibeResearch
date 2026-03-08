@@ -14,6 +14,17 @@
   - Kept "Generate Notes" functionality intact
 - **Result**: Cleaner chat UI with single "New Chat" button location
 
+### fix: Auto-tag Cancel button not working
+
+- **Scope**: `src/main/services/tagging.service.ts`, `src/main/services/ai-provider.service.ts`
+- **Problem**: The Cancel button during auto-tagging did not abort ongoing API requests. Clicking Cancel would set a flag but the actual API call continued until completion or timeout.
+- **Root cause**: `generateText` used only `AbortSignal.timeout()` without a cancellable `AbortController`. The `cancelTagging()` function had no way to abort in-flight requests.
+- **Fix**:
+  - Added `currentAbortController` variable to track active request
+  - Modified `cancelTagging()` to call `abort()` on the controller
+  - Updated `tagPaper()` to create an `AbortController` and combine its signal with timeout using `AbortSignal.any()`
+  - Passed the combined signal to both structured output and fallback `generateText` calls
+
 ### fix: Modal Test Connection button not showing results
 
 - **Scope**: `src/renderer/hooks/use-ipc.ts`

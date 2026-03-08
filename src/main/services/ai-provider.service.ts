@@ -472,7 +472,7 @@ export async function generateWithModelKind(
   kind: ModelKind,
   systemPrompt: string,
   userPrompt: string,
-  options: { strictSelection?: boolean } = {},
+  options: { strictSelection?: boolean; signal?: AbortSignal } = {},
 ): Promise<string> {
   const modelConfig = getActiveModel(kind);
 
@@ -483,12 +483,18 @@ export async function generateWithModelKind(
       if (configWithKey && configWithKey.apiKey) {
         const model = getLanguageModelFromConfig(configWithKey);
         try {
+          // Combine user-provided signal with timeout
+          const timeoutSignal = AbortSignal.timeout(120_000);
+          const signal = options.signal
+            ? AbortSignal.any([options.signal, timeoutSignal])
+            : timeoutSignal;
+
           const result = await generateText({
             model,
             system: systemPrompt,
             prompt: userPrompt,
             maxOutputTokens: kind === 'lightweight' ? 1024 : 4096,
-            abortSignal: AbortSignal.timeout(120_000),
+            abortSignal: signal,
           });
           recordUsage(
             result,
