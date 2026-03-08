@@ -375,6 +375,9 @@ export function ReaderPage() {
   const streamingContent = activeChatJob?.partialText ?? '';
   const aiStatus: AiStatus = activeChatJob?.stage === 'preparing' ? 'thinking' : 'idle';
 
+  // Track completed jobs to trigger message refresh
+  const lastCompletedJobIdRef = useRef<string | null>(null);
+
   // Chat selector dropdown
   const [showChatDropdown, setShowChatDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -477,12 +480,21 @@ export function ReaderPage() {
 
   // Chat completion effect — when job completes, refresh messages from DB
   useEffect(() => {
-    if (!paper || !activeChatJob) return;
-    if (activeChatJob.stage !== 'done') return;
-    if (activeChatJob.paperId !== paper.id) return;
+    if (!paper) return;
 
-    // Job completed — load final messages from DB
-    const noteId = activeChatJob.chatNoteId;
+    // Find the most recent completed job for this paper
+    const completedJob = chatJobList.find(
+      (j) => j.paperId === paper.id && j.stage === 'done' && !j.active,
+    );
+
+    if (!completedJob) return;
+    if (completedJob.jobId === lastCompletedJobIdRef.current) return; // Already processed
+
+    // Mark as processed
+    lastCompletedJobIdRef.current = completedJob.jobId;
+
+    // Load final messages from DB
+    const noteId = completedJob.chatNoteId;
     if (noteId) {
       ipc
         .getReading(noteId)
@@ -506,7 +518,7 @@ export function ReaderPage() {
         .then(setChatNotes)
         .catch(() => undefined);
     }
-  }, [paper, activeChatJob]);
+  }, [paper, chatJobList]);
   useEffect(() => {
     if (skipAutoScrollRef.current) {
       skipAutoScrollRef.current = false;
