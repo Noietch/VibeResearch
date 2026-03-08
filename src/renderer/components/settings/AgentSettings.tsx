@@ -93,7 +93,6 @@ export function AgentSettings() {
     name: '',
     backend: '',
     cliPath: '',
-    acpArgs: '',
     agentTool: 'claude-code' as AgentToolKind,
     configContent: '',
     authContent: '',
@@ -171,7 +170,6 @@ export function AgentSettings() {
           agentTool: tool,
           backend: tool.replace(/-/g, ''),
           cliPath: shouldUpdateCliPath ? (meta.cliCommand || prev.cliPath) : prev.cliPath,
-          acpArgs: meta.defaultAcpArgs,
         };
       });
     } else {
@@ -184,7 +182,6 @@ export function AgentSettings() {
           agentTool: tool,
           backend: tool.replace(/-/g, ''),
           cliPath: shouldUpdateCliPath ? (meta.cliCommand || prev.cliPath) : prev.cliPath,
-          acpArgs: meta.defaultAcpArgs.join(' '),
         };
       });
     }
@@ -195,13 +192,13 @@ export function AgentSettings() {
     if (!newAgent.name || !newAgent.cliPath) return;
     setSaving(true);
     try {
-      const acpArgs = newAgent.acpArgs.trim() ? newAgent.acpArgs.split(' ').filter(Boolean) : [];
       const extraEnv = parseEnvText(newAgent.extraEnvText);
+      const meta = getAgentToolMeta(newAgent.agentTool);
       await ipc.addAgent({
         name: newAgent.name,
         backend: newAgent.backend,
         cliPath: newAgent.cliPath,
-        acpArgs,
+        acpArgs: meta.defaultAcpArgs,
         agentTool: newAgent.agentTool,
         configContent: newAgent.configContent || undefined,
         authContent: newAgent.authContent || undefined,
@@ -215,7 +212,6 @@ export function AgentSettings() {
         name: '',
         backend: '',
         cliPath: '',
-        acpArgs: '',
         agentTool: 'claude-code',
         configContent: '',
         authContent: '',
@@ -448,23 +444,6 @@ export function AgentSettings() {
                     placeholder="/usr/local/bin/claude"
                     className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                   />
-                </div>
-
-                {/* ACP Args */}
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-notion-text">
-                    ACP Args
-                  </label>
-                  <input
-                    type="text"
-                    value={newAgent.acpArgs}
-                    onChange={(e) => setNewAgent((p) => ({ ...p, acpArgs: e.target.value }))}
-                    placeholder="--experimental-acp"
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
-                  />
-                  <p className="mt-1 text-xs text-notion-text-tertiary">
-                    Arguments to enable ACP protocol mode. Different CLIs use different conventions.
-                  </p>
                 </div>
 
                 {/* Default Model */}
@@ -922,11 +901,9 @@ function EditAgentModal({
   onAgentToolChange: (tool: AgentToolKind) => void;
   onLoadConfigContents: (tool: AgentToolKind, target: 'config' | 'auth') => void;
 }) {
-  const [acpArgsText, setAcpArgsText] = useState(() => agent?.acpArgs.join(' ') ?? '');
   const [extraEnvText, setExtraEnvText] = useState(() => envToText(agent?.extraEnv));
 
   useEffect(() => {
-    setAcpArgsText(agent?.acpArgs.join(' ') ?? '');
     setExtraEnvText(envToText(agent?.extraEnv));
   }, [agent?.id]);
 
@@ -1032,24 +1009,6 @@ function EditAgentModal({
                   placeholder="/usr/local/bin/claude"
                   className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                 />
-              </div>
-
-              {/* ACP Args */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-notion-text">ACP Args</label>
-                <input
-                  type="text"
-                  value={acpArgsText}
-                  onChange={(e) => {
-                    setAcpArgsText(e.target.value);
-                    onUpdate({ acpArgs: e.target.value.split(' ').filter(Boolean) });
-                  }}
-                  placeholder="--experimental-acp"
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
-                />
-                <p className="mt-1 text-xs text-notion-text-tertiary">
-                  Arguments to enable ACP protocol mode.
-                </p>
               </div>
 
               {/* Default Model */}
