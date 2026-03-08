@@ -19,14 +19,20 @@
 
 ### fix: Test Connection fails with "Process exited (code: 1)"
 
-**Scope**: `src/main/ipc/agent-todo.ipc.ts`
+**Scope**: `src/main/agent/agent-detector.ts`, `src/main/agent/acp-types.ts`, `src/shared/types/agent-todo.ts`, `src/main/ipc/agent-todo.ipc.ts`, `tests/integration/acp.test.ts`
 
 **Changes**:
 
-- Fixed `test-acp` handler to inject API credentials into env vars (ANTHROPIC_API_KEY/OPENAI_API_KEY, base URL, model)
-- Added `resolveAgentCliArgs()` to prepend `--settings` flag for Claude Code
-- Added `resolveAgentHomeFiles()` to write Codex config.toml/auth.json to temp HOME
+- **Root cause**: Claude Code and Codex native CLIs don't support ACP directly. Claude Code's `--experimental-acp` flag was removed; Codex needs `codex-acp` bridge.
+- Changed Claude Code ACP path from `claude --experimental-acp` → `npx @zed-industries/claude-agent-acp`
+- Changed Codex ACP path from `codex` → `npx @zed-industries/codex-acp`
+- Changed Gemini ACP arg from `--experimental-acp` → `--acp`
+- Updated `DEFAULT_AGENT_CONFIGS` and `AGENT_TOOL_META` to use correct ACP bridge commands
+- Detection now returns both `cliPath` (ACP bridge) and `nativeCliPath` (system binary) for display
+- Fixed `test-acp` handler to inject API credentials and config args
 - Collect stderr output for better error diagnostics on failure
+- Added `package-lock.json` to repo (needed for CI Linux release builds)
+- Updated all ACP test assertions to match new config
 
 ### fix: Change analysis banner to floating toast notification
 

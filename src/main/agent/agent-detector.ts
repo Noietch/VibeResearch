@@ -9,7 +9,10 @@ const execAsync = promisify(exec);
 export interface DetectedAgent {
   backend: string;
   name: string;
+  /** The CLI path used for ACP (may be a bridge like npx @zed-industries/claude-agent-acp) */
   cliPath: string;
+  /** The native CLI path detected on the system (e.g. /usr/local/bin/claude) */
+  nativeCliPath: string;
   acpArgs: string[];
   version?: string;
   configContent?: string;
@@ -20,27 +23,33 @@ export interface DetectedAgent {
 }
 
 /**
- * Agent metadata for detection
- * Different CLIs have different ACP activation conventions:
- * - Claude Code: --experimental-acp
- * - Gemini: --experimental-acp
- * - Codex: (uses codex-acp bridge internally, but the `codex` CLI itself is detectable)
- * - Qwen: --acp
- * - Goose: acp (subcommand, not flag)
+ * Agent metadata for detection.
+ *
+ * ACP activation:
+ * - Claude Code: native CLI doesn't support ACP; use npx @zed-industries/claude-agent-acp bridge
+ * - Codex: native CLI doesn't support ACP; use npx @zed-industries/codex-acp bridge
+ * - Gemini: gemini --acp (or bridge TBD)
+ * - Qwen: qwen --acp
+ * - Goose: goose acp (subcommand)
+ *
+ * When a native CLI is detected, `acpCliPath` overrides the cliPath for ACP mode,
+ * while the original cliPath is kept for display.
  */
 const AGENTS_TO_DETECT = [
   {
     backend: 'claude-code',
     name: 'Claude Code',
     cli: 'claude',
-    acpArgs: ['--experimental-acp'],
+    acpCliPath: 'npx @zed-industries/claude-agent-acp',
+    acpArgs: [] as string[],
     configFiles: [{ key: 'config' as const, path: '.claude/settings.json' }],
   },
   {
     backend: 'codex',
     name: 'Code X',
     cli: 'codex',
-    acpArgs: [],
+    acpCliPath: 'npx @zed-industries/codex-acp',
+    acpArgs: [] as string[],
     configFiles: [
       { key: 'config' as const, path: '.codex/config.toml' },
       { key: 'auth' as const, path: '.codex/auth.json' },
@@ -50,7 +59,7 @@ const AGENTS_TO_DETECT = [
     backend: 'gemini',
     name: 'Gemini CLI',
     cli: 'gemini',
-    acpArgs: ['--experimental-acp'],
+    acpArgs: ['--acp'],
     configFiles: [
       { key: 'config' as const, path: '.gemini/settings.json' },
       { key: 'auth' as const, path: '.gemini/oauth_creds.json' },
@@ -181,10 +190,14 @@ export async function detectAgents(): Promise<DetectedAgent[]> {
 
       const apiConfig = extractAgentApiConfig(agent.backend, configContent, authContent);
 
+      // Use ACP bridge path if defined (e.g. npx @zed-industries/claude-agent-acp)
+      const acpCliPath = 'acpCliPath' in agent ? (agent as any).acpCliPath : undefined;
+
       return {
         backend: agent.backend,
         name: agent.name,
-        cliPath,
+        cliPath: acpCliPath || cliPath,
+        nativeCliPath: cliPath,
         acpArgs: agent.acpArgs,
         configContent,
         authContent,

@@ -38,8 +38,8 @@ export const AGENT_TOOL_META: AgentToolMeta[] = [
     value: 'claude-code',
     label: 'Claude Code',
     description: "Anthropic's official CLI for Claude",
-    cliCommand: 'claude',
-    defaultAcpArgs: ['--experimental-acp'],
+    cliCommand: 'npx @zed-industries/claude-agent-acp',
+    defaultAcpArgs: [],
     configLabel: 'Claude Settings',
     configPath: '~/.claude/settings.json',
     authLabel: 'Auth credentials',
@@ -58,7 +58,7 @@ export const AGENT_TOOL_META: AgentToolMeta[] = [
     value: 'codex',
     label: 'Code X',
     description: 'OpenAI Codex via codex-acp bridge',
-    cliCommand: 'codex',
+    cliCommand: 'npx @zed-industries/codex-acp',
     defaultAcpArgs: [],
     configLabel: 'Code X Config',
     configPath: '~/.codex/config.toml',
@@ -121,7 +121,10 @@ export interface AgentConfigItem {
 export interface DetectedAgentItem {
   backend: string;
   name: string;
+  /** The CLI path used for ACP (may be a bridge command) */
   cliPath: string;
+  /** The native CLI path detected on the system */
+  nativeCliPath: string;
   acpArgs: string[];
   configContent?: string;
   authContent?: string;

@@ -497,7 +497,7 @@ export function AgentSettings() {
                                 {detected.name}
                               </p>
                               <p className="text-xs text-notion-text-tertiary">
-                                {detected.cliPath}
+                                {detected.nativeCliPath}
                               </p>
                               {(detected.configContent ||
                                 detected.authContent ||
