@@ -2,6 +2,17 @@
 
 ## 2026-03-08
 
+### fix: Agent model selector and thought message display
+
+**Scope**: `src/renderer/pages/agent-todos/[id]/page.tsx`, `src/renderer/components/agent-todo/MessageStream.tsx`
+
+**Changes**:
+
+- **Model selector fix**: Model dropdown now uses agent-specific models from `AGENT_TOOL_META` instead of chat model configs from `listModels()`. Each agent type (Claude Code, Code X) now shows its own predefined models (e.g., Claude Opus/Sonnet/Haiku for Claude Code, GPT 5.x/O3 for Code X).
+- **Thought consolidation**: Consecutive `thought` type messages are now merged into a single "Thinking..." collapsible block, avoiding multiple repetitive Thinking labels.
+
+**Test design**: Manual testing in task detail page — model dropdown shows appropriate models for the selected agent type; consecutive thought messages display as one merged block.
+
 ### fix: Cascade delete AgentTodo when Project is deleted
 
 **Scope**: `prisma/schema.prisma`

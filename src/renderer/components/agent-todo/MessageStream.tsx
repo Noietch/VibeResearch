@@ -97,38 +97,64 @@ function MessageGroupView({
     );
   }
 
-  // assistant group
+  // assistant group - merge consecutive thought messages
+  const mergedElements: React.ReactNode[] = [];
+  let consecutiveThoughts: { id: string; text: string }[] = [];
+
+  function flushThoughts() {
+    if (consecutiveThoughts.length > 0) {
+      const mergedText = consecutiveThoughts.map((t) => t.text).join('\n\n');
+      const key = consecutiveThoughts[0].id;
+      consecutiveThoughts = [];
+      return <ThoughtBlock key={key} content={{ text: mergedText }} />;
+    }
+    return null;
+  }
+
+  for (const msg of group.messages) {
+    const content = msg.content as Record<string, unknown>;
+
+    if (msg.type === 'thought') {
+      consecutiveThoughts.push({ id: msg.id, text: (content as { text: string }).text });
+    } else {
+      // Flush accumulated thoughts before rendering other message types
+      const thoughtsEl = flushThoughts();
+      if (thoughtsEl) mergedElements.push(thoughtsEl);
+
+      switch (msg.type) {
+        case 'text':
+          mergedElements.push(
+            <TextMessage
+              key={msg.id}
+              content={content as { text: string }}
+              streaming={msg.msgId === lastTextMsgId}
+            />,
+          );
+          break;
+        case 'tool_call':
+          mergedElements.push(
+            <ToolCallCard
+              key={msg.msgId}
+              content={content as any}
+              status={msg.status ?? undefined}
+            />,
+          );
+          break;
+        case 'plan':
+          mergedElements.push(<PlanCard key={msg.id} content={content as any} />);
+          break;
+      }
+    }
+  }
+  // Flush any remaining thoughts at the end
+  const remainingThoughts = flushThoughts();
+  if (remainingThoughts) mergedElements.push(remainingThoughts);
+
   return (
     <div className="flex flex-col items-start mr-8 my-2">
       <span className="text-xs text-notion-text-tertiary mb-1 ml-1">Agent</span>
       <div className="bg-notion-sidebar border border-notion-border rounded-xl rounded-tl-sm px-4 py-2.5 w-full">
-        {group.messages.map((msg) => {
-          const content = msg.content as Record<string, unknown>;
-          switch (msg.type) {
-            case 'text':
-              return (
-                <TextMessage
-                  key={msg.id}
-                  content={content as { text: string }}
-                  streaming={msg.msgId === lastTextMsgId}
-                />
-              );
-            case 'thought':
-              return <ThoughtBlock key={msg.id} content={content as { text: string }} />;
-            case 'tool_call':
-              return (
-                <ToolCallCard
-                  key={msg.msgId}
-                  content={content as any}
-                  status={msg.status ?? undefined}
-                />
-              );
-            case 'plan':
-              return <PlanCard key={msg.id} content={content as any} />;
-            default:
-              return null;
-          }
-        })}
+        {mergedElements}
       </div>
     </div>
   );

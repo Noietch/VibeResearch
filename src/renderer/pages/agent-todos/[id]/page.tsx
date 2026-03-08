@@ -15,7 +15,8 @@ import {
   User,
   Folder,
 } from 'lucide-react';
-import { ipc, type ModelConfig } from '../../../hooks/use-ipc';
+import { ipc } from '../../../hooks/use-ipc';
+import { AGENT_TOOL_META, getAgentToolMeta, type ModelOption, type AgentToolKind } from '@shared';
 import { useAgentStream } from '../../../hooks/use-agent-stream';
 import { MessageStream } from '../../../components/agent-todo/MessageStream';
 import { RunTimeline } from '../../../components/agent-todo/RunTimeline';
@@ -65,12 +66,12 @@ function TaskInfoPanel({ todo }: { todo: any }) {
 
 function ModelDropdown({
   value,
-  models,
+  agentTool,
   agentDefaultModel,
   onChange,
 }: {
   value: string | null;
-  models: ModelConfig[];
+  agentTool?: AgentToolKind;
   agentDefaultModel?: string;
   onChange: (val: string | null) => void;
 }) {
@@ -85,7 +86,15 @@ function ModelDropdown({
     return () => document.removeEventListener('mousedown', handle);
   }, []);
 
-  const displayLabel = value ?? agentDefaultModel ?? 'Default';
+  // Get models for the agent type
+  const agentMeta = agentTool ? getAgentToolMeta(agentTool) : null;
+  const models: ModelOption[] = agentMeta?.models ?? [];
+
+  // Find the selected model's label for display
+  const selectedModel = models.find((m) => m.value === value);
+  const defaultModel = agentDefaultModel ? models.find((m) => m.value === agentDefaultModel) : null;
+  const displayLabel =
+    selectedModel?.label ?? defaultModel?.label ?? agentDefaultModel ?? 'Default';
 
   return (
     <div ref={ref} className="relative">
@@ -125,30 +134,30 @@ function ModelDropdown({
           >
             <Cpu size={11} className="flex-shrink-0 text-notion-text-tertiary" />
             <span className="font-mono">
-              Default{agentDefaultModel ? ` (${agentDefaultModel})` : ''}
+              Default{agentDefaultModel ? ` (${defaultModel?.label ?? agentDefaultModel})` : ''}
             </span>
           </button>
           {models.length > 0 && <div className="my-1 border-t border-notion-border" />}
           {models.map((m) => (
             <button
-              key={m.id}
+              key={m.value}
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                onChange(m.model ?? m.name);
+                onChange(m.value);
                 setOpen(false);
               }}
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
-                value === (m.model ?? m.name)
+                value === m.value
                   ? 'bg-notion-accent-light text-notion-accent'
                   : 'text-notion-text hover:bg-notion-sidebar'
               }`}
             >
               <Cpu size={11} className="flex-shrink-0 text-notion-text-tertiary" />
               <div className="min-w-0">
-                <span className="font-mono truncate block">{m.model ?? m.name}</span>
-                {m.name !== (m.model ?? m.name) && (
-                  <span className="text-notion-text-tertiary">{m.name}</span>
+                <span className="truncate block">{m.label}</span>
+                {m.description && (
+                  <span className="text-notion-text-tertiary text-[10px]">{m.description}</span>
                 )}
               </div>
             </button>
@@ -167,7 +176,6 @@ export function AgentTodoDetailPage() {
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [historicMessages, setHistoricMessages] = useState<any[]>([]);
-  const [models, setModels] = useState<ModelConfig[]>([]);
 
   const [chatInput, setChatInput] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
@@ -197,7 +205,6 @@ export function AgentTodoDetailPage() {
   useEffect(() => {
     if (!id) return;
     loadData();
-    ipc.listModels().then(setModels).catch(console.error);
   }, [id]);
 
   async function loadData() {
@@ -597,7 +604,7 @@ export function AgentTodoDetailPage() {
                   <div className="flex items-center gap-0.5">
                     <ModelDropdown
                       value={todo.model ?? null}
-                      models={models}
+                      agentTool={todo.agent?.agentTool}
                       agentDefaultModel={todo.agent?.defaultModel}
                       onChange={handleModelChange}
                     />
