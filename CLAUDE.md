@@ -58,6 +58,10 @@ scripts/      # build-main.mjs, build-release.sh
    - Always use `git add <specific files>` — never `git add .` or `git add -A`.
    - Do not stage or push files you did not touch, even if they appear in `git status`.
 
+7. **README must be updated in both Chinese and English**
+   - `README.md` contains both English and Chinese sections.
+   - When updating README, always update both language sections to keep them synchronized.
+
 ## Expected coding sequence
 
 1. Create changelog entry for the coding session.
@@ -65,6 +69,51 @@ scripts/      # build-main.mjs, build-release.sh
 3. Fill changelog test design + validation results.
 4. Run formatting/lint/test checks.
 5. Commit only when checks pass.
+
+## UI Design Standards
+
+### Card Component Colors
+
+All card-style components (paper cards, reading cards, list items, etc.) use a **light blue + white** color scheme:
+
+```tsx
+// Card base styles
+className="bg-white border border-notion-border rounded-lg"
+
+// Card hover state
+className="hover:bg-notion-accent-light hover:border-notion-accent/30"
+
+// Card selected/active state
+className="bg-notion-accent-light border-notion-accent/50"
+```
+
+**Color Palette (from tailwind.config.ts):**
+
+| Purpose | Tailwind Class | Hex Value | Usage |
+|---------|---------------|-----------|-------|
+| Card background | `bg-white` | `#ffffff` | Default card background |
+| Card hover | `bg-notion-accent-light` | `#e8f4f8` | Light blue hover state |
+| Card border | `border-notion-border` | `#e8e8e5` | Default border |
+| Accent border | `border-notion-accent/30` | `rgba(46,170,220,0.3)` | Hover/active border |
+| Accent text | `text-notion-accent` | `#2eaadc` | Highlights, links |
+
+**Card Design Principles:**
+
+1. **Background**: White (`#ffffff`) by default
+2. **Hover**: Light blue background (`#e8f4f8`) with subtle blue border
+3. **Active/Selected**: Light blue background with more prominent blue border
+4. **Borders**: Light gray default, transitions to light blue on interaction
+5. **Shadows**: Use `shadow-notion` for subtle elevation, `shadow-notion-hover` on hover
+
+### Example Card Pattern
+
+```tsx
+<div className="group bg-white border border-notion-border rounded-lg p-4
+  hover:bg-notion-accent-light hover:border-notion-accent/30
+  transition-colors duration-150 cursor-pointer">
+  {/* Card content */}
+</div>
+```
 
 ## UI Animation Standards
 
