@@ -2,6 +2,39 @@
 
 ## 2026-03-08
 
+### feat: Simplify agent types to Claude Code + Code X with proper logos
+
+**Scope**: `src/shared/types/agent-todo.ts`, `src/renderer/components/settings/AgentSettings.tsx`, `prisma/schema.prisma`, `src/db/repositories/agent-todo.repository.ts`, `src/main/services/agent-todo.service.ts`
+
+**Changes**:
+
+- **Agent types reduced**: Removed all agent types except "Claude Code" and "Code X" from `AgentToolKind` and `AGENT_TOOL_META`.
+- **Logos added**: Added proper Claude/Anthropic logo and Code X logo components (SVG) sourced from AionUi repository.
+- **Code X API configuration**: Added `apiKey` and `baseUrl` fields to `AgentConfig` schema, repository input types, and service layer.
+- **Service layer**: `runTodo` now injects `OPENAI_API_KEY` and `OPENAI_BASE_URL` environment variables when executing Code X agents.
+- **UI**: Added conditional API Key + Base URL configuration section for Code X agents in both Add Agent form and Edit Agent modal.
+
+### feat: git init button in Code tab empty state
+
+**Scope**: `src/renderer/pages/projects/page.tsx`
+
+**Changes**:
+
+- Replaced the top-of-tab `git init` banner with a more prominent empty-state card in the Code tab.
+- When a project has a workdir but no git repository, the empty state now shows a centered card with a GitBranch icon, the workdir path, and a `git init` button — instead of the old small banner above the URL input.
+- Removed the old `AnimatePresence` banner block; the `git init` UI is now part of the repos empty state conditional.
+
+### refactor: Task detail page layout — model dropdown, prompt banner, YOLO in chat toolbar
+
+**Scope**: `src/renderer/pages/agent-todos/[id]/page.tsx`
+
+**Changes**:
+
+- **Model selector**: Moved from `TaskInfoPanel` (sidebar) to chat input toolbar (bottom-left). Replaced inline text edit with a proper dropdown (`ModelDropdown`) that lists all configured models from `ipc.listModels()`. Shows "Default (agentDefaultModel)" as the first option; selecting it clears the override.
+- **YOLO toggle**: Moved from `TaskInfoPanel` to chat input toolbar (next to Model dropdown) as a compact pill button with amber highlight when active.
+- **Prompt banner**: Prompt text now shown as a banner at the top of the chat area (right column), replacing the collapsible prompt row in the sidebar.
+- **TaskInfoPanel**: Simplified to show only Priority, Cron schedule (if set), and Created date — cleaner and less cluttered.
+
 ### feat: Model selection per agent and per task
 
 **Scope**: `prisma/schema.prisma`, `src/db/repositories/agent-todo.repository.ts`, `src/shared/types/agent-todo.ts`, `src/main/services/agent-todo.service.ts`, `src/renderer/components/settings/AgentSettings.tsx`, `src/renderer/pages/agent-todos/[id]/page.tsx`

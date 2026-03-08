@@ -10,10 +10,13 @@ export interface CreateAgentConfigInput {
   agentTool?: string;
   configContent?: string;
   authContent?: string;
+  apiKey?: string | null;
+  baseUrl?: string | null;
   isDetected?: boolean;
   isCustom?: boolean;
   enabled?: boolean;
   extraEnv?: string;
+  defaultModel?: string | null;
 }
 
 export interface CreateAgentTodoInput {
@@ -27,6 +30,7 @@ export interface CreateAgentTodoInput {
   cronExpr?: string;
   cronEnabled?: boolean;
   yoloMode?: boolean;
+  model?: string;
 }
 
 export interface CreateAgentTodoRunInput {

@@ -49,6 +49,9 @@ export class AgentTodoService {
     configContent?: string;
     authContent?: string;
     extraEnv?: Record<string, string>;
+    defaultModel?: string;
+    apiKey?: string;
+    baseUrl?: string;
   }) {
     return this.repository.createAgentConfig({
       name: input.name,
@@ -58,8 +61,11 @@ export class AgentTodoService {
       agentTool: input.agentTool,
       configContent: input.configContent,
       authContent: input.authContent,
+      apiKey: input.apiKey,
+      baseUrl: input.baseUrl,
       isCustom: true,
       extraEnv: JSON.stringify(input.extraEnv ?? {}),
+      defaultModel: input.defaultModel,
     });
   }
 
@@ -75,6 +81,9 @@ export class AgentTodoService {
       authContent: string;
       enabled: boolean;
       extraEnv: Record<string, string>;
+      defaultModel: string;
+      apiKey: string;
+      baseUrl: string;
     }>,
   ) {
     const data: Record<string, unknown> = {};
@@ -87,6 +96,9 @@ export class AgentTodoService {
     if (input.authContent !== undefined) data.authContent = input.authContent;
     if (input.enabled !== undefined) data.enabled = input.enabled;
     if (input.extraEnv !== undefined) data.extraEnv = JSON.stringify(input.extraEnv);
+    if ('defaultModel' in input) data.defaultModel = input.defaultModel ?? null;
+    if ('apiKey' in input) data.apiKey = input.apiKey ?? null;
+    if ('baseUrl' in input) data.baseUrl = input.baseUrl ?? null;
     return this.repository.updateAgentConfig(
       id,
       data as Parameters<typeof this.repository.updateAgentConfig>[1],
@@ -125,6 +137,7 @@ export class AgentTodoService {
     priority?: number;
     cronExpr?: string;
     yoloMode?: boolean;
+    model?: string;
   }) {
     return this.repository.createTodo(input);
   }
@@ -141,6 +154,7 @@ export class AgentTodoService {
       cronExpr: string;
       cronEnabled: boolean;
       yoloMode: boolean;
+      model: string | null;
     }>,
   ) {
     return this.repository.updateTodo(id, input);
@@ -170,6 +184,16 @@ export class AgentTodoService {
     const extraEnv = JSON.parse(
       typeof agentConfig.extraEnv === 'string' ? agentConfig.extraEnv : '{}',
     ) as Record<string, string>;
+
+    // Inject model override: todo.model takes precedence over agent defaultModel
+    const model = (todo as any).model ?? agentConfig.defaultModel;
+    if (model) extraEnv['ANTHROPIC_MODEL'] = model;
+
+    // Inject Code X API configuration
+    if (agentConfig.agentTool === 'codex') {
+      if (agentConfig.apiKey) extraEnv['OPENAI_API_KEY'] = agentConfig.apiKey;
+      if (agentConfig.baseUrl) extraEnv['OPENAI_BASE_URL'] = agentConfig.baseUrl;
+    }
 
     // Create run record
     const run = await this.repository.createRun({
