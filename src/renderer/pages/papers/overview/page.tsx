@@ -703,10 +703,10 @@ function TagEditor({
 
   const stageLabel: Record<NonNullable<TaggingStatus['stage']>, string> = {
     idle: 'Idle',
-    building_prompt: 'Preparing',
-    requesting_model: 'Requesting model',
-    streaming: 'Streaming output',
-    parsing: 'Parsing tags',
+    building_prompt: 'Auto tagging',
+    requesting_model: 'Auto tagging',
+    streaming: 'Auto tagging',
+    parsing: 'Auto tagging',
     saving: 'Saving tags',
     done: 'Done',
     error: 'Error',

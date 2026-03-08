@@ -384,7 +384,7 @@ export async function tagPaper(
       currentPaperId: paperId,
       currentPaperTitle: paper.title,
       stage: 'requesting_model',
-      message: 'Requesting lightweight model…',
+      message: 'Auto tagging…',
     });
 
     const modelConfig = getActiveModel('lightweight');
@@ -466,6 +466,11 @@ export async function tagPaper(
         },
         'tagging.log',
       );
+
+      // Check for empty response
+      if (!response || !response.trim()) {
+        throw new Error('Model returned empty response. Please check if the model name is correct and the API key is valid.');
+      }
 
       updateSinglePaperStatus({
         currentPaperId: paperId,
