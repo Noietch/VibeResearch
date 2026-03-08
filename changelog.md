@@ -2,6 +2,19 @@
 
 ## 2026-03-09
 
+### fix: Prevent chat messages from disappearing after streaming completes
+
+**Scope**: `src/renderer/pages/papers/reader/page.tsx`
+
+**Changes**:
+
+- Added `lastCompletedJobIdRef` to track processed completion events and prevent duplicate handling
+- Changed completion effect to watch `chatJobList` instead of `activeChatJob` (which becomes null when job finishes)
+- Effect now finds the most recent completed job for current paper and loads messages once
+- Fixes issue where streaming content would disappear when job transitions from active to inactive
+
+**Validation**: Manual testing shows messages persist after streaming completes
+
 ### feat: Convert paper chat to job subscription pattern
 
 **Scope**: `src/main/ipc/reading.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/hooks/use-chat.tsx`, `src/renderer/pages/papers/reader/page.tsx`
@@ -1874,3 +1887,13 @@
 - Fuse fallback is now limited to title and tags with stricter thresholds to reduce unrelated hits for queries like `hello`
 - Repository-side `q` filtering now uses the same exact token-matching logic for consistency
 - Semantic search now drops low-similarity chunk hits below a minimum relevance threshold before returning papers
+
+### fix: improve semantic recall for short alias-like queries
+
+**Scope**: `src/main/services/semantic-search.service.ts`, `src/main/services/semantic-utils.ts`, `src/renderer/components/search-content.tsx`
+
+**Changes**:
+
+- Lowered the semantic chunk relevance floor slightly so short queries like `run less` do not get filtered out too aggressively
+- Added a small lexical boost when the query appears in the matched paper text, title, or abstract to help alias-like phrases rank more intuitively
+- Preserved the current search input when switching between normal, semantic, and agentic modes
