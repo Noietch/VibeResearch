@@ -3,11 +3,12 @@ import { Play, Square, Settings2, Trash2 } from 'lucide-react';
 import { ipc } from '../../hooks/use-ipc';
 import type { AgentTodoItem } from '@shared';
 import { StatusDot } from './StatusDot';
+import { PriorityBarIcon } from './PriorityBar';
 
 interface TodoCardProps {
   todo: AgentTodoItem;
   onRefresh: () => void;
-  onEdit: (id: string) => void;
+  onEdit?: (id: string) => void;
 }
 
 function formatRelative(dateStr: string): string {
@@ -58,7 +59,7 @@ export function TodoCard({ todo, onRefresh, onEdit }: TodoCardProps) {
 
   return (
     <div
-      className="group bg-white border border-notion-border rounded-lg p-4 hover:bg-notion-accent-light hover:border-notion-accent/30 transition-colors duration-150 cursor-pointer"
+      className="group bg-white border border-notion-border rounded-lg p-4 hover:bg-notion-sidebar hover:border-notion-border transition-colors duration-150 cursor-pointer"
       onClick={() => navigate(`/agent-todos/${todo.id}`)}
     >
       <div className="flex items-start justify-between gap-3">
@@ -66,6 +67,11 @@ export function TodoCard({ todo, onRefresh, onEdit }: TodoCardProps) {
           <div className="flex items-center gap-2 mb-1">
             <StatusDot status={todo.status} />
             <h3 className="font-medium text-notion-text truncate">{todo.title}</h3>
+            {todo.priority > 0 && (
+              <span className="flex-shrink-0">
+                <PriorityBarIcon value={todo.priority} />
+              </span>
+            )}
             {todo.yoloMode && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0">
                 YOLO
@@ -73,7 +79,7 @@ export function TodoCard({ todo, onRefresh, onEdit }: TodoCardProps) {
             )}
           </div>
 
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-notion-accent-light text-notion-accent text-xs rounded-full mb-1">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-notion-tag-bg text-notion-text-secondary text-xs rounded-full mb-1">
             {todo.agent.name}
           </span>
 
@@ -99,22 +105,24 @@ export function TodoCard({ todo, onRefresh, onEdit }: TodoCardProps) {
           ) : (
             <button
               onClick={handleRun}
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-notion-accent hover:bg-notion-accent-light transition-colors"
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-notion-text-secondary hover:bg-notion-sidebar-hover transition-colors"
               title="Run"
             >
               <Play size={12} /> Run
             </button>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(todo.id);
-            }}
-            className="rounded p-1 text-notion-text-secondary hover:bg-notion-accent-light transition-colors"
-            title="Edit"
-          >
-            <Settings2 size={14} />
-          </button>
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(todo.id);
+              }}
+              className="rounded p-1 text-notion-text-secondary hover:bg-notion-sidebar-hover transition-colors"
+              title="Edit"
+            >
+              <Settings2 size={14} />
+            </button>
+          )}
           <button
             onClick={handleDelete}
             className="rounded p-1 text-notion-text-secondary hover:bg-red-50 hover:text-red-500 transition-colors"

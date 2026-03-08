@@ -15,7 +15,7 @@ model Paper {
   authorsJson String          @default("[]")
   source      SourceType
   sourceUrl   String?
-  year        Int?
+  submittedAt DateTime?
   abstract    String?
   pdfUrl      String?
   pdfPath     String?
@@ -32,7 +32,7 @@ model Paper {
 
   @@index([shortId])
   @@index([title])
-  @@index([year])
+  @@index([submittedAt])
   @@index([source])
 }
 
@@ -103,6 +103,7 @@ model Project {
   id              String    @id @default(cuid())
   name            String
   description     String?
+  workdir         String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   lastAccessedAt  DateTime?
@@ -189,6 +190,9 @@ model AgentConfig {
   backend       String
   cliPath       String?
   acpArgs       String   @default("[]")
+  agentTool     String?  // 'claude-code' | 'codex' | 'custom'
+  configContent String?  // Config file content (JSON/TOML)
+  authContent   String?  // Auth file content
   isDetected    Boolean  @default(false)
   isCustom      Boolean  @default(false)
   enabled       Boolean  @default(true)

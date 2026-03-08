@@ -1,6 +1,139 @@
 # Changelog
 ## 2026-03-08
 
+### feat: Move Agent Task creation to Projects page; Agent Tasks page becomes read-only
+
+**Scope**: `prisma/schema.prisma`, `src/db/repositories/projects.repository.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/projects/page.tsx`, `src/renderer/pages/agent-todos/page.tsx`, `src/renderer/components/agent-todo/TodoForm.tsx`, `src/renderer/components/agent-todo/TodoCard.tsx`
+
+**Changes**:
+- Added `workdir String?` field to `Project` model in schema; synced via `npx prisma db push`
+- `CreateProjectInput` and IPC `createProject`/`updateProject` now accept optional `workdir`
+- `ProjectItem` interface in `use-ipc.ts` includes `workdir?: string | null`
+- `TodoForm` accepts optional `projectId` prop; passes it when creating agent todos
+- `TodoCard` `onEdit` prop is now optional; edit button hidden when `onEdit` is not provided
+- Projects page create-project form now includes a `CwdPicker` for selecting default working directory
+- `TodoList` component now shows an "Agent Task" button that opens `TodoForm` modal with `project.workdir` as default cwd
+- Agent tasks linked to the project are listed below the todos section (read-only `TodoCard` list)
+- Agent Tasks page (`/agent-todos`) removes "New Task" button, `showForm`/`editId`/`editValues` state, and `handleEdit`; page is now read-only display only
+
+**Test**: `npm run precommit:check` — 14 tests passed, 1 skipped
+
+
+
+### fix: Clean up settings page TypeScript errors after agent settings refactor
+
+**Scope**: `src/renderer/pages/settings/page.tsx`
+
+**Changes**:
+- Removed unused agent-related code from EditModelModal (Agent Preset selection, AgentConfigHint, config/auth textareas)
+- Removed unused imports: `AgentToolKind`, `AgentConfigStatus`, `AgentConfigContents`
+- Removed dead code: `AGENT_TOOL_OPTIONS`, `getAgentToolMeta`, `getAgentConfigFieldState`, `AgentConfigHint` functions
+- Added `agent: 'cli'` to `KIND_BACKEND` to fix TypeScript Record type completeness
+
+**Result**: Settings page compiles without errors; agent configuration fully handled by AgentSettings component
+
+### feat: Improve AgentTodo form UX — priority signal bars, YOLO pill toggle, remove detect button
+
+**Scope**: `src/renderer/components/agent-todo/AgentSelector.tsx`, `TodoForm.tsx`, `TodoCard.tsx`, `PriorityBar.tsx` (new)
+
+**Changes**:
+- Removed "Detect" button from AgentSelector in task form; agents now sourced from Settings only
+- Replaced 3-level radio priority with 5-level signal-bar picker (Low/Normal/Medium/High/Urgent)
+- Added `PriorityBar.tsx` with `PriorityBarIcon` (read-only) and `PriorityPicker` (interactive) components
+- Bar colors graduate green→lime→yellow→orange→red per level
+- YOLO Mode moved out of Advanced section into a top-level pill/capsule toggle
+- Removed collapsible Advanced section entirely
+- TodoCard now shows `PriorityBarIcon` inline when priority > 0
+
+
+
+### feat: Add detailed agent configuration to Agents settings
+
+**Scope**: `src/renderer/components/settings/AgentSettings.tsx`, `src/shared/types/agent-todo.ts`, `src/main/services/agent-todo.service.ts`, `src/db/repositories/agent-todo.repository.ts`, `prisma/schema.prisma`
+
+**Changes**:
+- Added agent tool selector (Claude Code, Codex, Custom CLI) to agent configuration
+- Added config file content field for managing tool-specific settings
+- Added auth file content field for authentication configuration
+- Added test connection functionality with diagnostics output
+- Added expandable agent cards showing detailed configuration
+- Updated database schema with `agentTool`, `configContent`, `authContent` fields
+- Integrated load from file functionality for existing config/auth files
+- Usage statistics (runs count, tokens) now shown on each agent card
+
+**Database migration required**: Run `npx prisma db push` after pulling changes
+
+**Result**: Agents tab now has full feature parity with removed Models->Agent section
+
+### refactor: Unify button border-radius to rounded-lg across all views
+
+**Scope**: `src/renderer/components/`, `src/renderer/pages/`
+
+**Changes**:
+- Changed all action buttons from `rounded-md` to `rounded-lg` for visual consistency
+- Affected files: app-shell, import-modal, download-modal, AgentSettings, TodoForm, CwdPicker, AgentSelector, agent-todos pages, papers overview/reader/notes pages, projects page, settings page
+- Preserved `rounded-md` for non-button elements (inputs, textareas, `<pre>` blocks, alert divs, sidebar nav indicators)
+- Preserved `rounded-full` for pill-shaped tags and toggle switches
+
+**Result**: All interactive buttons now use uniform rounded-lg corner radius
+
+### refactor: Consolidate Agent settings into dedicated Agents tab
+
+**Scope**: `src/renderer/pages/settings/page.tsx`, `src/renderer/components/settings/AgentSettings.tsx`
+
+**Changes**:
+- Removed Agent section from Models tab (agent model kind)
+- Removed Built-in Agents section from Agents tab
+- Renamed "Custom Agents" to "Agents"
+- Agents tab now contains all agent configuration with usage statistics
+
+**Result**: Cleaner UI with agents fully managed in dedicated Agents tab
+
+
+### refactor: Reorganize Agent settings and usage statistics
+
+**Scope**: `src/renderer/pages/settings/page.tsx`, `src/renderer/components/settings/AgentSettings.tsx`
+
+**Changes**:
+- Removed agent-related settings from AddModelModal/EditModelModal (Agent Preset, config/auth content fields)
+- Moved Agent usage frequency statistics from Models tab to Agents tab
+- Changed Proxy's Agents icon from Code2 to Bot for consistency
+- Redesigned AgentSettings component following ModelKindSection pattern
+- Removed auto-detect functionality from AgentSettings
+- Agents now configured through dedicated Agents tab, not through model modals
+
+**Result**: Cleaner separation of concerns - Agent configuration is now fully in Agents tab with usage statistics
+
+
+### fix: Change Agentic Search from purple to blue theme
+
+**Scope**: `src/renderer/components/search-content.tsx`, `CLAUDE.md`
+
+**Changes**:
+- Changed all agentic search UI elements from purple to blue color scheme
+- Updated search box border, icons, buttons, and loading states
+- Updated agentic steps container and keyword tags
+- Updated AgenticPaperCard component styling
+- Added comprehensive color palette documentation to CLAUDE.md
+- Improved toggle button animation with spring physics for smoother transition
+- Added title color change and text change based on search mode
+- Added icon transition animation with scale and rotate effects
+- Added transition-colors to buttons and borders for smooth color changes
+
+**Result**: Agentic search now uses consistent blue theme with smooth animated transitions
+
+
+### fix: IME composition Enter key conflict
+
+**Scope**: src/renderer/components/, src/renderer/pages/
+
+**Changes**:
+- Added `!e.nativeEvent.isComposing` guard to all `onKeyDown` Enter handlers across the app
+- Affected files: tag-management-modal, search-content, import-modal, reader/page, overview/page, projects/page
+- Prevents Chinese/Japanese/Korean IME composition confirmation Enter from triggering form actions
+
+
+
 ### feat: Agent-powered TODO automation system with ACP protocol support
 
 **Scope**: src/main/agent/, src/main/services/, src/main/ipc/, src/renderer/pages/agent-todos/, src/renderer/components/agent-todo/, src/renderer/components/settings/, src/shared/types/, src/db/repositories/, prisma/schema.prisma

@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, Zap } from 'lucide-react';
 import { ipc } from '../../hooks/use-ipc';
 import { AgentSelector } from './AgentSelector';
 import { CwdPicker } from './CwdPicker';
+import { PriorityPicker } from './PriorityBar';
 
 interface TodoFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   editId?: string;
+  projectId?: string;
   initialValues?: {
     title?: string;
     prompt?: string;
@@ -20,14 +22,13 @@ interface TodoFormProps {
   };
 }
 
-export function TodoForm({ isOpen, onClose, onSuccess, editId, initialValues }: TodoFormProps) {
+export function TodoForm({ isOpen, onClose, onSuccess, editId, projectId, initialValues }: TodoFormProps) {
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [prompt, setPrompt] = useState(initialValues?.prompt ?? '');
   const [cwd, setCwd] = useState(initialValues?.cwd ?? '');
   const [agentId, setAgentId] = useState(initialValues?.agentId ?? '');
   const [priority, setPriority] = useState(initialValues?.priority ?? 0);
   const [yoloMode, setYoloMode] = useState(initialValues?.yoloMode ?? false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -43,7 +44,7 @@ export function TodoForm({ isOpen, onClose, onSuccess, editId, initialValues }: 
       if (editId) {
         await ipc.updateAgentTodo(editId, { title, prompt, cwd, agentId, priority, yoloMode });
       } else {
-        await ipc.createAgentTodo({ title, prompt, cwd, agentId, priority, yoloMode });
+        await ipc.createAgentTodo({ title, prompt, cwd, agentId, priority, yoloMode, projectId });
       }
       onSuccess();
       onClose();
@@ -123,52 +124,34 @@ export function TodoForm({ isOpen, onClose, onSuccess, editId, initialValues }: 
                 />
               </div>
 
-              {/* Advanced */}
+              {/* Priority */}
               <div>
+                <label className="mb-2 block text-sm font-medium text-notion-text">Priority</label>
+                <PriorityPicker value={priority} onChange={setPriority} />
+              </div>
+
+              {/* YOLO Mode pill toggle */}
+              <div className="flex items-center justify-between rounded-lg border border-notion-border px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Zap size={14} className={yoloMode ? 'text-amber-500' : 'text-notion-text-tertiary'} />
+                  <span className="text-sm font-medium text-notion-text">YOLO Mode</span>
+                  <span className="text-xs text-notion-text-tertiary">auto-approve all permissions</span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="text-sm text-notion-text-secondary hover:text-notion-text flex items-center gap-1"
+                  role="switch"
+                  aria-checked={yoloMode}
+                  onClick={() => setYoloMode(!yoloMode)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                    yoloMode ? 'bg-amber-500' : 'bg-gray-200'
+                  }`}
                 >
-                  <span>{showAdvanced ? '▼' : '▶'}</span> Advanced
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                      yoloMode ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
-                {showAdvanced && (
-                  <div className="mt-3 space-y-3 rounded-md border border-notion-border p-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={yoloMode}
-                        onChange={(e) => setYoloMode(e.target.checked)}
-                        className="rounded"
-                      />
-                      <span className="text-sm text-notion-text">
-                        YOLO Mode (auto-approve all permissions)
-                      </span>
-                    </label>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-notion-text">
-                        Priority
-                      </label>
-                      <div className="flex gap-3">
-                        {[
-                          { label: 'Normal', value: 0 },
-                          { label: 'High', value: 1 },
-                          { label: 'Urgent', value: 2 },
-                        ].map((p) => (
-                          <label key={p.value} className="flex items-center gap-1 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="priority"
-                              checked={priority === p.value}
-                              onChange={() => setPriority(p.value)}
-                            />
-                            <span className="text-sm text-notion-text">{p.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {error && <p className="text-sm text-red-500">{error}</p>}
@@ -177,14 +160,14 @@ export function TodoForm({ isOpen, onClose, onSuccess, editId, initialValues }: 
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-md px-4 py-2 text-sm text-notion-text-secondary hover:bg-notion-accent-light transition-colors"
+                  className="rounded-lg px-4 py-2 text-sm text-notion-text-secondary hover:bg-notion-accent-light transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-md bg-notion-accent px-4 py-2 text-sm font-medium text-white hover:bg-notion-accent/90 disabled:opacity-50 transition-colors"
+                  className="rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:bg-notion-text/80 disabled:opacity-50 transition-colors"
                 >
                   {submitting ? 'Saving...' : editId ? 'Save' : 'Create'}
                 </button>

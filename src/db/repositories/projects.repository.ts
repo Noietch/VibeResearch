@@ -3,6 +3,7 @@ import { getPrismaClient } from '../client';
 export interface CreateProjectInput {
   name: string;
   description?: string;
+  workdir?: string;
 }
 
 export interface CreateTodoInput {

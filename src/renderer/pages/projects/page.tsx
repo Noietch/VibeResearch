@@ -11,6 +11,7 @@ import {
   type CommitInfo,
   type ModelConfig,
 } from '../../hooks/use-ipc';
+import type { AgentTodoItem } from '@shared';
 import { useTabs } from '../../hooks/use-tabs';
 import {
   FolderKanban,
@@ -31,6 +32,9 @@ import {
   Square,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { CwdPicker } from '../../components/agent-todo/CwdPicker';
+import { TodoForm } from '../../components/agent-todo/TodoForm';
+import { TodoCard } from '../../components/agent-todo/TodoCard';
 
 // ── Animation variants ────────────────────────────────────────────────────────
 
@@ -161,7 +165,7 @@ function TodoItem({
           onChange={(e) => setEditText(e.target.value)}
           onBlur={commitEdit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitEdit();
             if (e.key === 'Escape') {
               setEditText(todo.text);
               setEditing(false);
@@ -198,6 +202,28 @@ function TodoItem({
 function TodoList({ project, onChange }: { project: ProjectItem; onChange: () => void }) {
   const [text, setText] = useState('');
   const [adding, setAdding] = useState(false);
+  const [showAgentForm, setShowAgentForm] = useState(false);
+  const [agentTodos, setAgentTodos] = useState<AgentTodoItem[]>([]);
+
+  const loadAgentTodos = useCallback(async () => {
+    try {
+      const data = await ipc.listAgentTodos({ projectId: project.id });
+      setAgentTodos(data);
+    } catch {
+      // silent
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    loadAgentTodos();
+  }, [loadAgentTodos]);
+
+  useEffect(() => {
+    const off = onIpc('agent-todo:status', () => {
+      loadAgentTodos();
+    });
+    return off;
+  }, [loadAgentTodos]);
 
   const add = async () => {
     const trimmed = text.trim();
@@ -229,7 +255,7 @@ function TodoList({ project, onChange }: { project: ProjectItem; onChange: () =>
 
   return (
     <div className="space-y-3">
-      {/* Add input */}
+      {/* Add input row */}
       <motion.div
         className="flex gap-2"
         initial={{ opacity: 0, y: 10 }}
@@ -238,7 +264,7 @@ function TodoList({ project, onChange }: { project: ProjectItem; onChange: () =>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && add()}
           placeholder="Add a todo..."
           className="flex-1 rounded-lg border border-notion-border bg-transparent px-3 py-2 text-sm text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-text/20"
         />
@@ -251,6 +277,16 @@ function TodoList({ project, onChange }: { project: ProjectItem; onChange: () =>
         >
           {adding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           Add
+        </motion.button>
+        <motion.button
+          onClick={() => setShowAgentForm(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-notion-border px-3 py-2 text-sm font-medium text-notion-text-secondary hover:bg-notion-sidebar-hover transition-colors"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          title="Create an Agent Task for this project"
+        >
+          <Bot size={14} />
+          Agent Task
         </motion.button>
       </motion.div>
 
@@ -283,7 +319,7 @@ function TodoList({ project, onChange }: { project: ProjectItem; onChange: () =>
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="py-8 text-center text-sm text-notion-text-tertiary"
+          className="py-4 text-center text-sm text-notion-text-tertiary"
         >
           No todos yet
         </motion.p>
@@ -302,6 +338,31 @@ function TodoList({ project, onChange }: { project: ProjectItem; onChange: () =>
           </AnimatePresence>
         </ul>
       )}
+
+      {/* Agent Tasks section */}
+      {agentTodos.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Bot size={13} className="text-notion-text-tertiary" />
+            <span className="text-xs font-medium text-notion-text-tertiary">Agent Tasks</span>
+          </div>
+          <div className="space-y-2">
+            {agentTodos.map((todo) => (
+              <TodoCard key={todo.id} todo={todo} onRefresh={loadAgentTodos} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Agent Task Form Modal */}
+      <TodoForm
+        key={showAgentForm ? 'open' : 'closed'}
+        isOpen={showAgentForm}
+        onClose={() => setShowAgentForm(false)}
+        onSuccess={loadAgentTodos}
+        projectId={project.id}
+        initialValues={{ cwd: project.workdir ?? '' }}
+      />
     </div>
   );
 }
@@ -375,7 +436,7 @@ function RepoCard({ repo, onDelete }: { repo: ProjectRepo; onDelete: () => void 
             <motion.button
               onClick={handleClone}
               disabled={cloning}
-              className="inline-flex items-center gap-1 rounded-md border border-notion-border px-2.5 py-1 text-xs font-medium text-notion-text hover:bg-notion-sidebar-hover disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-notion-border px-2.5 py-1 text-xs font-medium text-notion-text hover:bg-notion-sidebar-hover disabled:opacity-50"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -386,7 +447,7 @@ function RepoCard({ repo, onDelete }: { repo: ProjectRepo; onDelete: () => void 
           {repo.localPath && (
             <motion.button
               onClick={toggleExpand}
-              className="inline-flex items-center gap-1 rounded-md border border-notion-border px-2.5 py-1 text-xs font-medium text-notion-text hover:bg-notion-sidebar-hover"
+              className="inline-flex items-center gap-1 rounded-lg border border-notion-border px-2.5 py-1 text-xs font-medium text-notion-text hover:bg-notion-sidebar-hover"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -763,7 +824,7 @@ function CodeTab({ project, onChange }: { project: ProjectItem; onChange: () => 
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addRepo()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && addRepo()}
           placeholder="https://github.com/owner/repo.git"
           className="flex-1 rounded-lg border border-notion-border bg-transparent px-3 py-2 text-sm text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-text/20"
         />
@@ -1141,7 +1202,7 @@ function IdeaCard({
                 onChange={(e) => setTitleDraft(e.target.value)}
                 onBlur={commitTitle}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitTitle();
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitTitle();
                   if (e.key === 'Escape') {
                     setTitleDraft(idea.title);
                     setEditingTitle(false);
@@ -1293,7 +1354,7 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
             onChange={(e) => setNameDraft(e.target.value)}
             onBlur={commitName}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') commitName();
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitName();
               if (e.key === 'Escape') {
                 setNameDraft(project.name);
                 setEditingName(false);
@@ -1318,7 +1379,7 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
             onChange={(e) => setDescDraft(e.target.value)}
             onBlur={commitDesc}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') commitDesc();
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitDesc();
               if (e.key === 'Escape') {
                 setDescDraft(project.description ?? '');
                 setEditingDesc(false);
@@ -1468,6 +1529,7 @@ export function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newWorkdir, setNewWorkdir] = useState('');
   const [showForm, setShowForm] = useState(false);
   const navigate = useNavigate();
   const { openTab } = useTabs();
@@ -1492,9 +1554,14 @@ export function ProjectsPage() {
     if (!name) return;
     setCreating(true);
     try {
-      const p = await ipc.createProject({ name, description: newDesc.trim() || undefined });
+      const p = await ipc.createProject({
+        name,
+        description: newDesc.trim() || undefined,
+        workdir: newWorkdir.trim() || undefined,
+      });
       setNewName('');
       setNewDesc('');
+      setNewWorkdir('');
       setShowForm(false);
       await fetchProjects();
       // Open the new project in a tab
@@ -1564,7 +1631,7 @@ export function ProjectsPage() {
                     autoFocus
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && createProject()}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && createProject()}
                     placeholder="Project name"
                     className="w-full rounded-lg border border-notion-border bg-transparent px-3 py-2 text-sm text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-text/20"
                   />
@@ -1574,6 +1641,12 @@ export function ProjectsPage() {
                     placeholder="Description (optional)"
                     className="w-full rounded-lg border border-notion-border bg-transparent px-3 py-2 text-sm text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-text/20"
                   />
+                  <div>
+                    <label className="mb-1 block text-xs text-notion-text-tertiary">
+                      Working Directory (optional — default cwd for Agent Tasks)
+                    </label>
+                    <CwdPicker value={newWorkdir} onChange={setNewWorkdir} />
+                  </div>
                   <div className="flex gap-2 pt-1">
                     <motion.button
                       onClick={createProject}
@@ -1594,6 +1667,7 @@ export function ProjectsPage() {
                         setShowForm(false);
                         setNewName('');
                         setNewDesc('');
+                        setNewWorkdir('');
                       }}
                       className="rounded-lg border border-notion-border px-3 py-1.5 text-sm text-notion-text-secondary hover:bg-notion-sidebar-hover"
                       whileHover={{ scale: 1.02 }}

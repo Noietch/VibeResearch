@@ -13,6 +13,7 @@ import type {
   AgentTodoQuery,
   AgentTodoRunItem,
   AgentTodoMessageItem,
+  AgentToolKind,
 } from '@shared';
 
 declare global {
@@ -95,7 +96,7 @@ export interface PaperItem {
   shortId: string;
   title: string;
   authors?: string[];
-  year?: number;
+  submittedAt?: string;
   abstract?: string;
   tagNames?: string[];
   categorizedTags?: Array<{ name: string; category: string }>;
@@ -161,7 +162,7 @@ export interface AgenticSearchPaper {
   shortId: string;
   title: string;
   authors?: string[];
-  year?: number;
+  submittedAt?: string;
   tagNames?: string[];
   abstract?: string;
   relevanceReason?: string;
@@ -227,6 +228,7 @@ export interface ProjectItem {
   id: string;
   name: string;
   description?: string | null;
+  workdir?: string | null;
   createdAt: string;
   updatedAt: string;
   lastAccessedAt?: string | null;
@@ -270,7 +272,7 @@ export type ProviderKind = 'anthropic' | 'openai' | 'gemini' | 'custom';
 
 export type ModelKind = 'agent' | 'lightweight' | 'chat';
 export type ModelBackend = 'api' | 'cli';
-export type AgentToolKind = 'claude-code' | 'codex' | 'custom';
+export type { AgentToolKind };
 
 export interface ProxyScope {
   pdfDownload: boolean;
@@ -443,9 +445,9 @@ export const ipc = {
 
   // Projects
   listProjects: () => invoke<ProjectItem[]>('projects:list'),
-  createProject: (input: { name: string; description?: string }) =>
+  createProject: (input: { name: string; description?: string; workdir?: string }) =>
     invoke<ProjectItem>('projects:create', input),
-  updateProject: (id: string, data: { name?: string; description?: string }) =>
+  updateProject: (id: string, data: { name?: string; description?: string; workdir?: string }) =>
     invoke<ProjectItem>('projects:update', id, data),
   deleteProject: (id: string) => invoke<ProjectItem>('projects:delete', id),
   touchProject: (id: string) => invoke<void>('projects:touch', id),
