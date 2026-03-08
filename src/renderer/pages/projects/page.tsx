@@ -1656,7 +1656,9 @@ export function ProjectsPage() {
                     autoFocus
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && createProject()}
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && !e.nativeEvent.isComposing && createProject()
+                    }
                     placeholder="Project name"
                     className="w-full rounded-lg border border-notion-border bg-transparent px-3 py-2 text-sm text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-text/20"
                   />

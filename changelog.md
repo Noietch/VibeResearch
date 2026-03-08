@@ -1,4 +1,5 @@
 # Changelog
+
 ## 2026-03-08
 
 ### feat: Conversational idea chat → Agent Task creation in Projects
@@ -6,6 +7,7 @@
 **Scope**: `src/main/services/projects.service.ts`, `src/main/ipc/projects.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/ideas/IdeaChatModal.tsx` (new)
 
 **Changes**:
+
 - `projects.service.ts`: Extracted `buildSourceContext()` private helper from `generateIdea()`; added `ideaChat()` streaming method (uses `streamText` with paper/repo context) and `extractTaskFromChat()` non-streaming method (extracts JSON title+prompt from conversation)
 - `projects.ipc.ts`: Added `BrowserWindow` import, `activeIdeaChats` AbortController map, and 3 new IPC handlers: `projects:idea:chat` (streaming, pushes `idea-chat:output/done/error`), `projects:idea:chatKill`, `projects:idea:extract-task`
 - `use-ipc.ts`: Added `startIdeaChat`, `killIdeaChat`, `extractTaskFromChat` IPC methods
@@ -14,13 +16,12 @@
 
 **IPC channels**: `projects:idea:chat` (invoke), `projects:idea:chatKill` (invoke), `projects:idea:extract-task` (invoke), `idea-chat:output/done/error` (pushed events)
 
-
-
 ### feat: Redesign Chat input box; add fullscreen mode for Chat panel
 
 **Scope**: `src/renderer/pages/papers/reader/page.tsx`
 
 **Changes**:
+
 - Removed top border (`border-t`) above the chat input area
 - Redesigned input box to match Codex-style layout: textarea on top, bottom toolbar with `+` (new chat), model selector (with dropdown), and a rounded send/stop button
 - Dropdown for chat history/clear/new chat now opens upward from the model selector in the input toolbar
@@ -32,6 +33,7 @@
 **Scope**: `prisma/schema.prisma`, `src/db/repositories/projects.repository.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/projects/page.tsx`, `src/renderer/pages/agent-todos/page.tsx`, `src/renderer/components/agent-todo/TodoForm.tsx`, `src/renderer/components/agent-todo/TodoCard.tsx`
 
 **Changes**:
+
 - Added `workdir String?` field to `Project` model in schema; synced via `npx prisma db push`
 - `CreateProjectInput` and IPC `createProject`/`updateProject` now accept optional `workdir`
 - `ProjectItem` interface in `use-ipc.ts` includes `workdir?: string | null`
@@ -44,13 +46,12 @@
 
 **Test**: `npm run precommit:check` — 14 tests passed, 1 skipped
 
-
-
 ### fix: Clean up settings page TypeScript errors after agent settings refactor
 
 **Scope**: `src/renderer/pages/settings/page.tsx`
 
 **Changes**:
+
 - Removed unused agent-related code from EditModelModal (Agent Preset selection, AgentConfigHint, config/auth textareas)
 - Removed unused imports: `AgentToolKind`, `AgentConfigStatus`, `AgentConfigContents`
 - Removed dead code: `AGENT_TOOL_OPTIONS`, `getAgentToolMeta`, `getAgentConfigFieldState`, `AgentConfigHint` functions
@@ -63,6 +64,7 @@
 **Scope**: `src/renderer/components/agent-todo/AgentSelector.tsx`, `TodoForm.tsx`, `TodoCard.tsx`, `PriorityBar.tsx` (new)
 
 **Changes**:
+
 - Removed "Detect" button from AgentSelector in task form; agents now sourced from Settings only
 - Replaced 3-level radio priority with 5-level signal-bar picker (Low/Normal/Medium/High/Urgent)
 - Added `PriorityBar.tsx` with `PriorityBarIcon` (read-only) and `PriorityPicker` (interactive) components
@@ -71,13 +73,12 @@
 - Removed collapsible Advanced section entirely
 - TodoCard now shows `PriorityBarIcon` inline when priority > 0
 
-
-
 ### feat: Add detailed agent configuration to Agents settings
 
 **Scope**: `src/renderer/components/settings/AgentSettings.tsx`, `src/shared/types/agent-todo.ts`, `src/main/services/agent-todo.service.ts`, `src/db/repositories/agent-todo.repository.ts`, `prisma/schema.prisma`
 
 **Changes**:
+
 - Added agent tool selector (Claude Code, Codex, Custom CLI) to agent configuration
 - Added config file content field for managing tool-specific settings
 - Added auth file content field for authentication configuration
@@ -96,6 +97,7 @@
 **Scope**: `src/renderer/components/`, `src/renderer/pages/`
 
 **Changes**:
+
 - Changed all action buttons from `rounded-md` to `rounded-lg` for visual consistency
 - Affected files: app-shell, import-modal, download-modal, AgentSettings, TodoForm, CwdPicker, AgentSelector, agent-todos pages, papers overview/reader/notes pages, projects page, settings page
 - Preserved `rounded-md` for non-button elements (inputs, textareas, `<pre>` blocks, alert divs, sidebar nav indicators)
@@ -108,6 +110,7 @@
 **Scope**: `src/renderer/pages/settings/page.tsx`, `src/renderer/components/settings/AgentSettings.tsx`
 
 **Changes**:
+
 - Removed Agent section from Models tab (agent model kind)
 - Removed Built-in Agents section from Agents tab
 - Renamed "Custom Agents" to "Agents"
@@ -115,12 +118,12 @@
 
 **Result**: Cleaner UI with agents fully managed in dedicated Agents tab
 
-
 ### refactor: Reorganize Agent settings and usage statistics
 
 **Scope**: `src/renderer/pages/settings/page.tsx`, `src/renderer/components/settings/AgentSettings.tsx`
 
 **Changes**:
+
 - Removed agent-related settings from AddModelModal/EditModelModal (Agent Preset, config/auth content fields)
 - Moved Agent usage frequency statistics from Models tab to Agents tab
 - Changed Proxy's Agents icon from Code2 to Bot for consistency
@@ -130,12 +133,12 @@
 
 **Result**: Cleaner separation of concerns - Agent configuration is now fully in Agents tab with usage statistics
 
-
 ### fix: Change Agentic Search from purple to blue theme
 
 **Scope**: `src/renderer/components/search-content.tsx`, `CLAUDE.md`
 
 **Changes**:
+
 - Changed all agentic search UI elements from purple to blue color scheme
 - Updated search box border, icons, buttons, and loading states
 - Updated agentic steps container and keyword tags
@@ -148,29 +151,28 @@
 
 **Result**: Agentic search now uses consistent blue theme with smooth animated transitions
 
-
 ### fix: IME composition Enter key conflict
 
 **Scope**: src/renderer/components/, src/renderer/pages/
 
 **Changes**:
+
 - Added `!e.nativeEvent.isComposing` guard to all `onKeyDown` Enter handlers across the app
 - Affected files: tag-management-modal, search-content, import-modal, reader/page, overview/page, projects/page
 - Prevents Chinese/Japanese/Korean IME composition confirmation Enter from triggering form actions
-
-
 
 ### feat: Agent-powered TODO automation system with ACP protocol support
 
 **Scope**: src/main/agent/, src/main/services/, src/main/ipc/, src/renderer/pages/agent-todos/, src/renderer/components/agent-todo/, src/renderer/components/settings/, src/shared/types/, src/db/repositories/, prisma/schema.prisma
 
 **Changes**:
+
 - Added 4 new database tables: AgentConfig, AgentTodo, AgentTodoRun, AgentTodoMessage
 - Implemented ACP (Agent Communication Protocol) JSON-RPC 2.0 over stdio communication layer (acp-connection.ts, acp-adapter.ts, acp-types.ts)
 - Added automatic CLI detection for Claude Code, Codex, and Gemini CLI agents
 - Implemented AgentTaskRunner for orchestrating agent execution with streaming output
 - Added AgentTodoService with full CRUD, execution control, and cron scheduling
-- Registered all agent-todo:* IPC channels
+- Registered all agent-todo:\* IPC channels
 - Built Agent Tasks list page (/agent-todos) with status filters and create/edit modal
 - Built Agent Task detail page (/agent-todos/:id) with real-time message stream, run history timeline, and permission approval UI
 - Added Agents tab to Settings page for agent detection and custom agent management
@@ -222,7 +224,6 @@
   - State persisted to localStorage for persistence across sessions
   - Smooth animations using framer-motion for text fade in/out
 - **Result**: Cleaner UI with option to minimize sidebar clutter
-
 
 ### refactor: Remove Auto Tag progress card from paper details
 

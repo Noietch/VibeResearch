@@ -3,7 +3,11 @@ import path from 'path';
 import os from 'os';
 import { ProjectsRepository, PapersRepository } from '@db';
 import { getShellPath } from './cli-runner.service';
-import { generateWithModelKind, getLanguageModelFromConfig, streamText } from './ai-provider.service';
+import {
+  generateWithModelKind,
+  getLanguageModelFromConfig,
+  streamText,
+} from './ai-provider.service';
 import { getActiveModel, getModelWithKey } from '../store/model-config-store';
 
 export interface CloneResult {
@@ -289,7 +293,11 @@ export class ProjectsService {
     projectId: string;
     paperIds: string[];
     repoIds?: string[];
-  }): Promise<{ paperContext: string; repoContext: string; project: Awaited<ReturnType<ProjectsRepository['getProject']>> }> {
+  }): Promise<{
+    paperContext: string;
+    repoContext: string;
+    project: Awaited<ReturnType<ProjectsRepository['getProject']>>;
+  }> {
     const project = await this.repo.getProject(input.projectId);
     if (!project) throw new Error('Project not found');
 
@@ -382,7 +390,8 @@ export class ProjectsService {
       },
       {
         role: 'assistant',
-        content: 'I understand the project context and the provided materials. I\'m ready to help you explore and develop research ideas. What would you like to discuss?',
+        content:
+          "I understand the project context and the provided materials. I'm ready to help you explore and develop research ideas. What would you like to discuss?",
       },
       ...input.messages,
     ];

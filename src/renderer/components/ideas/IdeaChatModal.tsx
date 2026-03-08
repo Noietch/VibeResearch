@@ -138,7 +138,10 @@ export function IdeaChatModal({
       setStreamingContent('');
       setMessages((msgs) => [
         ...msgs,
-        { role: 'assistant', content: `Error: ${err instanceof Error ? err.message : String(err)}` },
+        {
+          role: 'assistant',
+          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+        },
       ]);
     }
   }, [input, streaming, messages, projectId, paperIds, repoIds]);
@@ -266,7 +269,10 @@ export function IdeaChatModal({
                   {messages.length === 0 && !streaming && (
                     <div className="flex h-full items-center justify-center">
                       <div className="text-center">
-                        <MessageSquare size={32} className="mx-auto mb-3 text-notion-text-tertiary/40" />
+                        <MessageSquare
+                          size={32}
+                          className="mx-auto mb-3 text-notion-text-tertiary/40"
+                        />
                         <p className="text-sm text-notion-text-tertiary">
                           Start a conversation about your research ideas
                         </p>
