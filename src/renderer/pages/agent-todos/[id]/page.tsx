@@ -199,6 +199,9 @@ export function AgentTodoDetailPage() {
               status: m.status || prev.status,
               content: mergedContent,
             };
+          } else if (existing !== undefined && m.type === 'plan') {
+            // Plan updates: replace with latest (has most up-to-date entry statuses)
+            merged[existing] = m;
           } else {
             seen.set(m.msgId, merged.length);
             merged.push(m);

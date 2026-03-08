@@ -9,7 +9,7 @@
 **Changes**:
 
 - **Stop race condition**: `runner.stop()` 先设置 status 为 `cancelled` 再 kill 进程，确保 exit 事件触发时不会再标记为 `failed`；`runTodo` 的 catch 块增加判断，若 runner 已是 `cancelled` 则跳过 DB 更新；`stopTodo` 把 todo 和 lastRun 都更新为 `cancelled`（而非 `idle`）。
-- **历史消息合并**: 读取历史消息时，把相同 `msgId` 的 `text` 类型 chunk 拼接成一条，避免每个字符单独渲染成一行；`tool_call` 类型做字段合并（非空覆盖），确保 title/kind/status 都正确显示。
+- **历史消息合并**: 读取历史消息时，把相同 `msgId` 的 `text` 类型 chunk 拼接成一条，避免每个字符单独渲染成一行；`tool_call` 类型做字段合并（非空覆盖），确保 title/kind/status 都正确显示；`plan` 类型取最后一条（entries 状态最新）。
 
 ### fix: Agent ACP now uses aia.linglong521.cn proxy with real API key
 
