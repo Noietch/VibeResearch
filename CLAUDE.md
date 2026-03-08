@@ -62,6 +62,13 @@ scripts/      # build-main.mjs, build-release.sh
    - `README.md` contains both English and Chinese sections.
    - When updating README, always update both language sections to keep them synchronized.
 
+8. **Branch and PR workflow**
+   - **Main branch (`main`) is protected and must only be updated via Pull Requests.**
+   - Never push directly to `main` branch.
+   - All feature development must be done in feature branches (e.g., `feat/feature-name`, `fix/bug-name`).
+   - When feature work is complete, create a PR to merge into `main`.
+   - Feature branches can be pushed directly for collaboration and backup.
+
 ## Expected coding sequence
 
 1. Create changelog entry for the coding session.
@@ -78,24 +85,24 @@ All card-style components (paper cards, reading cards, list items, etc.) use a *
 
 ```tsx
 // Card base styles
-className="bg-white border border-notion-border rounded-lg"
+className = 'bg-white border border-notion-border rounded-lg';
 
 // Card hover state
-className="hover:bg-notion-accent-light hover:border-notion-accent/30"
+className = 'hover:bg-notion-accent-light hover:border-notion-accent/30';
 
 // Card selected/active state
-className="bg-notion-accent-light border-notion-accent/50"
+className = 'bg-notion-accent-light border-notion-accent/50';
 ```
 
 **Color Palette (from tailwind.config.ts):**
 
-| Purpose | Tailwind Class | Hex Value | Usage |
-|---------|---------------|-----------|-------|
-| Card background | `bg-white` | `#ffffff` | Default card background |
-| Card hover | `bg-notion-accent-light` | `#e8f4f8` | Light blue hover state |
-| Card border | `border-notion-border` | `#e8e8e5` | Default border |
-| Accent border | `border-notion-accent/30` | `rgba(46,170,220,0.3)` | Hover/active border |
-| Accent text | `text-notion-accent` | `#2eaadc` | Highlights, links |
+| Purpose         | Tailwind Class            | Hex Value              | Usage                   |
+| --------------- | ------------------------- | ---------------------- | ----------------------- |
+| Card background | `bg-white`                | `#ffffff`              | Default card background |
+| Card hover      | `bg-notion-accent-light`  | `#e8f4f8`              | Light blue hover state  |
+| Card border     | `border-notion-border`    | `#e8e8e5`              | Default border          |
+| Accent border   | `border-notion-accent/30` | `rgba(46,170,220,0.3)` | Hover/active border     |
+| Accent text     | `text-notion-accent`      | `#2eaadc`              | Highlights, links       |
 
 **Card Design Principles:**
 
@@ -108,9 +115,11 @@ className="bg-notion-accent-light border-notion-accent/50"
 ### Example Card Pattern
 
 ```tsx
-<div className="group bg-white border border-notion-border rounded-lg p-4
+<div
+  className="group bg-white border border-notion-border rounded-lg p-4
   hover:bg-notion-accent-light hover:border-notion-accent/30
-  transition-colors duration-150 cursor-pointer">
+  transition-colors duration-150 cursor-pointer"
+>
   {/* Card content */}
 </div>
 ```
