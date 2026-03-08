@@ -4,7 +4,7 @@ import { getSemanticSearchSettings } from '../store/app-settings-store';
 import { getPaperText } from './paper-text.service';
 import { localSemanticService } from './local-semantic.service';
 import { extractPaperMetadata } from './paper-metadata.service';
-import { splitTextIntoChunks } from './semantic-utils';
+import { sanitizeSemanticText, splitTextIntoChunks } from './semantic-utils';
 import * as vecIndex from './vec-index.service';
 
 export type PaperProcessingStatus =
@@ -85,9 +85,16 @@ async function processPaper(paperId: string) {
 
   try {
     await updateStatus(repo, paperId, 'extracting_text', { processingError: null });
-    const text = await getPaperText(paper.id, paper.shortId, pdfUrl, paper.pdfPath ?? undefined, {
-      maxChars: 220_000,
-    });
+    const rawText = await getPaperText(
+      paper.id,
+      paper.shortId,
+      pdfUrl,
+      paper.pdfPath ?? undefined,
+      {
+        maxChars: 220_000,
+      },
+    );
+    const text = sanitizeSemanticText(rawText);
     if (!text.trim()) {
       throw new Error('Could not extract text from PDF.');
     }

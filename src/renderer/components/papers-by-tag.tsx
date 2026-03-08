@@ -1087,6 +1087,13 @@ function PaperCard({
               </span>
             )}
             <ProcessingBadge status={paper.processingStatus} />
+          </div>
+          {paper.processingStatus === 'failed' && paper.processingError && (
+            <p className="mt-1 line-clamp-2 break-all text-xs text-red-700/90">
+              {paper.processingError}
+            </p>
+          )}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {visibleTags.map((tag) => {
               const colors = CATEGORY_COLORS[tag.category as TagCategory] || CATEGORY_COLORS.topic;
               return (
