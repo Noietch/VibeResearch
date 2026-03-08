@@ -2,7 +2,7 @@ import { PapersRepository } from '@db';
 import type { TagCategory } from '@shared';
 import { getSemanticSearchSettings } from '../store/app-settings-store';
 import { localSemanticService } from './local-semantic.service';
-import { cosineSimilarity } from './semantic-utils';
+import { cosineSimilarity, isSemanticScoreMatch, semanticLexicalBoost } from './semantic-utils';
 import * as vecIndex from './vec-index.service';
 
 export interface SemanticSearchPaper {
@@ -17,6 +17,7 @@ export interface SemanticSearchPaper {
   similarityScore: number;
   matchedChunks: string[];
   processingStatus?: string;
+  processingError?: string | null;
 }
 
 export interface SemanticSearchResult {
@@ -33,6 +34,7 @@ function mapPaper(chunkPaper: {
   submittedAt: Date | string | null;
   abstract: string | null;
   processingStatus: string;
+  processingError?: string | null;
   tags: Array<{ tag: { name: string; category: string } }>;
 }) {
   return {
@@ -51,17 +53,20 @@ function mapPaper(chunkPaper: {
       category: item.tag.category as TagCategory,
     })),
     processingStatus: chunkPaper.processingStatus,
+    processingError: chunkPaper.processingError,
   };
 }
 
 function groupAndScore(
   chunks: Array<{
     paperId: string;
+    content: string;
     contentPreview: string;
     paper: Parameters<typeof mapPaper>[0];
     score: number;
   }>,
   limit: number,
+  query: string,
 ): SemanticSearchPaper[] {
   const grouped = new Map<
     string,
@@ -77,7 +82,13 @@ function groupAndScore(
       paper: mapPaper(chunk.paper),
       hits: [],
     };
-    existing.hits.push({ score: chunk.score, preview: chunk.contentPreview });
+    const lexicalBoost = semanticLexicalBoost(query, [
+      chunk.paper.title,
+      chunk.paper.abstract,
+      chunk.content,
+      chunk.contentPreview,
+    ]);
+    existing.hits.push({ score: chunk.score + lexicalBoost, preview: chunk.contentPreview });
     grouped.set(chunk.paperId, existing);
   }
 
@@ -140,14 +151,17 @@ export class SemanticSearchService {
           // Build distance lookup
           const distMap = new Map(knnResults.map((r) => [r.chunkId, r.distance]));
 
-          const scored = dbChunks.map((chunk) => ({
-            paperId: chunk.paperId,
-            contentPreview: chunk.contentPreview,
-            paper: chunk.paper,
-            score: 1 - (distMap.get(chunk.id) ?? 1), // cosine distance → similarity
-          }));
+          const scored = dbChunks
+            .map((chunk) => ({
+              paperId: chunk.paperId,
+              content: chunk.content,
+              contentPreview: chunk.contentPreview,
+              paper: chunk.paper,
+              score: 1 - (distMap.get(chunk.id) ?? 1), // cosine distance → similarity
+            }))
+            .filter((chunk) => isSemanticScoreMatch(chunk.score));
 
-          const papers = groupAndScore(scored, limit);
+          const papers = groupAndScore(scored, limit, trimmed);
           if (papers.length > 0) {
             return { mode: 'semantic', papers };
           }
@@ -158,10 +172,11 @@ export class SemanticSearchService {
     }
 
     // Brute-force fallback
-    return this.bruteForceFallback(queryEmbedding, limit);
+    return this.bruteForceFallback(trimmed, queryEmbedding, limit);
   }
 
   private async bruteForceFallback(
+    query: string,
     queryEmbedding: number[],
     limit: number,
   ): Promise<SemanticSearchResult> {
@@ -184,21 +199,22 @@ export class SemanticSearchService {
         }
         return {
           paperId: chunk.paperId,
+          content: chunk.content,
           contentPreview: chunk.contentPreview,
           paper: chunk.paper,
           score: cosineSimilarity(queryEmbedding, embedding),
         };
       })
-      .filter((c): c is NonNullable<typeof c> => c !== null);
+      .filter((c): c is NonNullable<typeof c> => c !== null && isSemanticScoreMatch(c.score));
 
-    const papers = groupAndScore(scored, limit);
+    const papers = groupAndScore(scored, limit, query);
 
     if (papers.length === 0) {
       return {
         mode: 'fallback',
         papers: [],
         fallbackReason:
-          'Semantic search found no indexed matches, so normal search should be used.',
+          'No semantic matches cleared the relevance threshold, so normal search should be used.',
       };
     }
 

@@ -1,4 +1,11 @@
-import type { SourceType, TagCategory, CategorizedTag } from '@shared';
+import { randomUUID } from 'node:crypto';
+import { getVecDb } from '../vec-client';
+import {
+  matchesNormalSearchQuery,
+  type SourceType,
+  type TagCategory,
+  type CategorizedTag,
+} from '@shared';
 import { getPrismaClient } from '../client';
 
 export interface CreatePaperParams {
@@ -98,13 +105,6 @@ export class PapersRepository {
   }) {
     const conditions: Record<string, unknown>[] = [];
 
-    // Title-only filter for Prisma query (tag matching done post-query)
-    if (query?.q && !query.tag && !query.year) {
-      // When only q is provided, fetch all and filter in JS for tag matching
-    } else if (query?.q) {
-      conditions.push({ title: { contains: query.q } });
-    }
-
     if (query?.year) {
       conditions.push({
         submittedAt: {
@@ -152,12 +152,7 @@ export class PapersRepository {
 
     // Post-query filtering: match q against both title and tag names
     if (query?.q) {
-      const q = query.q.toLowerCase();
-      return mapped.filter(
-        (paper) =>
-          paper.title.toLowerCase().includes(q) ||
-          paper.tagNames.some((tag) => tag.toLowerCase().includes(q)),
-      );
+      return mapped.filter((paper) => matchesNormalSearchQuery(paper, query.q!));
     }
 
     return mapped;
@@ -404,20 +399,37 @@ export class PapersRepository {
       embedding: number[];
     }>,
   ) {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.paperChunk.deleteMany({ where: { paperId } });
-      for (const chunk of chunks) {
-        await tx.paperChunk.create({
-          data: {
-            paperId,
-            chunkIndex: chunk.chunkIndex,
-            content: chunk.content,
-            contentPreview: chunk.contentPreview,
-            embeddingJson: JSON.stringify(chunk.embedding),
-          },
-        });
-      }
-    });
+    const db = getVecDb();
+    const deleteStmt = db.prepare('DELETE FROM "PaperChunk" WHERE "paperId" = ?');
+    const insertStmt = db.prepare(
+      'INSERT INTO "PaperChunk" ("id", "paperId", "chunkIndex", "content", "contentPreview", "embeddingJson") VALUES (?, ?, ?, ?, ?, ?)',
+    );
+
+    const transaction = db.transaction(
+      (
+        paperIdValue: string,
+        chunkRows: Array<{
+          chunkIndex: number;
+          content: string;
+          contentPreview: string;
+          embedding: number[];
+        }>,
+      ) => {
+        deleteStmt.run(paperIdValue);
+        for (const chunk of chunkRows) {
+          insertStmt.run(
+            randomUUID(),
+            paperIdValue,
+            chunk.chunkIndex,
+            chunk.content,
+            chunk.contentPreview,
+            JSON.stringify(chunk.embedding),
+          );
+        }
+      },
+    );
+
+    transaction(paperId, chunks);
   }
 
   async listChunksForSemanticSearch() {

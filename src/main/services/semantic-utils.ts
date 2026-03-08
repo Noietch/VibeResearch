@@ -4,6 +4,14 @@ export interface TextChunk {
   contentPreview: string;
 }
 
+export function sanitizeSemanticText(value: string): string {
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+    .replace(/\p{Co}|\p{Cs}/gu, '')
+    .replace(/\uFEFF/g, '')
+    .normalize('NFC');
+}
+
 export function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -73,6 +81,35 @@ export function splitTextIntoChunks(
   }
 
   return chunks;
+}
+
+export const MIN_SEMANTIC_CHUNK_SIMILARITY = 0.35;
+
+export function isSemanticScoreMatch(score: number): boolean {
+  return Number.isFinite(score) && score >= MIN_SEMANTIC_CHUNK_SIMILARITY;
+}
+
+export function semanticLexicalBoost(
+  query: string,
+  fields: Array<string | null | undefined>,
+): number {
+  const normalizedQuery = normalizeWhitespace(query).toLowerCase();
+  if (!normalizedQuery) return 0;
+
+  const haystack = normalizeWhitespace(fields.filter(Boolean).join(' ')).toLowerCase();
+  if (!haystack) return 0;
+
+  if (haystack.includes(normalizedQuery)) {
+    return 0.08;
+  }
+
+  const tokens = normalizedQuery.split(/\s+/).filter((token) => token.length >= 2);
+  if (tokens.length === 0) return 0;
+
+  const matchedTokens = tokens.filter((token) => haystack.includes(token)).length;
+  if (matchedTokens === 0) return 0;
+
+  return Math.min(0.06, matchedTokens * 0.02);
 }
 
 export function cosineSimilarity(left: number[], right: number[]): number {

@@ -11,7 +11,12 @@ import {
   type SemanticSearchPaper,
 } from '../hooks/use-ipc';
 import { FileText, Search, Loader2, Trash2, X, Sparkles, RotateCcw } from 'lucide-react';
-import { cleanArxivTitle, getTagStyle } from '@shared';
+import {
+  cleanArxivTitle,
+  filterNormalSearchResults,
+  getTagStyle,
+  tokenizeSearchQuery,
+} from '@shared';
 
 const EXCLUDED_TAGS = [
   'arxiv',
@@ -84,15 +89,14 @@ const searchBoxVariants = {
 
 type SearchMode = 'normal' | 'agentic' | 'semantic';
 
-// Fuse.js config for fuzzy search across title, tags, abstract
+// Fuse.js fallback config for title/tag typo tolerance when exact token matching finds nothing
 const FUSE_OPTIONS: IFuseOptions<PaperItem> = {
   keys: [
-    { name: 'title', weight: 0.6 },
-    { name: 'tagNames', weight: 0.3 },
-    { name: 'abstract', weight: 0.1 },
+    { name: 'title', weight: 0.75 },
+    { name: 'tagNames', weight: 0.25 },
   ],
-  threshold: 0.4,
-  minMatchCharLength: 2,
+  threshold: 0.22,
+  minMatchCharLength: 3,
   includeScore: true,
   ignoreLocation: true,
 };
@@ -140,16 +144,17 @@ function getNormalSearchResults(
 ): PaperItem[] {
   if (!query.trim()) return [];
 
-  if (fuse) {
-    return fuseTokenSearch(fuse, query);
+  const exactMatches = filterNormalSearchResults(items, query);
+  if (exactMatches.length > 0 || !fuse) {
+    return exactMatches;
   }
 
-  const lowerQuery = query.toLowerCase();
-  return items.filter(
-    (paper) =>
-      paper.title.toLowerCase().includes(lowerQuery) ||
-      paper.tagNames?.some((tag) => tag.toLowerCase().includes(lowerQuery)),
-  );
+  const tokens = tokenizeSearchQuery(query);
+  if (tokens.some((token) => token.length < 3)) {
+    return [];
+  }
+
+  return fuseTokenSearch(fuse, query);
 }
 
 function mergePaperSnapshot(paper: PaperItem, latest?: PaperItem): PaperItem {
@@ -430,7 +435,7 @@ export function SearchContent() {
     setAgenticError(null);
     setSemanticPapers([]);
     setSemanticFallbackReason(null);
-    setQuery('');
+    inputRef.current?.focus();
   };
 
   const semanticUsingFallback = searchMode === 'semantic' && !!semanticFallbackReason;
@@ -932,6 +937,25 @@ function PaperCard({
             </span>
           )}
           <ProcessingBadge status={paper.processingStatus} />
+        </div>
+
+        {paper.processingStatus === 'failed' && paper.processingError && (
+          <p className="line-clamp-3 break-all text-xs text-red-700/90">{paper.processingError}</p>
+        )}
+
+        <div className="flex flex-wrap gap-1.5"></div>
+
+        {paper.processingStatus === 'failed' && paper.processingError && (
+          <p className="line-clamp-3 break-all text-xs text-red-700/90">{paper.processingError}</p>
+        )}
+
+        <div className="flex flex-wrap gap-1.5"></div>
+
+        {paper.processingStatus === 'failed' && paper.processingError && (
+          <p className="line-clamp-3 break-all text-xs text-red-700/90">{paper.processingError}</p>
+        )}
+
+        <div className="flex flex-wrap gap-1.5">
           {paper.categorizedTags
             ?.filter((t) => !EXCLUDED_TAGS.includes(t.name.toLowerCase()))
             .slice(0, 3)

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   cosineSimilarity,
+  isSemanticScoreMatch,
+  MIN_SEMANTIC_CHUNK_SIMILARITY,
   normalizeWhitespace,
+  semanticLexicalBoost,
   splitTextIntoChunks,
 } from '../../src/main/services/semantic-utils';
 
@@ -29,5 +32,21 @@ describe('semantic utils', () => {
     expect(cosineSimilarity([1, 0], [0, 1])).toBeCloseTo(0, 6);
     expect(cosineSimilarity([1, 2], [1])).toBe(-1);
     expect(cosineSimilarity([], [])).toBe(-1);
+  });
+
+  it('applies a minimum semantic score threshold', () => {
+    expect(isSemanticScoreMatch(MIN_SEMANTIC_CHUNK_SIMILARITY)).toBe(true);
+    expect(isSemanticScoreMatch(MIN_SEMANTIC_CHUNK_SIMILARITY - 0.01)).toBe(false);
+    expect(isSemanticScoreMatch(Number.NaN)).toBe(false);
+  });
+
+  it('adds lexical boost when the query appears in indexed text', () => {
+    expect(
+      semanticLexicalBoost('run less', [
+        'The Diminishing Returns',
+        'Available at Run_Less repository',
+      ]),
+    ).toBeGreaterThan(0);
+    expect(semanticLexicalBoost('run less', ['unrelated content only'])).toBe(0);
   });
 });
