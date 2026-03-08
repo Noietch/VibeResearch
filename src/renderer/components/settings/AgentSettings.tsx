@@ -157,26 +157,36 @@ export function AgentSettings() {
 
   const handleAgentToolChange = useCallback((tool: AgentToolKind, isEdit = false) => {
     const meta = getAgentToolMeta(tool);
+    // Get all default CLI commands to check if current path is a default
+    const defaultCommands = AGENT_TOOL_META.map((m) => m.cliCommand).filter(Boolean);
+
     if (isEdit) {
-      setEditingAgent((prev) =>
-        prev
-          ? {
-              ...prev,
-              agentTool: tool,
-              backend: tool.replace(/-/g, ''),
-              cliPath: meta.cliCommand || prev.cliPath,
-              acpArgs: meta.defaultAcpArgs,
-            }
-          : null,
-      );
+      setEditingAgent((prev) => {
+        if (!prev) return null;
+        // Only update cliPath if it's empty or matches a default command
+        const shouldUpdateCliPath =
+          !prev.cliPath || defaultCommands.includes(prev.cliPath);
+        return {
+          ...prev,
+          agentTool: tool,
+          backend: tool.replace(/-/g, ''),
+          cliPath: shouldUpdateCliPath ? (meta.cliCommand || prev.cliPath) : prev.cliPath,
+          acpArgs: meta.defaultAcpArgs,
+        };
+      });
     } else {
-      setNewAgent((prev) => ({
-        ...prev,
-        agentTool: tool,
-        backend: tool.replace(/-/g, ''),
-        cliPath: meta.cliCommand || prev.cliPath,
-        acpArgs: meta.defaultAcpArgs.join(' '),
-      }));
+      setNewAgent((prev) => {
+        // Only update cliPath if it's empty or matches a default command
+        const shouldUpdateCliPath =
+          !prev.cliPath || defaultCommands.includes(prev.cliPath);
+        return {
+          ...prev,
+          agentTool: tool,
+          backend: tool.replace(/-/g, ''),
+          cliPath: shouldUpdateCliPath ? (meta.cliCommand || prev.cliPath) : prev.cliPath,
+          acpArgs: meta.defaultAcpArgs.join(' '),
+        };
+      });
     }
   }, []);
 
@@ -197,6 +207,8 @@ export function AgentSettings() {
         authContent: newAgent.authContent || undefined,
         extraEnv: Object.keys(extraEnv).length > 0 ? extraEnv : undefined,
         defaultModel: newAgent.defaultModel || undefined,
+        apiKey: newAgent.apiKey || undefined,
+        baseUrl: newAgent.baseUrl || undefined,
         isCustom: true,
       });
       setNewAgent({
@@ -236,6 +248,8 @@ export function AgentSettings() {
         authContent: editingAgent.authContent || undefined,
         extraEnv: editingAgent.extraEnv,
         defaultModel: editingAgent.defaultModel || undefined,
+        apiKey: editingAgent.apiKey || undefined,
+        baseUrl: editingAgent.baseUrl || undefined,
       });
       setEditingAgent(null);
       await loadAgents();
@@ -458,22 +472,37 @@ export function AgentSettings() {
                   <label className="mb-1 block text-xs font-medium text-notion-text">
                     Default Model
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={newAgent.defaultModel}
                     onChange={(e) => setNewAgent((p) => ({ ...p, defaultModel: e.target.value }))}
-                    placeholder={newAgent.agentTool === 'codex' ? 'e.g. gpt-4o, o1' : 'e.g. claude-opus-4-5'}
-                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
-                  />
+                    className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
+                  >
+                    <option value="">Use agent default</option>
+                    {getAgentToolMeta(newAgent.agentTool).models.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}{m.description ? ` — ${m.description}` : ''}
+                      </option>
+                    ))}
+                    <option value="__custom__">Custom model...</option>
+                  </select>
+                  {newAgent.defaultModel === '__custom__' && (
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Enter custom model name"
+                      onChange={(e) => setNewAgent((p) => ({ ...p, defaultModel: e.target.value }))}
+                      className="mt-2 w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
+                    />
+                  )}
                   <p className="mt-1 text-xs text-notion-text-tertiary">
                     {newAgent.agentTool === 'codex'
-                      ? 'Sets OPENAI_MODEL when running tasks. Leave empty to use the agent\'s built-in default.'
-                      : 'Sets ANTHROPIC_MODEL when running tasks. Leave empty to use the agent\'s built-in default.'}
+                      ? 'Sets OPENAI_MODEL when running tasks.'
+                      : 'Sets ANTHROPIC_MODEL when running tasks.'}
                   </p>
                 </div>
 
-                {/* Code X API Configuration - Only show for codex */}
-                {newAgent.agentTool === 'codex' && (
+                {/* API Configuration - Show for agents that require API key */}
+                {getAgentToolMeta(newAgent.agentTool).requiresApiKey && (
                   <div className="space-y-3 p-3 rounded-lg bg-notion-sidebar/50 border border-notion-border">
                     <div className="flex items-center gap-2 text-xs font-medium text-notion-text">
                       <Key size={12} />
@@ -487,29 +516,35 @@ export function AgentSettings() {
                         type="password"
                         value={newAgent.apiKey}
                         onChange={(e) => setNewAgent((p) => ({ ...p, apiKey: e.target.value }))}
-                        placeholder="sk-..."
+                        placeholder={newAgent.agentTool === 'codex' ? 'sk-...' : 'sk-ant-...'}
                         className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                       />
                       <p className="mt-1 text-xs text-notion-text-tertiary">
-                        Your OpenAI API key for Code X authentication.
+                        {newAgent.agentTool === 'codex'
+                          ? 'Your OpenAI API key for Code X authentication.'
+                          : 'Your Anthropic API key for Claude authentication.'}
                       </p>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-notion-text flex items-center gap-1">
-                        <Link size={10} />
-                        Base URL <span className="text-notion-text-tertiary">(Optional)</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={newAgent.baseUrl}
-                        onChange={(e) => setNewAgent((p) => ({ ...p, baseUrl: e.target.value }))}
-                        placeholder="https://api.openai.com/v1"
-                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
-                      />
-                      <p className="mt-1 text-xs text-notion-text-tertiary">
-                        Custom API endpoint. Leave empty for default OpenAI endpoint.
-                      </p>
-                    </div>
+                    {getAgentToolMeta(newAgent.agentTool).supportsBaseUrl && (
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-notion-text flex items-center gap-1">
+                          <Link size={10} />
+                          Base URL <span className="text-notion-text-tertiary">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newAgent.baseUrl}
+                          onChange={(e) => setNewAgent((p) => ({ ...p, baseUrl: e.target.value }))}
+                          placeholder={newAgent.agentTool === 'codex' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'}
+                          className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
+                        />
+                        <p className="mt-1 text-xs text-notion-text-tertiary">
+                          {newAgent.agentTool === 'codex'
+                            ? 'Custom API endpoint. Leave empty for default OpenAI endpoint.'
+                            : 'Custom API endpoint. Leave empty for default Anthropic endpoint.'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -630,7 +665,11 @@ export function AgentSettings() {
                 return (
                   <div
                     key={agent.id}
-                    className="rounded-lg border border-notion-border overflow-hidden"
+                    className={`rounded-lg border overflow-hidden transition-colors ${
+                      agent.enabled
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-white border-notion-border'
+                    }`}
                   >
                     {/* Header row */}
                     <div
@@ -660,7 +699,7 @@ export function AgentSettings() {
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         {usage.calls > 0 && (
                           <div className="text-right">
-                            <div className="text-xs font-semibold tabular-nums text-blue-600">
+                            <div className="text-xs font-semibold tabular-nums text-notion-accent">
                               {usage.calls} runs
                             </div>
                             <div className="text-xs text-notion-text-tertiary tabular-nums">
@@ -696,7 +735,7 @@ export function AgentSettings() {
                               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                           }`}
                         >
-                          {agent.enabled ? 'Enabled' : 'Disabled'}
+                          {agent.enabled ? 'Activated' : 'Deactivated'}
                         </button>
                         <button
                           onClick={() => handleDelete(agent.id)}
@@ -808,7 +847,7 @@ export function AgentSettings() {
           {totalAgentRuns > 0 && (
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <div className="text-sm font-semibold tabular-nums text-blue-600">
+                <div className="text-sm font-semibold tabular-nums text-notion-accent">
                   {totalAgentRuns} runs
                 </div>
                 <div className="text-xs text-notion-text-tertiary tabular-nums">
@@ -837,7 +876,7 @@ export function AgentSettings() {
                 >
                   <span className="font-mono text-sm text-notion-text">{item.key}</span>
                   <div className="text-right">
-                    <span className="text-sm font-semibold tabular-nums text-blue-600">
+                    <span className="text-sm font-semibold tabular-nums text-notion-accent">
                       {item.calls} runs
                     </span>
                     <span className="ml-2 text-xs text-notion-text-tertiary tabular-nums">
@@ -1018,22 +1057,37 @@ function EditAgentModal({
                 <label className="mb-1 block text-xs font-medium text-notion-text">
                   Default Model
                 </label>
-                <input
-                  type="text"
+                <select
                   value={agent.defaultModel || ''}
                   onChange={(e) => onUpdate({ defaultModel: e.target.value || undefined })}
-                  placeholder={agent.agentTool === 'codex' ? 'e.g. gpt-4o, o1' : 'e.g. claude-opus-4-5'}
-                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
-                />
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
+                >
+                  <option value="">Use agent default</option>
+                  {getAgentToolMeta(agent.agentTool || 'claude-code').models.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}{m.description ? ` — ${m.description}` : ''}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom model...</option>
+                </select>
+                {agent.defaultModel === '__custom__' && (
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Enter custom model name"
+                    onChange={(e) => onUpdate({ defaultModel: e.target.value || undefined })}
+                    className="mt-2 w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
+                  />
+                )}
                 <p className="mt-1 text-xs text-notion-text-tertiary">
                   {agent.agentTool === 'codex'
-                    ? 'Sets OPENAI_MODEL when running tasks. Leave empty to use the agent\'s built-in default.'
-                    : 'Sets ANTHROPIC_MODEL when running tasks. Leave empty to use the agent\'s built-in default.'}
+                    ? 'Sets OPENAI_MODEL when running tasks.'
+                    : 'Sets ANTHROPIC_MODEL when running tasks.'}
                 </p>
               </div>
 
-              {/* Code X API Configuration - Only show for codex */}
-              {agent.agentTool === 'codex' && (
+              {/* API Configuration - Show for agents that require API key */}
+              {getAgentToolMeta(agent.agentTool || 'claude-code').requiresApiKey && (
                 <div className="space-y-3 p-3 rounded-lg bg-notion-sidebar/50 border border-notion-border">
                   <div className="flex items-center gap-2 text-xs font-medium text-notion-text">
                     <Key size={12} />
@@ -1047,29 +1101,35 @@ function EditAgentModal({
                       type="password"
                       value={agent.apiKey || ''}
                       onChange={(e) => onUpdate({ apiKey: e.target.value })}
-                      placeholder="sk-..."
+                      placeholder={agent.agentTool === 'codex' ? 'sk-...' : 'sk-ant-...'}
                       className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
                     />
                     <p className="mt-1 text-xs text-notion-text-tertiary">
-                      Your OpenAI API key for Code X authentication.
+                      {agent.agentTool === 'codex'
+                        ? 'Your OpenAI API key for Code X authentication.'
+                        : 'Your Anthropic API key for Claude authentication.'}
                     </p>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-notion-text flex items-center gap-1">
-                      <Link size={10} />
-                      Base URL <span className="text-notion-text-tertiary">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={agent.baseUrl || ''}
-                      onChange={(e) => onUpdate({ baseUrl: e.target.value })}
-                      placeholder="https://api.openai.com/v1"
-                      className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
-                    />
-                    <p className="mt-1 text-xs text-notion-text-tertiary">
-                      Custom API endpoint. Leave empty for default OpenAI endpoint.
-                    </p>
-                  </div>
+                  {getAgentToolMeta(agent.agentTool || 'claude-code').supportsBaseUrl && (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-notion-text flex items-center gap-1">
+                        <Link size={10} />
+                        Base URL <span className="text-notion-text-tertiary">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={agent.baseUrl || ''}
+                        onChange={(e) => onUpdate({ baseUrl: e.target.value })}
+                        placeholder={agent.agentTool === 'codex' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'}
+                        className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-notion-accent/20 focus:border-notion-accent"
+                      />
+                      <p className="mt-1 text-xs text-notion-text-tertiary">
+                        {agent.agentTool === 'codex'
+                          ? 'Custom API endpoint. Leave empty for default OpenAI endpoint.'
+                          : 'Custom API endpoint. Leave empty for default Anthropic endpoint.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 

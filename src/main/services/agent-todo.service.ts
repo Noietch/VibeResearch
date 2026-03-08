@@ -187,12 +187,22 @@ export class AgentTodoService {
 
     // Inject model override: todo.model takes precedence over agent defaultModel
     const model = (todo as any).model ?? agentConfig.defaultModel;
-    if (model) extraEnv['ANTHROPIC_MODEL'] = model;
+    if (model) {
+      // Use appropriate env var based on agent type
+      if (agentConfig.agentTool === 'codex') {
+        extraEnv['OPENAI_MODEL'] = model;
+      } else {
+        extraEnv['ANTHROPIC_MODEL'] = model;
+      }
+    }
 
-    // Inject Code X API configuration
+    // Inject API configuration based on agent type
     if (agentConfig.agentTool === 'codex') {
       if (agentConfig.apiKey) extraEnv['OPENAI_API_KEY'] = agentConfig.apiKey;
       if (agentConfig.baseUrl) extraEnv['OPENAI_BASE_URL'] = agentConfig.baseUrl;
+    } else if (agentConfig.agentTool === 'claude-code') {
+      if (agentConfig.apiKey) extraEnv['ANTHROPIC_API_KEY'] = agentConfig.apiKey;
+      if (agentConfig.baseUrl) extraEnv['ANTHROPIC_BASE_URL'] = agentConfig.baseUrl;
     }
 
     // Create run record
@@ -334,6 +344,10 @@ export class AgentTodoService {
   async enableCron(todoId: string, cronExpr: string) {
     await this.repository.updateTodo(todoId, { cronExpr, cronEnabled: true });
     this.scheduler.add(todoId, cronExpr);
+  }
+
+  async getAgentRunStats() {
+    return this.repository.getAgentRunStats();
   }
 
   async disableCron(todoId: string) {

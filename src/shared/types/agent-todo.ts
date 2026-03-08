@@ -2,6 +2,15 @@
 export type AgentToolKind = 'claude-code' | 'codex';
 
 /**
+ * Model option for agent configuration
+ */
+export interface ModelOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+/**
  * Agent metadata for different CLI tools
  */
 export interface AgentToolMeta {
@@ -20,6 +29,8 @@ export interface AgentToolMeta {
   requiresApiKey: boolean;
   /** Whether this agent type supports custom base URL */
   supportsBaseUrl: boolean;
+  /** Available models for this agent type */
+  models: ModelOption[];
 }
 
 export const AGENT_TOOL_META: AgentToolMeta[] = [
@@ -35,8 +46,13 @@ export const AGENT_TOOL_META: AgentToolMeta[] = [
     authPath: '~/.claude/credentials.json',
     supportsYolo: true,
     yoloModeId: 'bypassPermissions',
-    requiresApiKey: false,
-    supportsBaseUrl: false,
+    requiresApiKey: true,
+    supportsBaseUrl: true,
+    models: [
+      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', description: 'Most capable' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'Balanced' },
+      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', description: 'Fast' },
+    ],
   },
   {
     value: 'codex',
@@ -51,6 +67,15 @@ export const AGENT_TOOL_META: AgentToolMeta[] = [
     supportsYolo: false,
     requiresApiKey: true,
     supportsBaseUrl: true,
+    models: [
+      { value: 'gpt-5.4', label: 'GPT 5.4', description: 'Latest' },
+      { value: 'gpt-5.3', label: 'GPT 5.3' },
+      { value: 'gpt-5.2', label: 'GPT 5.2' },
+      { value: 'gpt-5.1', label: 'GPT 5.1' },
+      { value: 'o3-high', label: 'O3 High', description: 'High reasoning' },
+      { value: 'o3-medium', label: 'O3 Medium', description: 'Medium reasoning' },
+      { value: 'o3-low', label: 'O3 Low', description: 'Low reasoning' },
+    ],
   },
 ];
 
