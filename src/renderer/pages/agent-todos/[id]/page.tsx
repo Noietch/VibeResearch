@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Play, Square } from 'lucide-react';
 import { ipc } from '../../../hooks/use-ipc';
 import { useAgentStream } from '../../../hooks/use-agent-stream';
@@ -10,6 +10,7 @@ import { StatusDot } from '../../../components/agent-todo/StatusDot';
 export function AgentTodoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [todo, setTodo] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -111,7 +112,10 @@ export function AgentTodoDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-notion-border px-4 py-3 flex-shrink-0">
         <button
-          onClick={() => navigate('/agent-todos')}
+          onClick={() => {
+            const from = (location.state as { from?: string })?.from;
+            navigate(from ?? '/agent-todos');
+          }}
           className="text-notion-text-secondary hover:text-notion-text transition-colors"
         >
           <ArrowLeft size={18} />
@@ -128,14 +132,14 @@ export function AgentTodoDetailPage() {
           {isRunning ? (
             <button
               onClick={handleStop}
-              className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+              className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
             >
               <Square size={12} /> Stop
             </button>
           ) : (
             <button
               onClick={handleRun}
-              className="flex items-center gap-1 rounded-md bg-notion-accent px-3 py-1.5 text-xs text-white hover:bg-notion-accent/90 transition-colors"
+              className="flex items-center gap-1 rounded-lg bg-notion-text px-3 py-1.5 text-xs text-white hover:bg-notion-text/90 transition-colors"
             >
               <Play size={12} /> Run
             </button>

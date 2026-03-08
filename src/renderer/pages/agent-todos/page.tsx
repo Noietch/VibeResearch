@@ -77,7 +77,7 @@ export function AgentTodosPage() {
           </div>
         ) : (
           todos.map((todo) => (
-            <TodoCard key={todo.id} todo={todo} onRefresh={loadTodos} />
+            <TodoCard key={todo.id} todo={todo} onRefresh={loadTodos} from="/agent-todos" />
           ))
         )}
       </div>

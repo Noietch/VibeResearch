@@ -2,6 +2,32 @@
 
 ## 2026-03-08
 
+### fix: Back button returns to correct source page
+
+**Scope**: `src/renderer/components/agent-todo/TodoCard.tsx`, `src/renderer/pages/agent-todos/[id]/page.tsx`, `src/renderer/pages/agent-todos/page.tsx`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/dashboard-content.tsx`, `src/renderer/components/papers-by-tag.tsx`, `src/renderer/components/search-content.tsx`, `src/renderer/pages/papers/overview/page.tsx`
+
+**Changes**:
+
+- Added `from` prop to `TodoCard` component to pass source page info via `location.state`
+- Agent Task detail page now returns to the correct source page (Projects or Agent Tasks list)
+- Paper overview page now returns to the correct source page (Dashboard, Library, or Search)
+- Updated navigation calls across Dashboard, Library (papers-by-tag), and Search to pass `from` location state
+
+### feat: Remove ProjectTodo model; unify task creation to Agent Tasks
+
+**Scope**: `prisma/schema.prisma`, `src/db/repositories/projects.repository.ts`, `src/main/services/projects.service.ts`, `src/main/ipc/projects.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/app-shell.tsx`, `src/renderer/pages/agent-todos/page.tsx`
+
+**Changes**:
+
+- Removed `ProjectTodo` model from schema (simple text todos)
+- Removed `createTodo`, `updateTodo`, `deleteTodo` from projects repository/service/IPC
+- Removed `ProjectTodo` type and todo-related IPC methods from `use-ipc.ts`
+- Projects page "Todos" tab now only shows Agent Tasks with a single "Add Task" button
+- Renamed UI labels: "Todos" → "Tasks", "Agent Tasks" → "Tasks"
+- Agent Tasks page header changed from "Agent Tasks" to "Tasks"
+
+**Migration**: Run `npx prisma db push` after pulling to sync schema changes
+
 ### feat: Conversational idea chat → Agent Task creation in Projects
 
 **Scope**: `src/main/services/projects.service.ts`, `src/main/ipc/projects.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/ideas/IdeaChatModal.tsx` (new)

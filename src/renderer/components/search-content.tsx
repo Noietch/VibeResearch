@@ -607,7 +607,7 @@ function PaperCard({
   const navigate = useNavigate();
 
   const handleClick = () => {
-    navigate(`/papers/${paper.shortId}`);
+    navigate(`/papers/${paper.shortId}`, { state: { from: '/search' } });
   };
 
   return (
@@ -690,7 +690,7 @@ function AgenticPaperCard({
   const navigate = useNavigate();
 
   const handleClick = () => {
-    navigate(`/papers/${paper.shortId}`);
+    navigate(`/papers/${paper.shortId}`, { state: { from: '/search' } });
   };
 
   return (

@@ -9,6 +9,8 @@ interface TodoCardProps {
   todo: AgentTodoItem;
   onRefresh: () => void;
   onEdit?: (id: string) => void;
+  /** Path to navigate back to from detail page */
+  from?: string;
 }
 
 function formatRelative(dateStr: string): string {
@@ -21,7 +23,7 @@ function formatRelative(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function TodoCard({ todo, onRefresh, onEdit }: TodoCardProps) {
+export function TodoCard({ todo, onRefresh, onEdit, from }: TodoCardProps) {
   const navigate = useNavigate();
 
   async function handleRun(e: React.MouseEvent) {
@@ -60,7 +62,7 @@ export function TodoCard({ todo, onRefresh, onEdit }: TodoCardProps) {
   return (
     <div
       className="group bg-white border border-notion-border rounded-lg p-4 hover:bg-notion-sidebar hover:border-notion-border transition-colors duration-150 cursor-pointer"
-      onClick={() => navigate(`/agent-todos/${todo.id}`)}
+      onClick={() => navigate(`/agent-todos/${todo.id}`, { state: { from } })}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">

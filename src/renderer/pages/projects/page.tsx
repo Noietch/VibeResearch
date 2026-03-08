@@ -350,7 +350,7 @@ function TodoList({ project, onChange }: { project: ProjectItem; onChange: () =>
           </div>
           <div className="space-y-2">
             {agentTodos.map((todo) => (
-              <TodoCard key={todo.id} todo={todo} onRefresh={loadAgentTodos} />
+              <TodoCard key={todo.id} todo={todo} onRefresh={loadAgentTodos} from={`/projects/${project.id}`} />
             ))}
           </div>
         </div>

@@ -837,7 +837,7 @@ export function PapersByTag({
                 downloadingPdf={downloadingPdf}
                 onDelete={handleDelete}
                 onDownload={handleDownloadPdf}
-                onOpen={(shortId) => navigate(`/papers/${shortId}`)}
+                onOpen={(shortId, state) => navigate(`/papers/${shortId}`, { state })}
                 isSelectMode={isSelectMode}
                 isSelected={selectedIds.has(paper.id)}
                 onToggleSelect={toggleSelect}
@@ -934,7 +934,7 @@ function PaperCard({
   downloadingPdf: string | null;
   onDelete: (id: string) => void;
   onDownload: (paper: PaperItem) => void;
-  onOpen: (shortId: string) => void;
+  onOpen: (shortId: string, state?: unknown) => void;
   isSelectMode: boolean;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
@@ -993,7 +993,7 @@ function PaperCard({
 
         {/* Clickable content area */}
         <button
-          onClick={() => (isSelectMode ? onToggleSelect(paper.id) : onOpen(paper.shortId))}
+          onClick={() => (isSelectMode ? onToggleSelect(paper.id) : onOpen(paper.shortId, { from: '/papers' }))}
           className="min-w-0 flex-1 text-left"
         >
           <span className="block truncate text-sm font-semibold text-notion-text">

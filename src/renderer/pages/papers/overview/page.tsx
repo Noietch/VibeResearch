@@ -1091,11 +1091,17 @@ export function OverviewPage() {
       {/* Header */}
       <div className="flex flex-shrink-0 items-center gap-3 border-b border-notion-border px-8 py-5">
         <button
-          onClick={() => navigate('/papers')}
+          onClick={() => {
+            const from = (location.state as { from?: string })?.from;
+            navigate(from ?? '/papers');
+          }}
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
         >
           <ArrowLeft size={16} />
-          Library
+          {((location.state as { from?: string })?.from === '/dashboard' ||
+          (location.state as { from?: string })?.from === '/search'
+            ? 'Back'
+            : 'Library')}
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold tracking-tight text-notion-text truncate">
