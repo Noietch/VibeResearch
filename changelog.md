@@ -2,6 +2,42 @@
 
 ## 2026-03-08
 
+### test: Add ACP protocol unit tests (46 cases)
+
+**Scope**: `tests/integration/acp.test.ts` (new file)
+
+**Changes**:
+
+- `acp-types`: covers all 6 backends in `DEFAULT_AGENT_CONFIGS`, all `YOLO_MODE_IDS` entries
+- `acp-adapter`: tests every `sessionUpdate` variant (`agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `config_option_update`), edge cases (empty text, missing content, unique IDs, ISO timestamps)
+- `acp-connection`: JSON-RPC message parsing (success/error response, non-JSON lines, partial/split chunks), notification routing (`session/update`, `session/finished`), exit event + pending request rejection, permission request emission, `respondToPermission` output format, `fs/read_text_file` (real file + missing file), `fs/write_text_file`, request ID monotonic increment
+- `agent-detector`: result shape validation, no-duplicate-backend invariant, per-backend acpArgs contract cross-checked against `DEFAULT_AGENT_CONFIGS`
+
+### feat: Add workdir editing to Project detail page
+
+**Scope**: `src/main/services/projects.service.ts`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/agent-todo/CwdPicker.tsx`
+
+**Changes**:
+
+- Added `workdir` parameter support to `createProject` and `updateProject` methods in `ProjectsService`
+- Added workdir editing UI in `ProjectDetail` component with double-click to edit pattern
+- Extended `CwdPicker` component with optional `onBlur` prop for form integration
+- Workdir is displayed as a folder path with folder icon, double-click to edit, uses CwdPicker for directory selection
+
+### fix: Unify AgentToolKind — add Gemini support across main process
+
+**Scope**: `src/main/store/model-config-store.ts`, `src/main/services/agent-config.service.ts`, `src/main/services/models.service.ts`, `src/main/ipc/models.ipc.ts`, `src/main/ipc/cli-tools.ipc.ts`, `src/main/services/agent-local-server.ts`
+
+**Changes**:
+
+- Removed local `AgentToolKind = 'claude-code' | 'codex' | 'custom'` from `model-config-store.ts`; now re-exports the canonical type from `@shared` (which includes `gemini | qwen | goose`)
+- Added Gemini CLI preset to `DEFAULT_AGENT_MODELS` (`id: 'agent-gemini'`, command: `gemini`, agentTool: `'gemini'`)
+- Added Gemini branch to `getSystemAgentConfigStatus` — detects `~/.gemini/settings.json` and `~/.gemini/oauth_creds.json`
+- Added Gemini branch to `getSystemAgentConfigContents` — reads the same two files
+- Widened `getAgentConfigStatus` / `getAgentConfigContents` signatures in `ModelsService` from `'claude-code' | 'codex' | 'custom'` to `AgentToolKind`
+- Widened same IPC handler params in `models.ipc.ts` and `cli-tools.ipc.ts`
+- Widened `AgentTestRequest.agentTool` in `agent-local-server.ts`
+
 ### fix: TypeScript errors and test failures
 
 **Scope**: `src/renderer/components/settings/AgentSettings.tsx`, `src/renderer/pages/projects/page.tsx`, `src/renderer/pages/settings/page.tsx`, `tests/support/test-db.ts`, `tests/integration/projects.test.ts`

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { ProjectsRepository, PapersRepository } from '@db';
 import { getShellPath } from './cli-runner.service';
 import {
@@ -22,6 +23,12 @@ export interface CommitInfo {
   message: string;
   author: string;
   date: string;
+}
+
+export interface WorkdirRepoStatus {
+  hasGit: boolean;
+  remoteUrl?: string;
+  localPath: string;
 }
 
 /**
@@ -78,11 +85,11 @@ export class ProjectsService {
     });
   }
 
-  async createProject(input: { name: string; description?: string }) {
+  async createProject(input: { name: string; description?: string; workdir?: string }) {
     return this.repo.createProject(input);
   }
 
-  async updateProject(id: string, data: { name?: string; description?: string }) {
+  async updateProject(id: string, data: { name?: string; description?: string; workdir?: string }) {
     return this.repo.updateProject(id, data);
   }
 
@@ -92,20 +99,6 @@ export class ProjectsService {
 
   async touchProject(id: string) {
     return this.repo.touchLastAccessed(id);
-  }
-
-  // ── Todos ─────────────────────────────────────────────────────────────────
-
-  async createTodo(input: { projectId: string; text: string }) {
-    return this.repo.createTodo(input);
-  }
-
-  async updateTodo(id: string, data: { text?: string; done?: boolean }) {
-    return this.repo.updateTodo(id, data);
-  }
-
-  async deleteTodo(id: string) {
-    return this.repo.deleteTodo(id);
   }
 
   // ── Repos ─────────────────────────────────────────────────────────────────

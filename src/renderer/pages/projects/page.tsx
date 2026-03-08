@@ -30,6 +30,7 @@ import {
   MessageSquare,
   Check,
   X,
+  FolderOpen,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { CwdPicker } from '../../components/agent-todo/CwdPicker';
@@ -1135,8 +1136,10 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
   const [tab, setTab] = useState<Tab>('tasks');
   const [editingName, setEditingName] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
+  const [editingWorkdir, setEditingWorkdir] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
   const [descDraft, setDescDraft] = useState(project.description ?? '');
+  const [workdirDraft, setWorkdirDraft] = useState(project.workdir ?? '');
 
   const commitName = async () => {
     const t = nameDraft.trim();
@@ -1158,6 +1161,17 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
       setDescDraft(project.description ?? '');
     }
     setEditingDesc(false);
+  };
+
+  const commitWorkdir = async () => {
+    const w = workdirDraft.trim();
+    if (w !== (project.workdir ?? '')) {
+      await ipc.updateProject(project.id, { workdir: w || undefined });
+      onRefresh();
+    } else {
+      setWorkdirDraft(project.workdir ?? '');
+    }
+    setEditingWorkdir(false);
   };
 
   const tabs: { id: Tab; label: string; count: number }[] = [
@@ -1234,6 +1248,46 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
           >
             {project.description ?? 'Add a description…'}
           </p>
+        )}
+
+        {/* Work directory */}
+        {editingWorkdir ? (
+          <div className="mt-2">
+            <CwdPicker
+              value={workdirDraft}
+              onChange={setWorkdirDraft}
+              onBlur={commitWorkdir}
+            />
+            <div className="mt-1 flex gap-1">
+              <button
+                onClick={commitWorkdir}
+                className="rounded px-2 py-0.5 text-xs text-notion-accent hover:bg-notion-accent-light"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setWorkdirDraft(project.workdir ?? '');
+                  setEditingWorkdir(false);
+                }}
+                className="rounded px-2 py-0.5 text-xs text-notion-text-secondary hover:bg-notion-sidebar-hover"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={clsx(
+              'mt-2 flex cursor-default items-center gap-1.5 text-xs',
+              project.workdir ? 'text-notion-text-secondary' : 'text-notion-text-tertiary',
+            )}
+            onDoubleClick={() => setEditingWorkdir(true)}
+            title="Double-click to edit working directory"
+          >
+            <FolderOpen size={12} />
+            <span className="font-mono">{project.workdir ?? 'Set working directory…'}</span>
+          </div>
         )}
       </div>
 
