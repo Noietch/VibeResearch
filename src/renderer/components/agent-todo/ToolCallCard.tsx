@@ -40,20 +40,35 @@ function ToolIcon({ kind }: { kind?: string }) {
   }
 }
 
-function getStatusStyles(status?: string) {
+function getStatusStyles(status?: string, kind?: string) {
+  // For execute commands, use purple theme
+  const isExecute = kind === 'execute';
+
   switch (status) {
     case 'in_progress':
-      return {
-        border: 'border-l-2 border-l-blue-400',
-        bg: 'bg-blue-50',
-        icon: <Loader2 size={12} className="animate-spin text-blue-500" />,
-      };
+      return isExecute
+        ? {
+            border: 'border-l-2 border-l-purple-400',
+            bg: 'bg-purple-50',
+            icon: <Loader2 size={12} className="animate-spin text-purple-500" />,
+          }
+        : {
+            border: 'border-l-2 border-l-blue-400',
+            bg: 'bg-blue-50',
+            icon: <Loader2 size={12} className="animate-spin text-blue-500" />,
+          };
     case 'completed':
-      return {
-        border: 'border-l-2 border-l-green-400',
-        bg: 'bg-green-50',
-        icon: <Check size={12} className="text-green-500" />,
-      };
+      return isExecute
+        ? {
+            border: 'border-l-2 border-l-purple-400',
+            bg: 'bg-purple-50',
+            icon: <Check size={12} className="text-purple-500" />,
+          }
+        : {
+            border: 'border-l-2 border-l-green-400',
+            bg: 'bg-green-50',
+            icon: <Check size={12} className="text-green-500" />,
+          };
     case 'failed':
       return {
         border: 'border-l-2 border-l-red-400',
@@ -62,11 +77,17 @@ function getStatusStyles(status?: string) {
       };
     default:
       // pending or unknown
-      return {
-        border: 'border-l-2 border-l-amber-400',
-        bg: 'bg-amber-50',
-        icon: <Loader2 size={12} className="animate-spin text-amber-500" />,
-      };
+      return isExecute
+        ? {
+            border: 'border-l-2 border-l-purple-300',
+            bg: 'bg-purple-50/50',
+            icon: <Loader2 size={12} className="animate-spin text-purple-400" />,
+          }
+        : {
+            border: 'border-l-2 border-l-amber-400',
+            bg: 'bg-amber-50',
+            icon: <Loader2 size={12} className="animate-spin text-amber-500" />,
+          };
   }
 }
 
@@ -74,14 +95,18 @@ export function ToolCallCard({ content, status }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const path = content.locations?.[0]?.path ?? (content.rawInput?.path as string) ?? null;
   const command = (content.rawInput?.command as string) ?? null;
+  // Always show expand button for completed tool calls
   const hasDetails = !!(path || command || content.rawInput);
 
   const effectiveStatus = status ?? content.status;
-  const { border, bg, icon } = getStatusStyles(effectiveStatus);
+  const { border, bg, icon } = getStatusStyles(effectiveStatus, content.kind);
 
   return (
     <motion.div layout className={`${border} ${bg} overflow-hidden my-1.5 rounded-r-md`}>
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div
+        className={`flex items-center gap-2 px-3 py-2 ${hasDetails ? 'cursor-pointer' : ''}`}
+        onClick={hasDetails ? () => setExpanded(!expanded) : undefined}
+      >
         <span className="text-notion-text-secondary">
           <ToolIcon kind={content.kind} />
         </span>
@@ -90,23 +115,14 @@ export function ToolCallCard({ content, status }: ToolCallCardProps) {
         </span>
         {icon}
         {hasDetails && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-notion-text-tertiary hover:text-notion-text-secondary transition-colors"
-          >
+          <span className="text-notion-text-tertiary">
             {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </button>
+          </span>
         )}
       </div>
 
-      {(path || command) && (
-        <div className="px-3 pb-1.5 text-xs font-mono text-notion-text-secondary">
-          {path ?? command}
-        </div>
-      )}
-
       <AnimatePresence>
-        {expanded && content.rawInput && (
+        {expanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -114,9 +130,16 @@ export function ToolCallCard({ content, status }: ToolCallCardProps) {
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <pre className="px-3 py-2 text-xs font-mono bg-white/60 max-h-48 overflow-y-auto text-notion-text border-t border-white/40">
-              {JSON.stringify(content.rawInput, null, 2)}
-            </pre>
+            {(path || command) && (
+              <div className="px-3 pb-1.5 text-xs font-mono text-notion-text-secondary">
+                {path ?? command}
+              </div>
+            )}
+            {content.rawInput && (
+              <pre className="px-3 py-2 text-xs font-mono bg-white/60 max-h-48 overflow-y-auto text-notion-text border-t border-white/40">
+                {JSON.stringify(content.rawInput, null, 2)}
+              </pre>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

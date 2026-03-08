@@ -2,6 +2,18 @@
 
 ## 2026-03-08
 
+### fix: Tool call card UI improvements
+
+**Scope**: `src/renderer/components/agent-todo/ToolCallCard.tsx`
+
+**Changes**:
+
+- **Default collapsed**: Tool call details (path/command/rawInput) are now collapsed by default. Only the title row is shown, reducing visual clutter for long commands.
+- **Purple theme for execute**: Commands (kind='execute') now use purple color scheme instead of green/blue, making them visually distinct from file read/edit operations.
+- **Click whole row to expand**: The entire title row is now clickable for expansion, not just the chevron button.
+
+**Test design**: Run agent tasks and verify tool calls show minimal info by default, with purple highlighting for bash/shell commands.
+
 ### fix: Accumulate thought chunks in message stream
 
 **Scope**: `src/renderer/hooks/use-agent-stream.ts`
