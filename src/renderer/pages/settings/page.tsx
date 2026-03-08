@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ipc,
@@ -222,7 +223,7 @@ function AddToolModal({ onAdd, onClose }: { onAdd: (t: CliConfig) => void; onClo
     onClose();
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -314,7 +315,7 @@ function AddToolModal({ onAdd, onClose }: { onAdd: (t: CliConfig) => void; onClo
         </motion.div>
       </motion.div>
     </AnimatePresence>
-  );
+  , document.body);
 }
 
 // ─── CLI Tool card ────────────────────────────────────────────────────────────
@@ -448,9 +449,7 @@ function CliToolCard({
               exit={{ opacity: 0, x: -4 }}
               transition={{ duration: 0.15 }}
               className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                testResult.success
-                  ? 'bg-green-50 text-green-700'
-                  : 'bg-red-50 text-red-600'
+                testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
               }`}
             >
               {testResult.success ? (
@@ -459,9 +458,9 @@ function CliToolCard({
                 <X size={13} className="shrink-0 text-red-500" strokeWidth={2.5} />
               )}
               <span className="font-mono truncate">
-                {(testResult.success
+                {testResult.success
                   ? (testResult.output?.slice(0, 300) ?? 'Command found')
-                  : (testResult.error?.slice(0, 300) ?? 'Failed'))}
+                  : (testResult.error?.slice(0, 300) ?? 'Failed')}
               </span>
             </motion.div>
           )}
@@ -1220,7 +1219,7 @@ function AddModelModal({
     }
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -1486,8 +1485,8 @@ function AddModelModal({
                   )}
                   <span className="leading-snug">
                     {testResult.success
-                      ? (testResult.output || 'Connection successful!')
-                      : (testResult.error || 'Connection failed')}
+                      ? testResult.output || 'Connection successful!'
+                      : testResult.error || 'Connection failed'}
                   </span>
                 </motion.div>
               </AnimatePresence>
@@ -1532,7 +1531,7 @@ function AddModelModal({
         </motion.div>
       </motion.div>
     </AnimatePresence>
-  );
+  , document.body);
 }
 
 // ─── Edit Model Modal ──────────────────────────────────────────────────────────
@@ -1675,7 +1674,7 @@ function EditModelModal({
   };
 
   if (loading) {
-    return (
+    return createPortal(
       <AnimatePresence>
         <motion.div
           initial={{ opacity: 0 }}
@@ -1697,10 +1696,10 @@ function EditModelModal({
           </motion.div>
         </motion.div>
       </AnimatePresence>
-    );
+    , document.body);
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -1960,8 +1959,8 @@ function EditModelModal({
                   )}
                   <span className="leading-snug">
                     {testResult.success
-                      ? (testResult.output || 'Connection successful!')
-                      : (testResult.error || 'Connection failed')}
+                      ? testResult.output || 'Connection successful!'
+                      : testResult.error || 'Connection failed'}
                   </span>
                 </motion.div>
               </AnimatePresence>
@@ -2006,7 +2005,7 @@ function EditModelModal({
         </motion.div>
       </motion.div>
     </AnimatePresence>
-  );
+  , document.body);
 }
 
 function ModelCard({
@@ -2133,8 +2132,8 @@ function ModelCard({
               )}
               <span className="leading-snug">
                 {testResult.success
-                  ? (testResult.output || 'Connection successful!')
-                  : (testResult.error || 'Connection failed')}
+                  ? testResult.output || 'Connection successful!'
+                  : testResult.error || 'Connection failed'}
               </span>
             </motion.div>
           </AnimatePresence>
@@ -2811,22 +2810,42 @@ function UsageSettings() {
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    <path
+      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      fill="#4285F4"
+    />
+    <path
+      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      fill="#34A853"
+    />
+    <path
+      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+      fill="#FBBC05"
+    />
+    <path
+      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      fill="#EA4335"
+    />
   </svg>
 );
 
 const GitHubIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/>
+  <svg
+    viewBox="0 0 24 24"
+    className="h-5 w-5"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z" />
   </svg>
 );
 
 const YouTubeIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" xmlns="http://www.w3.org/2000/svg">
-    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
+    <path
+      d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
+      fill="#FF0000"
+    />
   </svg>
 );
 
@@ -2946,9 +2965,13 @@ function ProxySettings() {
   return (
     <div className="space-y-4">
       {/* Proxy URL */}
-      <div className={`rounded-xl border p-5 transition-colors ${proxyEnabled ? 'border-blue-200 bg-blue-50/60' : 'border-notion-border bg-white'}`}>
+      <div
+        className={`rounded-xl border p-5 transition-colors ${proxyEnabled ? 'border-blue-200 bg-blue-50/60' : 'border-notion-border bg-white'}`}
+      >
         <div className="mb-3 flex items-center justify-between">
-          <label className="text-xs font-medium text-notion-text-secondary">HTTP / SOCKS Proxy</label>
+          <label className="text-xs font-medium text-notion-text-secondary">
+            HTTP / SOCKS Proxy
+          </label>
           {/* Pill toggle */}
           <button
             type="button"
@@ -2960,7 +2983,9 @@ function ProxySettings() {
             />
           </button>
         </div>
-        <div className={`flex items-stretch gap-2 transition-opacity ${proxyEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+        <div
+          className={`flex items-stretch gap-2 transition-opacity ${proxyEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}
+        >
           <div className="flex flex-1 items-stretch rounded-lg border border-notion-border bg-notion-sidebar focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
             {/* Scheme selector */}
             <div className="relative shrink-0" data-scheme-select>
@@ -2970,7 +2995,10 @@ function ProxySettings() {
                 className="flex h-full items-center gap-1 rounded-l-lg border-r border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
               >
                 {scheme}
-                <ChevronDown size={12} className={`transition-transform ${schemeOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform ${schemeOpen ? 'rotate-180' : ''}`}
+                />
               </button>
               {schemeOpen && (
                 <div className="absolute left-0 top-full z-50 mt-1 min-w-[90px] overflow-hidden rounded-lg border border-notion-border bg-white shadow-lg">
@@ -2978,7 +3006,10 @@ function ProxySettings() {
                     <button
                       key={s}
                       type="button"
-                      onClick={() => { setScheme(s); setSchemeOpen(false); }}
+                      onClick={() => {
+                        setScheme(s);
+                        setSchemeOpen(false);
+                      }}
                       className={`flex w-full items-center justify-between px-3 py-2 font-mono text-sm transition-colors hover:bg-notion-sidebar ${scheme === s ? 'bg-blue-50 text-blue-700' : 'text-notion-text'}`}
                     >
                       {s}
@@ -3012,13 +3043,15 @@ function ProxySettings() {
             disabled={saving}
             className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
           >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : null}
+            {saving ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : saved ? (
+              <Check size={14} />
+            ) : null}
             {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
           </button>
         </div>
-        {proxy && (
-          <p className="mt-1.5 font-mono text-2xs text-notion-text-tertiary">{proxy}</p>
-        )}
+        {proxy && <p className="mt-1.5 font-mono text-2xs text-notion-text-tertiary">{proxy}</p>}
       </div>
 
       {/* Proxy Scope */}
@@ -3041,10 +3074,15 @@ function ProxySettings() {
                   proxyScope[key] ? 'bg-blue-100' : 'bg-notion-sidebar'
                 }`}
               >
-                <Icon size={16} className={proxyScope[key] ? 'text-blue-600' : 'text-notion-text-secondary'} />
+                <Icon
+                  size={16}
+                  className={proxyScope[key] ? 'text-blue-600' : 'text-notion-text-secondary'}
+                />
               </div>
               <div>
-                <p className={`text-sm font-medium leading-tight ${proxyScope[key] ? 'text-blue-700' : 'text-notion-text'}`}>
+                <p
+                  className={`text-sm font-medium leading-tight ${proxyScope[key] ? 'text-blue-700' : 'text-notion-text'}`}
+                >
                   {label}
                 </p>
                 <p className="mt-0.5 text-2xs text-notion-text-tertiary">{desc}</p>
@@ -3080,10 +3118,14 @@ function ProxySettings() {
                     : 'border-notion-border bg-notion-sidebar/40'
                 }`}
               >
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ${isPending ? 'opacity-50' : ''}`}>
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ${isPending ? 'opacity-50' : ''}`}
+                >
                   <SiteIcon />
                 </div>
-                <span className={`text-sm font-semibold ${isPending ? 'text-notion-text-tertiary' : 'text-notion-text'}`}>
+                <span
+                  className={`text-sm font-semibold ${isPending ? 'text-notion-text-tertiary' : 'text-notion-text'}`}
+                >
                   {name}
                 </span>
                 <div className="flex h-4 items-center justify-center">
@@ -3093,12 +3135,19 @@ function ProxySettings() {
                     result.success ? (
                       <div className="flex items-center gap-1">
                         <Check size={12} className="text-green-600" strokeWidth={2.5} />
-                        <span className="text-xs text-green-700">{result.latency ? `${result.latency}ms` : 'OK'}</span>
+                        <span className="text-xs text-green-700">
+                          {result.latency ? `${result.latency}ms` : 'OK'}
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
                         <X size={12} className="text-red-500" strokeWidth={2.5} />
-                        <span className="max-w-[80px] truncate text-xs text-red-600" title={result.error}>{result.error ?? 'Failed'}</span>
+                        <span
+                          className="max-w-[80px] truncate text-xs text-red-600"
+                          title={result.error}
+                        >
+                          {result.error ?? 'Failed'}
+                        </span>
                       </div>
                     )
                   ) : (
@@ -3118,7 +3167,6 @@ function ProxySettings() {
           {testing ? 'Testing…' : 'Test Connection'}
         </button>
       </div>
-
     </div>
   );
 }

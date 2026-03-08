@@ -2,6 +2,17 @@
 
 ## 2026-03-08
 
+### fix: Validate PDF content on download to prevent saving invalid files
+
+- **Scope**: `src/main/services/download.service.ts`, `src/main/services/papers.service.ts`
+- **Problem**: When arXiv returns an HTML redirect instead of PDF (e.g., due to missing `.pdf` suffix), the HTML content was saved as `paper.pdf`. Subsequent download attempts would skip because file size > 0.
+- **Fix**:
+  - Added `isValidPdf()` function to check PDF magic bytes (`%PDF-`)
+  - Changed minimum valid PDF size from 0 to 1KB
+  - Before accepting cached file, verify it's a valid PDF
+  - After download, validate response is PDF content; if not, throw error and delete invalid file
+  - Invalid cached files are now detected and re-downloaded automatically
+
 ### feat: Add pre-commit lint check via lint-staged
 
 - **Scope**: `.lintstagedrc.json`, `.husky/pre-commit`
