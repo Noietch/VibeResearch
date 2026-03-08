@@ -232,6 +232,45 @@ export function setupProvidersIpc() {
   );
 
   ipcMain.handle(
+    'settings:getSemanticDebugInfo',
+    async (_, settings?: Partial<SemanticSearchSettings>): Promise<IpcResult<unknown>> => {
+      try {
+        const result = await providersService.getSemanticDebugInfo(settings);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[settings:getSemanticDebugInfo] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'settings:startSemanticModelPull',
+    async (_, settings?: Partial<SemanticSearchSettings>): Promise<IpcResult<unknown>> => {
+      try {
+        const result = providersService.startSemanticModelPull(settings);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[settings:startSemanticModelPull] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle('settings:listSemanticModelPullJobs', async (): Promise<IpcResult<unknown>> => {
+    try {
+      const result = providersService.listSemanticModelPullJobs();
+      return ok(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[settings:listSemanticModelPullJobs] Error:', msg);
+      return err(msg);
+    }
+  });
+
+  ipcMain.handle(
     'shell:openInEditor',
     async (_, dirPath: string): Promise<IpcResult<{ success: boolean; error?: string }>> => {
       try {

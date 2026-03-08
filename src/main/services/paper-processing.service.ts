@@ -3,6 +3,7 @@ import { PapersRepository } from '@db';
 import { getSemanticSearchSettings } from '../store/app-settings-store';
 import { getPaperText } from './paper-text.service';
 import { localSemanticService } from './local-semantic.service';
+import { extractPaperMetadata } from './paper-metadata.service';
 import { splitTextIntoChunks } from './semantic-utils';
 
 export type PaperProcessingStatus =
@@ -93,7 +94,7 @@ async function processPaper(paperId: string) {
     let metadataSource: string | null = paper.metadataSource ?? null;
     try {
       await updateStatus(repo, paperId, 'extracting_metadata', { processingError: null });
-      const extracted = await localSemanticService.extractMetadata(text);
+      const extracted = await extractPaperMetadata(text);
       const nextTitle = paper.source === 'manual' ? extracted.title?.trim() : undefined;
       const nextAuthors = !paper.authors?.length ? extracted.authors : undefined;
       const nextAbstract = !paper.abstract?.trim() ? extracted.abstract?.trim() : undefined;
@@ -105,9 +106,9 @@ async function processPaper(paperId: string) {
           authors: nextAuthors,
           abstract: nextAbstract,
           submittedAt: nextSubmittedAt,
-          metadataSource: 'ollama',
+          metadataSource: 'lightweight-model',
         });
-        metadataSource = 'ollama';
+        metadataSource = 'lightweight-model';
       }
     } catch (error) {
       console.warn('[paper-processing] metadata extraction failed:', error);

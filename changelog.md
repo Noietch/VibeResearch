@@ -2,6 +2,32 @@
 
 ## 2026-03-08
 
+### refactor: Use lightweight model for metadata and stream embedding downloads
+
+**Scope**: `src/main/services/paper-metadata.service.ts`, `src/main/services/paper-processing.service.ts`, `src/main/services/local-semantic.service.ts`, `src/main/services/ollama.service.ts`, `src/main/services/providers.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/main/store/app-settings-store.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/settings/page.tsx`
+
+**Changes**:
+
+- Switched paper metadata extraction from a separate Ollama metadata model to the user-configured lightweight model, and marked extracted metadata as coming from `lightweight-model`
+- Simplified Semantic Settings to focus on Ollama embedding configuration only, while surfacing lightweight-model readiness separately in Semantic Debug
+- Reworked embedding model downloads into a main-process background job with streamed progress, persisted in memory across page navigation, plus renderer status updates and a progress bar in Settings
+- Added richer download feedback with stage text, downloaded size, last-update time, and a hint when Ollama appears stalled during verify/unpack phases
+- Auto-runs semantic debug on entry so missing embedding models show download actions proactively instead of only after a failed embedding test
+
+**Motivation**: Metadata extraction belongs with the app's lightweight model, while embedding downloads should run in the background with visible progress and without forcing the user to stay on one page.
+
+### feat: Let users download missing semantic models from Settings
+
+**Scope**: `src/main/services/providers.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/settings/page.tsx`
+
+**Changes**:
+
+- Added a settings IPC action to pull the configured embedding or metadata model directly from the local Ollama server via `/api/pull`
+- Added contextual download buttons in the Semantic Debug panel whenever the configured embedding or metadata model is missing
+- Added in-app success and error feedback for model downloads and automatically rerun semantic diagnostics after each download attempt
+
+**Motivation**: When semantic setup fails because a local Ollama model is missing, users should be able to fix it directly inside the app instead of dropping to the terminal.
+
 ### feat: Add semantic debug panel for Ollama and index diagnostics
 
 **Scope**: `src/db/repositories/papers.repository.ts`, `src/main/services/providers.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/settings/page.tsx`

@@ -15,6 +15,22 @@ export interface CreatePaperParams {
   categorizedTags?: CategorizedTag[];
 }
 
+export interface SemanticIndexDebugSummary {
+  totalPapers: number;
+  indexedPapers: number;
+  pendingPapers: number;
+  failedPapers: number;
+  totalChunks: number;
+  recentFailures: Array<{
+    id: string;
+    shortId: string;
+    title: string;
+    processingStatus: string;
+    processingError: string | null;
+    updatedAt: Date;
+  }>;
+}
+
 function mapPaper<
   T extends { authorsJson: string; tags: Array<{ tag: { name: string; category: string } }> },
 >(paper: T) {
@@ -440,6 +456,44 @@ export class PapersRepository {
     });
 
     return rows.map((row) => row.id);
+  }
+
+  async getSemanticIndexDebugSummary(): Promise<SemanticIndexDebugSummary> {
+    const [totalPapers, indexedPapers, pendingPapers, failedPapers, totalChunks, recentFailures] =
+      await Promise.all([
+        this.prisma.paper.count(),
+        this.prisma.paper.count({ where: { indexedAt: { not: null } } }),
+        this.prisma.paper.count({
+          where: {
+            indexedAt: null,
+            OR: [{ pdfPath: { not: null } }, { pdfUrl: { not: null } }, { source: 'arxiv' }],
+          },
+        }),
+        this.prisma.paper.count({ where: { processingStatus: 'failed' } }),
+        this.prisma.paperChunk.count(),
+        this.prisma.paper.findMany({
+          where: { processingStatus: 'failed' },
+          orderBy: { updatedAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            shortId: true,
+            title: true,
+            processingStatus: true,
+            processingError: true,
+            updatedAt: true,
+          },
+        }),
+      ]);
+
+    return {
+      totalPapers,
+      indexedPapers,
+      pendingPapers,
+      failedPapers,
+      totalChunks,
+      recentFailures,
+    };
   }
 
   async listToday() {

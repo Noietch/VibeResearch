@@ -5,13 +5,6 @@ import {
 import { proxyFetch } from './proxy-fetch';
 import { ensureOllamaRunning } from './ollama.service';
 
-export interface ExtractedMetadata {
-  title?: string;
-  authors?: string[];
-  abstract?: string;
-  submittedAt?: Date | null;
-}
-
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
@@ -89,59 +82,6 @@ export class LocalSemanticService {
     }
 
     return fallbackVectors;
-  }
-
-  async extractMetadata(
-    text: string,
-    overrides: Partial<SemanticSearchSettings> = {},
-  ): Promise<ExtractedMetadata> {
-    const settings = this.getSettings(overrides);
-    const baseUrl = trimTrailingSlash(settings.baseUrl);
-    await ensureOllamaRunning({ trigger: 'semantic:metadata', settings });
-    const prompt = [
-      'Extract metadata from the following academic paper text.',
-      'Return strict JSON with keys: title, authors, abstract, submittedAt.',
-      'Use an ISO date string or null for submittedAt.',
-      'If a field cannot be determined, return null or an empty array.',
-      '',
-      text.slice(0, 18000),
-    ].join('\n');
-
-    const response = await proxyFetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: settings.metadataModel,
-        prompt,
-        stream: false,
-        format: 'json',
-      }),
-      timeoutMs: 120_000,
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return {};
-      }
-      throw new Error(`Metadata extraction failed with status ${response.status}`);
-    }
-
-    const parsed = safeJsonParse<{ response?: string }>(response.text());
-    const payload = safeJsonParse<{
-      title?: string | null;
-      authors?: string[] | null;
-      abstract?: string | null;
-      submittedAt?: string | null;
-    }>(parsed?.response ?? '');
-
-    return {
-      title: payload?.title?.trim() || undefined,
-      authors: Array.isArray(payload?.authors)
-        ? payload!.authors.map((author) => author.trim()).filter(Boolean)
-        : undefined,
-      abstract: payload?.abstract?.trim() || undefined,
-      submittedAt: payload?.submittedAt ? new Date(payload.submittedAt) : undefined,
-    };
   }
 }
 

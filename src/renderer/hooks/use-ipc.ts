@@ -342,7 +342,6 @@ export interface SemanticSearchSettings {
   autoProcess: boolean;
   autoStartOllama: boolean;
   baseUrl: string;
-  metadataModel: string;
   embeddingModel: string;
 }
 
@@ -379,11 +378,19 @@ export interface SemanticIndexDebugSummary {
   }>;
 }
 
+export interface LightweightModelDebugInfo {
+  configured: boolean;
+  backend?: 'api' | 'cli';
+  provider?: string;
+  model?: string;
+  baseURL?: string;
+  hasApiKey?: boolean;
+}
+
 export interface SemanticDebugResult {
   success: boolean;
   baseUrl: string;
   embeddingModel: string;
-  metadataModel: string;
   enabled: boolean;
   autoProcess: boolean;
   autoStartOllama: boolean;
@@ -393,13 +400,29 @@ export interface SemanticDebugResult {
     tags: SemanticDebugProbeResult;
     embed: SemanticDebugProbeResult;
     embeddings: SemanticDebugProbeResult;
-    generate: SemanticDebugProbeResult;
   };
   availableModels: string[];
   embeddingModelInstalled: boolean;
-  metadataModelInstalled: boolean;
   indexSummary: SemanticIndexDebugSummary;
+  lightweightModel: LightweightModelDebugInfo;
   notes: string[];
+}
+
+export interface SemanticModelPullJob {
+  id: string;
+  kind: 'embedding';
+  model: string;
+  baseUrl: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  message: string;
+  detail?: string;
+  progress?: number;
+  completedBytes?: number;
+  totalBytes?: number;
+  lastUpdatedAt: string;
+  recentEvents?: string[];
+  startedAt: string;
+  finishedAt?: string;
 }
 
 export interface ProxyTestResult {
@@ -668,6 +691,10 @@ export const ipc = {
     invoke<SemanticEmbeddingTestResult>('settings:testSemanticEmbedding', settings),
   getSemanticDebugInfo: (settings?: Partial<SemanticSearchSettings>) =>
     invoke<SemanticDebugResult>('settings:getSemanticDebugInfo', settings),
+  startSemanticModelPull: (settings?: Partial<SemanticSearchSettings>) =>
+    invoke<SemanticModelPullJob>('settings:startSemanticModelPull', settings),
+  listSemanticModelPullJobs: () =>
+    invoke<SemanticModelPullJob[]>('settings:listSemanticModelPullJobs'),
 
   // Shell
   openInEditor: (dirPath: string) =>
