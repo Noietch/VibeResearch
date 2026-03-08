@@ -20,14 +20,15 @@
 
 **Result**: Users can create agent tasks, assign Claude Code / Codex / Gemini CLI agents, execute tasks with real-time streaming output, approve permissions, and schedule recurring tasks via cron expressions
 
-### fix: Unify tag colors across dashboard and paper details page
+### fix: Unify tag colors by category across all views
 
 - **Scope**: `src/shared/utils/tag-style.ts`, `src/renderer/components/dashboard-content.tsx`, `src/renderer/components/search-content.tsx`, `src/renderer/pages/papers/overview/page.tsx`
 - **Changes**:
-  - Created shared `getTagStyle()` utility in `@shared/utils/tag-style.ts` for consistent hash-based tag coloring
-  - Updated dashboard and search components to use the shared utility instead of duplicated local implementations
-  - Updated paper details page to use hash-based colors for tag chips instead of category-based colors
-  - Category labels in paper details still use category colors (domain=blue, method=purple, topic=green) for grouping indication
+  - Created shared `getTagStyle(category)` utility for category-based tag coloring
+  - Tag colors now unified by category: domain=blue, method=purple, topic=green
+  - Updated dashboard and search components to use `categorizedTags` with category-based colors
+  - Updated paper details page to use consistent category colors for tag chips
+- **Result**: Same category tags now display with consistent color across dashboard, search, and paper details
 - **Result**: Same tag now displays with consistent color across all views (dashboard, search, paper details)
 
 ### feat: Add Windows window controls (minimize, maximize, close)

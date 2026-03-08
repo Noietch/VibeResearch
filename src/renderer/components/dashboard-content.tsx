@@ -236,18 +236,18 @@ function PaperCard({
               {paper.year}
             </span>
           )}
-          {paper.tagNames
-            ?.filter((t) => !EXCLUDED_TAGS.includes(t.toLowerCase()))
+          {paper.categorizedTags
+            ?.filter((t) => !EXCLUDED_TAGS.includes(t.name.toLowerCase()))
             .slice(0, 3)
             .map((tag) => {
-              const style = getTagStyle(tag);
+              const style = getTagStyle(tag.category);
               return (
                 <motion.span
-                  key={tag}
+                  key={tag.name}
                   className={`rounded px-1.5 py-0.5 text-xs font-medium ${style.bg} ${style.text}`}
                   whileHover={{ scale: 1.05 }}
                 >
-                  {tag}
+                  {tag.name}
                 </motion.span>
               );
             })}
