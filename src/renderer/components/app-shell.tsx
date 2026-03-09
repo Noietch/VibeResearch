@@ -13,6 +13,7 @@ import {
   Minus,
   Square,
   Bot,
+  Network,
   Loader2,
   Sparkles,
   CheckCircle2,
@@ -42,6 +43,7 @@ const navItems = [
   { to: '/search', label: 'Search', icon: Search },
   { to: '/papers', label: 'Library', icon: FileText },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/graph', label: 'Graph', icon: Network },
   { to: '/agent-todos', label: 'Tasks', icon: Bot },
 ];
 

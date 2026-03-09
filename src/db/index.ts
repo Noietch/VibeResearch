@@ -6,3 +6,4 @@ export * from './repositories/paper-code-links.repository';
 export * from './repositories/projects.repository';
 export * from './repositories/agent-todo.repository';
 export * from './repositories/collections.repository';
+export * from './repositories/citations.repository';

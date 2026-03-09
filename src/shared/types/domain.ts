@@ -127,6 +127,39 @@ export interface ResearchProfile {
   totalPapers: number;
 }
 
+// ── Graph types ──────────────────────────────────────────────────────────────
+
+export interface GraphNode {
+  id: string;
+  shortId: string;
+  title: string;
+  authors: string[];
+  year?: number;
+  tags: string[];
+  citationCount: number;
+  referenceCount: number;
+  pageRank?: number;
+  isInLibrary: boolean;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  confidence: number;
+  context?: string;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  stats: {
+    totalNodes: number;
+    totalEdges: number;
+    connectedComponents: number;
+  };
+}
+
 // IPC result types for error handling
 export interface IpcResult<T> {
   success: boolean;

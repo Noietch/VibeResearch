@@ -36,6 +36,8 @@ model Paper {
   readingNotes ReadingNote[]
   links       PaperCodeLink[]
   collections PaperCollection[]
+  citationsFrom PaperCitation[] @relation("CitesFrom")
+  citedBy       PaperCitation[] @relation("CitedBy")
 
   @@index([shortId])
   @@index([title])
@@ -302,4 +304,24 @@ model AgentTodoMessage {
 
   @@index([runId])
   @@index([msgId])
+}
+
+model PaperCitation {
+  id              String   @id @default(cuid())
+  sourcePaperId   String
+  targetPaperId   String?
+  externalTitle   String?
+  externalId      String?
+  citationType    String   @default("reference")
+  context         String?
+  confidence      Float    @default(1.0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sourcePaper     Paper    @relation("CitesFrom", fields: [sourcePaperId], references: [id], onDelete: Cascade)
+  targetPaper     Paper?   @relation("CitedBy", fields: [targetPaperId], references: [id], onDelete: SetNull)
+
+  @@unique([sourcePaperId, externalId])
+  @@index([sourcePaperId])
+  @@index([targetPaperId])
 }

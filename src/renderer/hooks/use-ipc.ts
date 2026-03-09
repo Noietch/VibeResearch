@@ -14,6 +14,7 @@ import type {
   AgentTodoRunItem,
   AgentTodoMessageItem,
   AgentToolKind,
+  GraphData,
 } from '@shared';
 
 declare global {
@@ -363,6 +364,14 @@ export interface SemanticSearchSettings {
   autoStartOllama: boolean;
   baseUrl: string;
   embeddingModel: string;
+  embeddingProvider: 'builtin' | 'ollama';
+}
+
+export interface BuiltinModelStatus {
+  ready: boolean;
+  downloading?: boolean;
+  downloadProgress?: number;
+  error?: string;
 }
 
 export interface SemanticEmbeddingTestResult {
@@ -748,6 +757,7 @@ export const ipc = {
     invoke<SemanticModelPullJob>('settings:startSemanticModelPull', settings),
   listSemanticModelPullJobs: () =>
     invoke<SemanticModelPullJob[]>('settings:listSemanticModelPullJobs'),
+  getBuiltinModelStatus: () => invoke<BuiltinModelStatus>('settings:getBuiltinModelStatus'),
 
   // Shell
   openInEditor: (dirPath: string) =>
@@ -850,6 +860,31 @@ export const ipc = {
     invoke<CollectionItem[]>('collections:getForPaper', paperId),
   getResearchProfile: (collectionId: string) =>
     invoke<ResearchProfile>('collections:researchProfile', collectionId),
+
+  // Citations & Graph
+  extractCitations: (paper: {
+    id: string;
+    shortId: string;
+    title: string;
+    sourceUrl?: string | null;
+  }) =>
+    invoke<{ referencesFound: number; citationsFound: number; matched: number }>(
+      'citations:extract',
+      paper,
+    ),
+  getCitationsForPaper: (paperId: string) =>
+    invoke<{ references: unknown[]; citedBy: unknown[] }>('citations:getForPaper', paperId),
+  getGraphData: (options?: { includeGhostNodes?: boolean }) =>
+    invoke<GraphData>('citations:getGraphData', options),
+  getGraphForPaper: (paperId: string, depth?: number, includeGhostNodes?: boolean) =>
+    invoke<GraphData>('citations:getGraphForPaper', paperId, depth, includeGhostNodes),
+  findCitationPath: (fromId: string, toId: string) =>
+    invoke<string[] | null>('citations:findPath', fromId, toId),
+  resolveUnmatched: () => invoke<{ resolved: number }>('citations:resolveUnmatched'),
+  getCitationCounts: (paperId: string) =>
+    invoke<{ references: number; citedBy: number }>('citations:getCounts', paperId),
+  exportGraph: (graphData: unknown) =>
+    invoke<{ saved: boolean; filePath?: string }>('citations:exportGraph', graphData),
 
   // Token Usage
   getTokenUsageSummary: () =>

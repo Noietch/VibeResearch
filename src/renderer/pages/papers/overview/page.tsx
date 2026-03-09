@@ -966,6 +966,13 @@ export function OverviewPage() {
   const [paperDir, setPaperDir] = useState<string | null>(null);
   const [activeCli, setActiveCli] = useState<CliConfig | null>(null);
 
+  // Citations
+  const [citationCounts, setCitationCounts] = useState<{
+    references: number;
+    citedBy: number;
+  } | null>(null);
+  const [extractingCitations, setExtractingCitations] = useState(false);
+
   // Clone repo modal
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [repoUrl, setRepoUrl] = useState('');
@@ -1002,6 +1009,15 @@ export function OverviewPage() {
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, [shortId]);
+
+  // Load citation counts
+  useEffect(() => {
+    if (!paper) return;
+    ipc
+      .getCitationCounts(paper.id)
+      .then(setCitationCounts)
+      .catch(() => undefined);
+  }, [paper?.id]);
 
   // Separate notes by type
   const analysisNote = notes.find(
@@ -1159,6 +1175,28 @@ export function OverviewPage() {
     }
   }, [paper, toast]);
 
+  const handleExtractCitations = useCallback(async () => {
+    if (!paper) return;
+    setExtractingCitations(true);
+    try {
+      const result = await ipc.extractCitations({
+        id: paper.id,
+        shortId: paper.shortId,
+        title: paper.title,
+        sourceUrl: paper.sourceUrl,
+      });
+      toast.success(
+        `Found ${result.referencesFound} references, ${result.citationsFound} citations (${result.matched} matched locally)`,
+      );
+      const counts = await ipc.getCitationCounts(paper.id);
+      setCitationCounts(counts);
+    } catch {
+      toast.error('Failed to extract citations');
+    } finally {
+      setExtractingCitations(false);
+    }
+  }, [paper, toast]);
+
   const handleDeletePaper = useCallback(async () => {
     if (!paper) return;
     if (!confirm(`Delete "${paper.title}"? This action cannot be undone.`)) return;
@@ -1279,6 +1317,18 @@ export function OverviewPage() {
               Copy BibTeX
             </button>
             <button
+              onClick={handleExtractCitations}
+              disabled={extractingCitations}
+              className="inline-flex items-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2.5 text-sm font-medium text-notion-text shadow-sm transition-all hover:bg-notion-sidebar disabled:opacity-40"
+            >
+              {extractingCitations ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <GitBranch size={16} />
+              )}
+              Extract Citations
+            </button>
+            <button
               onClick={handleDeletePaper}
               disabled={deleting}
               className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 shadow-sm transition-all hover:bg-red-50 disabled:opacity-40"
@@ -1318,6 +1368,30 @@ export function OverviewPage() {
 
           {/* Collections */}
           <CollectionPicker paperId={paper.id} />
+
+          {/* Citation Stats */}
+          {citationCounts && (citationCounts.references > 0 || citationCounts.citedBy > 0) && (
+            <div className="flex items-center gap-4 rounded-xl border border-notion-border p-4">
+              <div className="flex items-center gap-2 text-sm text-notion-text-secondary">
+                <GitBranch size={14} className="text-notion-text-tertiary" />
+                <span>
+                  <strong className="text-notion-text">{citationCounts.references}</strong>{' '}
+                  references
+                </span>
+                <span className="text-notion-text-tertiary">·</span>
+                <span>
+                  <strong className="text-notion-text">{citationCounts.citedBy}</strong> cited by
+                </span>
+              </div>
+              <button
+                onClick={() => navigate('/graph')}
+                className="ml-auto flex items-center gap-1.5 rounded-lg bg-notion-sidebar px-3 py-1.5 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar-hover hover:text-notion-text"
+              >
+                View in Graph
+                <ExternalLink size={12} />
+              </button>
+            </div>
+          )}
 
           {/* Abstract */}
           {paper.abstract && (

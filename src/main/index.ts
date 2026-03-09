@@ -16,6 +16,7 @@ import { setupTaggingIpc } from './ipc/tagging.ipc';
 import { setupAgentTodoIpc, getAgentTodoService } from './ipc/agent-todo.ipc';
 import { stopAllRunners } from './services/agent-runner-registry';
 import { setupCollectionsIpc, ensureDefaultCollections } from './ipc/collections.ipc';
+import { setupCitationsIpc } from './ipc/citations.ipc';
 import { ensureStorageDir, getDbPath } from './store/storage-path';
 import { PapersRepository } from '@db';
 import { resumeAutomaticPaperProcessing } from './services/paper-processing.service';
@@ -368,6 +369,7 @@ app.whenReady().then(async () => {
     .initialize()
     .catch((err) => console.error('[AgentTodo] Failed to initialize scheduler:', err));
   setupCollectionsIpc();
+  setupCitationsIpc();
   setupFileIpc();
 
   // Initialize vec index (background, non-blocking)

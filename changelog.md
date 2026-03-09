@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-03-09 (session 42)
+
+### feat: Add Literature Graph with citation extraction and visualization
+
+- **Scope**: `prisma/schema.prisma`, `src/db/repositories/citations.repository.ts`, `src/main/services/citation-extraction.service.ts`, `src/main/services/citation-graph.service.ts`, `src/main/ipc/citations.ipc.ts`, `src/renderer/pages/graph/page.tsx`, `src/renderer/components/graph/`, `src/renderer/pages/papers/overview/page.tsx`
+- **Problem**: No way to visualize citation relationships between papers or discover key research nodes.
+- **Solution**: Full citation graph feature with three layers:
+  - **Data layer**: `PaperCitation` model (Prisma), `CitationsRepository` for CRUD, `CitationExtractionService` using Semantic Scholar API (`/paper/{id}?fields=references,citations`) with arXiv ID + title matching to local papers, `CitationGraphService` with PageRank computation and BFS path finding.
+  - **Visualization layer**: Interactive graph page using Cytoscape.js with 4 layout modes (force-directed, dagre hierarchy, circle, grid). Ghost nodes for external references (dashed, semi-transparent). Node detail panel with references/cited-by lists. Export to PNG/JSON.
+  - **Integration**: "Extract Citations" button on paper overview page, citation count display with "View in Graph" link, Graph nav item in sidebar.
+- **Types**: `GraphNode`, `GraphEdge`, `GraphData` added to shared domain types.
+- **Tests**: 14 integration tests covering Citation CRUD, graph assembly (5 papers + 8 edges), PageRank (chain topology), BFS path finding, cascade delete, unmatched resolution, and full import-to-graph chain.
+- **Validation**: All 181 tests pass (14 new + 167 existing).
+
+## 2026-03-09 (session 41)
+
+### feat: Add CI/CD release workflow for automated GitHub Releases
+
+- **Scope**: `.github/workflows/release.yml`, `scripts/build-release.sh`, `scripts/build-release-linux.sh`
+- **Problem**: No automated release pipeline — macOS and Linux builds had to be created manually.
+- **Solution**: Created `.github/workflows/release.yml` triggered on `v*` tags with 4 jobs:
+  - `validate`: lint + test + build (same as CI)
+  - `build-mac`: builds .dmg and .zip on `macos-latest` (arm64)
+  - `build-linux`: builds .AppImage on `ubuntu-latest`
+  - `publish`: collects all artifacts and creates a GitHub Release via `softprops/action-gh-release@v2`
+- **Build script fix**: Conditioned `ELECTRON_MIRROR` (npmmirror.com) to only apply outside CI, so GitHub Actions uses the faster global Electron CDN.
+
+## 2026-03-09 (session 40)
+
+### feat: Add built-in embedding provider for zero-dependency semantic search
+
+- **Scope**: `src/main/services/`, `src/main/store/app-settings-store.ts`, `src/main/ipc/providers.ipc.ts`, `src/renderer/pages/settings/page.tsx`, `scripts/build-main.mjs`, `tests/integration/builtin-embedding.test.ts`
+- **Problem**: Semantic search required Ollama to be installed and running, raising the usage barrier for new users.
+- **Solution**: Introduced `EmbeddingProvider` interface with two implementations:
+  - **BuiltinEmbeddingProvider**: Uses `@huggingface/transformers` with `all-MiniLM-L6-v2` (384-dim, ~80MB) for zero-config local embedding. Model cached in `{storageDir}/models/`, lazy-loaded on first use with download progress broadcast.
+  - **OllamaEmbeddingProvider**: Extracted existing Ollama HTTP call logic into the provider interface.
+- **LocalSemanticService** refactored to delegate to the active provider via `getOrCreateProvider()` / `switchProvider()`.
+- **Settings**: Added `embeddingProvider: 'builtin' | 'ollama'` field (default: `'builtin'`). Migration preserves `'ollama'` for users with custom Ollama config. Provider switch triggers index rebuild (same flow as model change).
+- **UI**: Settings Semantic tab now shows provider selector (Built-in recommended / Ollama advanced) with conditional Ollama settings display and provider switch warning.
+- **Tests**: Integration tests for provider interface, builtin vector generation (384-dim, normalized), semantic similarity, batch processing, and provider switching.
+
 ## 2026-03-09 (session 39)
 
 ### fix: Skip unnecessary Prisma db push on startup via schema hash caching
