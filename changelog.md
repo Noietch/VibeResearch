@@ -1,5 +1,158 @@
 # Changelog
 
+## 2026-03-09 (session 57)
+
+### chore: Remove model weights from git and document download steps
+
+- **Scope**: `.gitignore`, `README.md`, `README_CN.md`
+- **Changes**:
+  - Removed `models/Xenova/all-MiniLM-L6-v2/` (4 files) from git tracking via `git rm --cached`
+  - Added `models/` to `.gitignore` to prevent re-committing weights
+  - Added "Model Weights" section to both READMEs explaining automatic download on first launch and manual `huggingface-cli` / manual download steps
+
+## 2026-03-09 (session 56)
+
+### style: Unify back button style across all pages
+
+- **Scope**: `src/renderer/components/app-shell.tsx`, `src/renderer/pages/papers/overview/page.tsx`, `src/renderer/pages/papers/reader/page.tsx`, `src/renderer/pages/papers/notes/page.tsx`, `src/renderer/pages/compare/page.tsx`, `src/renderer/pages/agent-todos/[id]/page.tsx`
+- **Changes**:
+  - Standardized all back buttons to: `inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50` with `ArrowLeft size={16}` and "Back" label
+  - reader/page.tsx: `rounded-md` → `rounded-lg`, icon `14` → `16`
+  - notes/page.tsx: icon `14` → `16`
+  - compare/page.tsx: `rounded-md` → `rounded-lg`
+  - agent-todos/[id]/page.tsx: icon-only `size={18}` → labeled button with `size={16}` and consistent padding
+  - app-shell.tsx: global back button (fullWidth and max-width modes) now uses same style with "Back" label instead of icon-only circle button
+
+## 2026-03-09 (session 55)
+
+### fix: Strengthen proxy-test.test.ts to actually verify agent routing
+
+- **Scope**: `tests/integration/proxy-test.test.ts`
+- **Changes**:
+  - Previous tests mocked `node:https` to always return 200 regardless of `agent` parameter — never verified proxy was actually passed to the request
+  - Added test: "passes agent to https.request when proxy is set" — asserts `opts.agent` is defined on every `https.request` call when proxy URL is configured
+  - Added test: "does NOT pass agent when no proxy" — asserts `opts.agent` is absent when proxy is unset
+  - Added test: "reports failure when proxy connection is refused" — simulates `ECONNREFUSED` error to verify failure path is correctly reported
+  - Fixed `vi.doMock` ordering bug in second test (mock was registered after module import, so it never applied)
+  - Extracted `makeFakeHttps()` helper; added `beforeEach(() => vi.resetModules())` for proper test isolation
+- **Validation**: 5/5 tests pass
+
+## 2026-03-09 (session 54)
+
+### feat: Remove Collections; add Related Works to Projects; simplify Library sidebar
+
+- **Scope**: `prisma/schema.prisma`, `src/db/repositories/projects.repository.ts`, `src/main/services/projects.service.ts`, `src/main/ipc/projects.ipc.ts`, `src/db/index.ts`, `src/main/index.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/router.tsx`, `src/renderer/components/app-shell.tsx`, `src/renderer/pages/papers/overview/page.tsx`, `src/renderer/pages/projects/page.tsx`, `tests/integration/projects.test.ts`
+- **Changes**:
+  - **Removed Collections entirely**: deleted `Collection` and `PaperCollection` schema models, `collections.repository.ts`, `collections.service.ts`, `collections.ipc.ts`, `pages/collections/`, `collection-modal.tsx`, `collections.test.ts`; removed all collection IPC methods from `use-ipc.ts`; removed collection types (`CollectionItem`, `ResearchProfile`) from `use-ipc.ts` and `domain.ts`
+  - **Added `ProjectPaper` join table**: schema with `projectId`, `paperId`, `addedAt`, `note`; `@@unique([projectId, paperId])` prevents duplicates; cascades on project/paper delete
+  - **Backend**: added `addPaperToProject`, `removePaperFromProject`, `listProjectPapers` methods to `ProjectsRepository`, `ProjectsService`, and `projects.ipc.ts` (`projects:papers:add/remove/list` channels)
+  - **Frontend types**: added `ProjectPaperItem` interface extending `PaperItem` with `addedAt`, `note`, `projectPaperId`; added 3 IPC client methods
+  - **Library sidebar**: simplified to a flat `<Link to="/papers">` — no more expandable tree or Collections section; Projects now shows a collapsible dropdown with indented project names (same design language as other nav items)
+  - **Paper overview**: replaced `CollectionPicker` with `ProjectAdder` — a dropdown button to add the current paper to any project, with toast feedback
+  - **Related Works tab**: added to `ProjectDetailPage` — lists papers added to the project, shows title/authors/year/abstract, remove button on hover; "Add Papers" modal with search; disabled "Generate Related Works" placeholder
+  - **DB migration**: ran `npx prisma db push --accept-data-loss` to sync schema
+  - **Tests**: added 3 new integration test cases for project papers (add/list, remove, upsert idempotency)
+
+## 2026-03-09 (session 53)
+
+### feat: Settings page UI polish — minimalist layout + Fuse.js fuzzy search + nav font size
+
+- **Scope**: `src/renderer/pages/settings/page.tsx`
+- **Changes**:
+  - Removed card/border wrapper — layout is now flat and borderless (极简风)
+  - Top search bar spans full width as a single inline strip (title · divider · search input)
+  - Search uses Fuse.js (threshold 0.4, weighted label + keywords) for fuzzy matching
+  - While searching: right panel stacks all matching sections vertically in real-time; left nav dims non-matching items
+  - Nav item font size bumped from `text-xs` to `text-sm` (14px) for readability; group headers from 10px to 11px
+
+### feat: VS Code-style Settings page redesign + settings-nav logic extraction + tests
+
+- **Scope**: `src/renderer/pages/settings/page.tsx`, `src/renderer/pages/settings/settings-nav.ts` (new), `tests/integration/settings-nav.test.ts` (new)
+- **Changes**:
+  - Replaced 4-tab layout (Basic, Agents, Models, Storage) with VS Code-style left sidebar nav + right content panel
+  - Extracted pure nav logic into `settings-nav.ts`: `SectionId`, `NAV_GROUPS`, `SECTION_META`, `ALL_SECTION_IDS`, `filterNavGroups()`, `getFilteredSectionIds()`, `resolveActiveSection()`, `toggleCollapsed()`, `isGroupExpanded()`
+  - `page.tsx` imports from `settings-nav.ts`; adds `GROUP_ICONS` map for React icon components (kept separate to avoid React deps in logic module)
+  - Sidebar includes search bar that filters nav items by label and keywords; groups auto-expand during search
+  - Active section highlighted with `bg-notion-accent-light text-notion-accent`; group headers collapse/expand on click
+  - Content panel renders section header (title + description) above each section component
+  - Added `ChevronRight` and `Search` to lucide-react imports; removed unused `Tab` type
+  - Added 38 unit tests in `settings-nav.test.ts` covering: NAV_GROUPS structure, ALL_SECTION_IDS, SECTION_META completeness, filterNavGroups (label/keyword/case/mutation), getFilteredSectionIds, resolveActiveSection (fallback logic), toggleCollapsed (immutability), isGroupExpanded (search override)
+
+## 2026-03-09 (session 52)
+
+### feat: Remove bundled model weights; add on-demand download UI
+
+- **Scope**: `.gitignore`, `src/main/services/builtin-embedding-provider.ts`, `src/main/ipc/providers.ipc.ts`, `src/main/services/providers.service.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/settings/page.tsx`, `src/main/services/proxy-test.service.ts`, `README.md`, `README_CN.md`
+- **Changes**:
+  - Added `models/` to `.gitignore`; removed model files from git tracking (`git rm -r --cached models/`)
+  - Updated `builtin-embedding-provider.ts`: added `checkModelExists()`, `getModelPath()`, `downloadModel()` methods; revised model path strategy — packaged app uses `userData/models/` (writable, persists across updates), dev uses `appPath/models/`; download uses Node `https` with redirect following, proxy support, and per-file progress reporting
+  - Added `settings:checkBuiltinModelExists` and `settings:downloadBuiltinModel` IPC handlers in `providers.ipc.ts`
+  - Added `checkBuiltinModelExists()` and `startBuiltinModelDownload()` methods to `ProvidersService`; download broadcasts progress via `settings:builtinModelDownloadProgress` IPC events
+  - Added `BuiltinModelDownloadProgress` interface + `checkBuiltinModelExists` / `downloadBuiltinModel` IPC client methods to `use-ipc.ts`
+  - Updated `AddEmbeddingModal` and `EmbeddingCard` in settings page to show model status (ready/not found/downloading) with progress bar and download button for builtin provider
+  - Added `HuggingFace` to proxy test endpoints in `proxy-test.service.ts`
+  - Updated `README.md` and `README_CN.md` with Model Setup section documenting download options
+
+## 2026-03-09 (session 51)
+
+### feat: Embedding model multi-card UI (like chat models)
+
+- **Scope**: `src/main/store/app-settings-store.ts`, `src/main/services/providers.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/settings/page.tsx`
+- **Changes**:
+  - Added `EmbeddingConfig` interface with `id`, `name`, `provider`, `embeddingModel`, `embeddingApiBase`, `embeddingApiKey`
+  - Added `embeddingConfigs[]` + `activeEmbeddingConfigId` fields to `AppSettings`; zero-downtime migration synthesizes one config from existing `semanticSearch` fields on first load
+  - Added store functions: `getEmbeddingConfigs`, `saveEmbeddingConfig`, `deleteEmbeddingConfig`, `getActiveEmbeddingConfigId`, `setActiveEmbeddingConfigId`, `getActiveEmbeddingConfig`
+  - Added `switchEmbeddingConfig(config)` method to `ProvidersService` — merges config into `semanticSearch` settings, resets vec index if provider/model changed, calls `localSemanticService.switchProvider()`
+  - Added 4 IPC handlers: `embedding:list`, `embedding:save`, `embedding:delete`, `embedding:setActive`
+  - Added `EmbeddingConfig` type export + 4 new IPC client methods to `use-ipc.ts`
+  - Replaced `SemanticSettingsPanel` with `EmbeddingSection` (card list) + `EmbeddingCard` + `AddEmbeddingModal` in `settings/page.tsx`
+  - Global semantic settings (enabled, autoProcess, autoEnrich, recommendationExploration) moved to compact section below the embedding cards
+
+## 2026-03-09 (session 50)
+
+### style: Back button inline with page header; new-paper red dot indicator (right edge, clears on view)
+
+- **Scope**: `src/renderer/components/app-shell.tsx`, `src/renderer/components/papers-by-tag.tsx`
+- **Changes**:
+  - Back button in non-fullWidth pages now uses `absolute` positioning (`left-4 top-[48px]`) so it sits visually to the left of the page header instead of above it
+  - Papers imported within the last 24 hours and not yet viewed show a red dot (`h-2 w-2 bg-red-500`) at the right edge of their row (vertically centered)
+  - Dot disappears after opening the paper detail page (`touchPaper` called on load, sets `lastReadAt`)
+
+## 2026-03-09 (session 49)
+
+### style: Restore constrained layout for Library page
+
+- **Scope**: `src/renderer/router.tsx`, `src/renderer/pages/papers/page.tsx`, `src/renderer/components/papers-by-tag.tsx`
+- **Changes**:
+  - Removed `fullWidth: true` from the `/papers` route so Library uses AppShell's `max-w-4xl` centered container (same as Projects/Tasks)
+  - Converted `papers-by-tag.tsx` from fixed-height internal-scroll layout (`h-full flex flex-col overflow-hidden`) to normal flow layout; removed all `px-8` horizontal padding (now inherited from AppShell's `px-16`)
+  - Removed `flex-shrink-0` / `flex-1 overflow-y-auto` from bars and paper list; scroll is now handled by AppShell's scroll container
+
+## 2026-03-09 (session 48)
+
+### refactor: Replace Ollama embedding with OpenAI-compatible API; simplify Semantic settings UI
+
+- **Scope**: `src/main/store/app-settings-store.ts`, `src/main/services/embedding-provider.ts`, `src/main/services/local-semantic.service.ts`, `src/main/services/openai-compatible-embedding-provider.ts` (new), `src/main/services/providers.service.ts`, `src/main/ipc/providers.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/settings/page.tsx`
+- **Changes**:
+  - Replaced `embeddingProvider: 'ollama'` with `'openai-compatible'`; added `embeddingApiBase` and `embeddingApiKey` fields
+  - Created `OpenAICompatibleEmbeddingProvider` — calls `/embeddings` endpoint with Bearer auth (compatible with OpenAI, local servers, etc.)
+  - Removed all Ollama-specific logic from `providers.service.ts` (warmup, endpoint probes, model list, `startedOllama`)
+  - Simplified `SemanticDebugResult` type — removed Ollama probe fields
+  - Rewrote `SemanticSettingsPanel` UI: compact card with pencil-expand pattern matching Models tab; removed Semantic Debug card and pull-job progress display
+  - Migration: existing `'ollama'` provider config auto-migrates to `'openai-compatible'` with `embeddingApiBase` set from old `baseUrl`
+
+## 2026-03-09 (session 47)
+
+### refactor: Simplify Dashboard — remove Graph, Library, Profile quick-access; embed Recommendations inline
+
+- **Scope**: `src/renderer/components/dashboard-content.tsx`, `src/renderer/components/dashboard-recommendations.tsx` (new), `src/renderer/router.tsx`
+- **Changes**:
+  - Removed Quick Access card grid (Graph, Library, Profile, Recommendations links) from Dashboard
+  - Removed Recent Comparisons section from Dashboard
+  - Created `DashboardRecommendations` component — compact inline recommendations (new status only) with Refresh, More/Fewer like this, Ignore, Save to Library actions
+  - Removed `/graph`, `/recommendations`, `/profile` routes from router
+  - Profile page removed entirely (no longer needed)
+
 ## 2026-03-09 (session 46)
 
 ### fix: Repair pre-existing test failures unrelated to PDF fix
