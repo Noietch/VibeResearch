@@ -9,3 +9,5 @@ export * from './repositories/collections.repository';
 export * from './repositories/citations.repository';
 export * from './repositories/recommendations.repository';
 export * from './repositories/comparisons.repository';
+export * from './repositories/task-results.repository';
+export * from './repositories/experiment-report.repository';
