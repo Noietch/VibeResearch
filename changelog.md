@@ -2,6 +2,14 @@
 
 ## 2026-03-09
 
+### feat: Comparison translation (EN/中文 toggle)
+
+- **Scope**: `prisma/schema.prisma`, `src/shared/types/domain.ts`, `src/db/repositories/comparisons.repository.ts`, `src/main/ipc/comparison.ipc.ts`, `src/main/services/comparison.service.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/compare/page.tsx`
+- **Translation**: Added EN/中文 pill toggle in comparison header. Clicking 中文 triggers a background translation job using the lightweight model via `streamText()`. Translation streams in real-time and is cached to `translatedContentMd` in the database for instant subsequent access.
+- **Background job pattern**: Translation runs as a background job (`comparison:translate` IPC) with status broadcast via `comparison:translateStatus`. Supports cancel, recovery on remount, and error handling.
+- **Cache invalidation**: Regenerating a comparison clears any cached translation. Translation is only triggered on-demand when user switches to 中文.
+- **Schema**: Added `translatedContentMd String?` to `ComparisonNote` model.
+
 ### feat: Auto-persist comparisons + improved comparison UI
 
 - **Scope**: `src/main/ipc/comparison.ipc.ts`, `src/db/repositories/comparisons.repository.ts`, `src/renderer/pages/compare/page.tsx`, `src/renderer/hooks/use-ipc.ts`, `src/main/services/comparison.service.ts`

@@ -19,11 +19,29 @@ interface ComparisonJobStatus {
   completedAt: string | null;
 }
 
+type TranslationJobStage = 'streaming' | 'done' | 'error' | 'cancelled';
+
+interface TranslationJobStatus {
+  jobId: string;
+  comparisonId: string;
+  active: boolean;
+  stage: TranslationJobStage;
+  partialText: string;
+  message: string;
+  error: string | null;
+  startedAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
 let comparisonService: ComparisonService | null = null;
 
 const activeComparisons = new Map<string, AbortController>();
 const comparisonJobs = new Map<string, ComparisonJobStatus>();
 const MAX_COMPARISON_JOBS = 10;
+
+const activeTranslations = new Map<string, AbortController>();
+const translationJobs = new Map<string, TranslationJobStatus>();
 
 function getComparisonService() {
   if (!comparisonService) comparisonService = new ComparisonService();
@@ -146,7 +164,9 @@ export function setupComparisonIpc() {
           const finalJob = comparisonJobs.get(jobId);
           // Update DB with final content
           if (savedId && finalJob?.partialText) {
-            await repo.update(savedId, { contentMd: finalJob.partialText }).catch(() => undefined);
+            await repo
+              .update(savedId, { contentMd: finalJob.partialText, translatedContentMd: null })
+              .catch(() => undefined);
           }
 
           updateComparisonJob(jobId, {
@@ -163,7 +183,9 @@ export function setupComparisonIpc() {
           // Save partial content on error/cancel too
           const finalJob = comparisonJobs.get(jobId);
           if (savedId && finalJob?.partialText) {
-            await repo.update(savedId, { contentMd: finalJob.partialText }).catch(() => undefined);
+            await repo
+              .update(savedId, { contentMd: finalJob.partialText, translatedContentMd: null })
+              .catch(() => undefined);
           }
           // Delete empty DB record if cancelled with no content
           if (savedId && !finalJob?.partialText && aborted) {
@@ -210,6 +232,7 @@ export function setupComparisonIpc() {
       paperIds: JSON.parse(row.paperIdsJson) as string[],
       titles: JSON.parse(row.titlesJson) as string[],
       contentMd: row.contentMd,
+      translatedContentMd: row.translatedContentMd ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }));
@@ -218,5 +241,126 @@ export function setupComparisonIpc() {
   ipcMain.handle('comparison:delete', async (_, id: string): Promise<{ success: boolean }> => {
     await repo.delete(id);
     return { success: true };
+  });
+
+  // ── Translation handlers ──────────────────────────────────────────────────
+
+  ipcMain.handle(
+    'comparison:translate',
+    async (_, input: { comparisonId: string }): Promise<{ jobId: string; started: boolean }> => {
+      const { comparisonId } = input;
+
+      // Check if already translating this comparison
+      const existing = translationJobs.get(comparisonId);
+      if (existing?.active) {
+        return { jobId: existing.jobId, started: false };
+      }
+
+      // Load the comparison from DB
+      const row = await repo.getById(comparisonId);
+      if (!row || !row.contentMd) {
+        throw new Error('Comparison not found or has no content');
+      }
+
+      // If already translated, return immediately
+      if (row.translatedContentMd) {
+        return { jobId: comparisonId, started: false };
+      }
+
+      const jobId = comparisonId;
+      const now = new Date().toISOString();
+      const controller = new AbortController();
+      activeTranslations.set(jobId, controller);
+
+      const job: TranslationJobStatus = {
+        jobId,
+        comparisonId,
+        active: true,
+        stage: 'streaming',
+        partialText: '',
+        message: 'Translating…',
+        error: null,
+        startedAt: now,
+        updatedAt: now,
+        completedAt: null,
+      };
+      translationJobs.set(jobId, job);
+      broadcastToAll('comparison:translateStatus', job);
+
+      void (async () => {
+        try {
+          await getComparisonService().translateComparison(
+            row.contentMd,
+            (chunk) => {
+              const current = translationJobs.get(jobId);
+              if (!current) return;
+              const updated: TranslationJobStatus = {
+                ...current,
+                partialText: current.partialText + chunk,
+                updatedAt: new Date().toISOString(),
+              };
+              translationJobs.set(jobId, updated);
+              broadcastToAll('comparison:translateStatus', updated);
+            },
+            controller.signal,
+          );
+
+          const finalJob = translationJobs.get(jobId);
+          if (finalJob?.partialText) {
+            await repo
+              .update(comparisonId, { translatedContentMd: finalJob.partialText })
+              .catch(() => undefined);
+          }
+
+          const doneJob: TranslationJobStatus = {
+            ...(translationJobs.get(jobId) ?? job),
+            active: false,
+            stage: 'done',
+            message: 'Translation complete',
+            completedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          translationJobs.set(jobId, doneJob);
+          broadcastToAll('comparison:translateStatus', doneJob);
+        } catch (err) {
+          const aborted = isAbortError(err);
+          const message = err instanceof Error ? err.message : String(err);
+
+          const errJob: TranslationJobStatus = {
+            ...(translationJobs.get(jobId) ?? job),
+            active: false,
+            stage: aborted ? 'cancelled' : 'error',
+            message: aborted ? 'Translation cancelled' : `Translation failed: ${message}`,
+            error: aborted ? null : message,
+            completedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          translationJobs.set(jobId, errJob);
+          broadcastToAll('comparison:translateStatus', errJob);
+        } finally {
+          activeTranslations.delete(jobId);
+        }
+      })();
+
+      return { jobId, started: true };
+    },
+  );
+
+  ipcMain.handle(
+    'comparison:getActiveTranslationJobs',
+    async (): Promise<TranslationJobStatus[]> => {
+      return Array.from(translationJobs.values()).sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+    },
+  );
+
+  ipcMain.handle('comparison:killTranslation', async (_, jobId: string) => {
+    const controller = activeTranslations.get(jobId);
+    if (controller) {
+      controller.abort();
+      return { killed: true };
+    }
+    return { killed: false };
   });
 }

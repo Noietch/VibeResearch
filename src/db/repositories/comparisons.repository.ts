@@ -25,10 +25,10 @@ export class ComparisonsRepository {
     });
   }
 
-  async update(id: string, data: { contentMd: string }) {
+  async update(id: string, data: { contentMd?: string; translatedContentMd?: string | null }) {
     return this.prisma.comparisonNote.update({
       where: { id },
-      data: { contentMd: data.contentMd },
+      data,
     });
   }
 

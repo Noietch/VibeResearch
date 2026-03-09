@@ -225,6 +225,7 @@ export interface ComparisonNoteItem {
   paperIds: string[];
   titles: string[];
   contentMd: string;
+  translatedContentMd?: string | null;
   createdAt: string;
   updatedAt: string;
 }

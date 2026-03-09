@@ -945,6 +945,22 @@ export const ipc = {
   killComparison: (jobId: string) => invoke<{ killed: boolean }>('comparison:kill', jobId),
   listComparisons: () => invoke<ComparisonNoteItem[]>('comparison:list'),
   deleteComparison: (id: string) => invoke<{ success: boolean }>('comparison:delete', id),
+  translateComparison: (input: { comparisonId: string }) =>
+    invoke<{ jobId: string; started: boolean }>('comparison:translate', input),
+  getActiveTranslationJobs: () =>
+    invoke<
+      Array<{
+        jobId: string;
+        comparisonId: string;
+        active: boolean;
+        stage: 'streaming' | 'done' | 'error' | 'cancelled';
+        partialText: string;
+        message: string;
+        error: string | null;
+      }>
+    >('comparison:getActiveTranslationJobs'),
+  killTranslation: (jobId: string) =>
+    invoke<{ killed: boolean }>('comparison:killTranslation', jobId),
 
   // Citations & Graph
   extractCitations: (paper: {

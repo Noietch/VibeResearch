@@ -88,4 +88,41 @@ export class ComparisonService {
 
     return fullText;
   }
+
+  async translateComparison(
+    contentMd: string,
+    onChunk: (chunk: string) => void,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const modelConfig = getActiveModel('lightweight');
+    if (!modelConfig) {
+      throw new Error(
+        'No lightweight model configured. Please set up a lightweight model in Settings.',
+      );
+    }
+
+    const configWithKey = getModelWithKey(modelConfig.id);
+    if (!configWithKey?.apiKey) {
+      throw new Error('No API key configured for the lightweight model.');
+    }
+
+    const model = getLanguageModelFromConfig(configWithKey);
+
+    const { textStream } = streamText({
+      model,
+      system:
+        'Translate the following academic comparison into Chinese. Keep markdown formatting, headings, and structure. Translate naturally, not literally. Do not add any extra content or commentary.',
+      prompt: contentMd,
+      maxTokens: 8192,
+      abortSignal: signal,
+    });
+
+    let fullText = '';
+    for await (const chunk of textStream) {
+      fullText += chunk;
+      onChunk(chunk);
+    }
+
+    return fullText;
+  }
 }

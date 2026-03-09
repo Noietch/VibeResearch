@@ -64,6 +64,12 @@ export function ComparePage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
 
+  // Translation state
+  const [lang, setLang] = useState<'en' | 'zh'>('en');
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
+
   // Keep jobIdRef in sync
   useEffect(() => {
     jobIdRef.current = jobId;
@@ -133,6 +139,49 @@ export function ComparePage() {
     });
     return unsub;
   }, [jobId]);
+
+  // Subscribe to translation status
+  useEffect(() => {
+    const unsub = onIpc('comparison:translateStatus', (_event: unknown, payload: unknown) => {
+      const status = payload as {
+        jobId: string;
+        comparisonId: string;
+        active: boolean;
+        stage: string;
+        partialText: string;
+        error: string | null;
+      };
+      if (!status?.comparisonId || status.comparisonId !== currentSavedId) return;
+      setTranslatedText(status.partialText || null);
+      setTranslating(status.active);
+      if (status.error) setTranslationError(status.error);
+      if (status.stage === 'done') setTranslating(false);
+    });
+    return unsub;
+  }, [currentSavedId]);
+
+  // Recover translation job on mount
+  useEffect(() => {
+    if (!currentSavedId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const jobs = await ipc.getActiveTranslationJobs();
+        if (cancelled) return;
+        const match = jobs.find((j) => j.comparisonId === currentSavedId);
+        if (match) {
+          setTranslatedText(match.partialText || null);
+          setTranslating(match.active);
+          if (match.error) setTranslationError(match.error);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSavedId]);
 
   // Recover existing job on mount (e.g. when navigating back to the page)
   useEffect(() => {
@@ -205,18 +254,67 @@ export function ComparePage() {
     setStatusMessage('');
     setError(null);
     setCurrentSavedId(null);
+    setTranslatedText(null);
+    setTranslating(false);
+    setTranslationError(null);
+    setLang('en');
     void startComparison();
   }, [startComparison]);
 
   const handleCopy = useCallback(async () => {
+    const textToCopy = lang === 'zh' && translatedText ? translatedText : partialText;
     try {
-      await navigator.clipboard.writeText(partialText);
+      await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // ignore
     }
-  }, [partialText]);
+  }, [partialText, translatedText, lang]);
+
+  const handleTranslate = useCallback(async () => {
+    if (!currentSavedId) return;
+    setTranslationError(null);
+    setTranslating(true);
+    setTranslatedText('');
+    try {
+      await ipc.translateComparison({ comparisonId: currentSavedId });
+    } catch (err) {
+      setTranslationError(err instanceof Error ? err.message : 'Translation failed');
+      setTranslating(false);
+    }
+  }, [currentSavedId]);
+
+  const handleLangToggle = useCallback(
+    (target: 'en' | 'zh') => {
+      setLang(target);
+      if (target === 'zh' && !translatedText && !translating && currentSavedId) {
+        void handleTranslate();
+      }
+    },
+    [translatedText, translating, currentSavedId, handleTranslate],
+  );
+
+  // Load saved translatedContentMd when loading a saved comparison
+  useEffect(() => {
+    if (!savedId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const items = await ipc.listComparisons();
+        const item = items.find((i) => i.id === savedId);
+        if (!item || cancelled) return;
+        if (item.translatedContentMd) {
+          setTranslatedText(item.translatedContentMd);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [savedId]);
 
   // Load history
   const loadHistory = useCallback(async () => {
@@ -381,6 +479,32 @@ export function ComparePage() {
               <History size={14} />
               History
             </button>
+            {/* Language toggle */}
+            {(isDone || translatedText) && (
+              <div className="flex items-center rounded-lg border border-notion-border bg-notion-sidebar p-0.5">
+                <button
+                  onClick={() => handleLangToggle('en')}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    lang === 'en'
+                      ? 'bg-white text-notion-text shadow-sm'
+                      : 'text-notion-text-tertiary hover:text-notion-text-secondary'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => handleLangToggle('zh')}
+                  className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    lang === 'zh'
+                      ? 'bg-white text-notion-text shadow-sm'
+                      : 'text-notion-text-tertiary hover:text-notion-text-secondary'
+                  }`}
+                >
+                  {translating && <Loader2 size={10} className="animate-spin" />}
+                  中文
+                </button>
+              </div>
+            )}
             {isStreaming && (
               <button
                 onClick={handleStop}
@@ -522,8 +646,19 @@ export function ComparePage() {
                         <span>Writing analysis…</span>
                       </div>
                     )}
+                    {lang === 'zh' && translating && !translatedText && (
+                      <div className="mb-4 flex items-center gap-2 text-xs text-notion-accent">
+                        <Loader2 size={12} className="animate-spin" />
+                        <span>Translating to Chinese…</span>
+                      </div>
+                    )}
+                    {translationError && lang === 'zh' && (
+                      <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {translationError}
+                      </div>
+                    )}
                     <MarkdownContent
-                      content={partialText}
+                      content={lang === 'zh' && translatedText ? translatedText : partialText}
                       className="comparison-article"
                       proseClassName="max-w-none break-words"
                     />
