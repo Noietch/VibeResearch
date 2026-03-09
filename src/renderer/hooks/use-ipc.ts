@@ -369,8 +369,6 @@ export interface SemanticSearchSettings {
 
 export interface BuiltinModelStatus {
   ready: boolean;
-  downloading?: boolean;
-  downloadProgress?: number;
   error?: string;
 }
 

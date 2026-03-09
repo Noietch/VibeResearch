@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-09 (session 43)
+
+### feat: Bundle embedding model for offline-first semantic search
+
+- **Scope**: `models/`, `scripts/download-model.sh`, `electron-builder.yml`, `src/main/services/builtin-embedding-provider.ts`, `src/main/services/embedding-provider.ts`, `src/renderer/pages/settings/page.tsx`, `src/renderer/hooks/use-ipc.ts`
+- **Problem**: Built-in embedding provider downloaded ~86MB ONNX model from Hugging Face on first use, requiring network access.
+- **Solution**: Pre-bundle `Xenova/all-MiniLM-L6-v2` model files (config.json, tokenizer_config.json, tokenizer.json, onnx/model.onnx) directly in the repository under `models/`. Provider now uses `env.localModelPath` + `env.allowRemoteModels = false` for true offline operation. Removed download progress UI from Settings. Added `extraResources` config in electron-builder to include models in packaged app. Added `scripts/download-model.sh` for CI/fresh clone recovery.
+- **Validation**: All tests pass (model loads from bundled files without network).
+
 ## 2026-03-09 (session 42)
 
 ### feat: Add Literature Graph with citation extraction and visualization

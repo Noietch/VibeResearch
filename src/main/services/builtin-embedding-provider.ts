@@ -1,0 +1,102 @@
+import path from 'path';
+import { app } from 'electron';
+import type {
+  EmbeddingProvider,
+  EmbeddingProviderInfo,
+  EmbeddingProviderStatus,
+} from './embedding-provider';
+
+const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
+const DIMENSIONS = 384;
+const BATCH_SIZE = 32;
+
+type FeatureExtractionPipeline = (
+  texts: string[],
+  options?: { pooling?: string; normalize?: boolean },
+) => Promise<{ tolist: () => number[][] }>;
+
+function getBundledModelPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'models');
+  }
+  // Development mode: models/ at project root
+  return path.join(app.getAppPath(), 'models');
+}
+
+export class BuiltinEmbeddingProvider implements EmbeddingProvider {
+  readonly info: EmbeddingProviderInfo = {
+    id: 'builtin',
+    name: 'Built-in (all-MiniLM-L6-v2)',
+    modelName: 'all-MiniLM-L6-v2',
+    dimensions: DIMENSIONS,
+  };
+
+  private pipeline: FeatureExtractionPipeline | null = null;
+  private initPromise: Promise<void> | null = null;
+  private status: EmbeddingProviderStatus = { ready: false };
+
+  async initialize(): Promise<void> {
+    if (this.pipeline) return;
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this._doInit();
+    return this.initPromise;
+  }
+
+  private async _doInit(): Promise<void> {
+    try {
+      this.status = { ready: false };
+
+      const { pipeline, env } = await import('@huggingface/transformers');
+
+      // Use bundled model files — no network download needed
+      env.localModelPath = getBundledModelPath();
+      env.allowRemoteModels = false;
+      env.allowLocalModels = true;
+
+      this.pipeline = (await pipeline('feature-extraction', MODEL_ID, {
+        dtype: 'fp32',
+      })) as unknown as FeatureExtractionPipeline;
+
+      this.status = { ready: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.status = { ready: false, error: message };
+      this.initPromise = null;
+      throw error;
+    }
+  }
+
+  getStatus(): EmbeddingProviderStatus {
+    return { ...this.status };
+  }
+
+  async embedTexts(texts: string[]): Promise<number[][]> {
+    if (!this.pipeline) {
+      await this.initialize();
+    }
+    if (!this.pipeline) {
+      throw new Error('Built-in embedding pipeline failed to initialize');
+    }
+
+    const allEmbeddings: number[][] = [];
+
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const batch = texts.slice(i, i + BATCH_SIZE);
+      const output = await this.pipeline(batch, {
+        pooling: 'mean',
+        normalize: true,
+      });
+      const vectors = output.tolist();
+      allEmbeddings.push(...vectors);
+    }
+
+    return allEmbeddings;
+  }
+
+  dispose(): void {
+    this.pipeline = null;
+    this.initPromise = null;
+    this.status = { ready: false };
+  }
+}

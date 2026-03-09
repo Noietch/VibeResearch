@@ -37,6 +37,10 @@ extraResources:
     to: 'prisma-backup'
     filter:
       - '**/*'
+  - from: 'models'
+    to: 'models'
+    filter:
+      - '**/*'
 
 # Unpack native .node binaries from asar so they can be dlopen'd at runtime
 asarUnpack:

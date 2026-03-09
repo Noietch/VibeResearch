@@ -19,6 +19,7 @@ import {
   type SemanticEmbeddingTestResult,
   type SemanticDebugResult,
   type SemanticModelPullJob,
+  type BuiltinModelStatus,
 } from '../../hooks/use-ipc';
 import {
   Settings,
@@ -2753,6 +2754,7 @@ function SemanticSettingsPanel() {
     autoStartOllama: true,
     baseUrl: 'http://127.0.0.1:11434',
     embeddingModel: 'nomic-embed-text',
+    embeddingProvider: 'builtin',
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -2763,6 +2765,8 @@ function SemanticSettingsPanel() {
   const [debugResult, setDebugResult] = useState<SemanticDebugResult | null>(null);
   const [debugError, setDebugError] = useState<string | null>(null);
   const [pullJobs, setPullJobs] = useState<SemanticModelPullJob[]>([]);
+  const [builtinStatus, setBuiltinStatus] = useState<BuiltinModelStatus>({ ready: false });
+  const [providerSwitchWarning, setProviderSwitchWarning] = useState(false);
   const activePullJob = useMemo(() => {
     const sorted = [...pullJobs].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
     return (
@@ -2818,6 +2822,12 @@ function SemanticSettingsPanel() {
         void runSemanticDebug();
       }
     });
+    void ipc
+      .getBuiltinModelStatus()
+      .then((status) => {
+        if (!cancelled) setBuiltinStatus(status);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
       off();
@@ -2900,6 +2910,13 @@ function SemanticSettingsPanel() {
     ? 'No fresh progress update for a while — Ollama may still be verifying, unpacking, or writing model layers.'
     : null;
 
+  const handleProviderChange = (provider: 'builtin' | 'ollama') => {
+    if (provider !== settings.embeddingProvider) {
+      setProviderSwitchWarning(true);
+      setSettings((prev) => ({ ...prev, embeddingProvider: provider }));
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-notion-border bg-white p-5">
@@ -2907,8 +2924,8 @@ function SemanticSettingsPanel() {
           <div>
             <h3 className="text-base font-semibold text-notion-text">Local Semantic Search</h3>
             <p className="mt-1 text-sm text-notion-text-secondary">
-              Use a local Ollama server for embedding-based search. Paper metadata extraction now
-              uses your configured lightweight model.
+              Embedding-based search for your papers. Paper metadata extraction uses your configured
+              lightweight model.
             </p>
           </div>
           <button
@@ -2925,27 +2942,102 @@ function SemanticSettingsPanel() {
         <div
           className={`grid gap-4 transition-opacity ${settings.enabled ? 'opacity-100' : 'opacity-50'}`}
         >
+          {/* Provider selector */}
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-              Ollama Base URL
+            <label className="mb-2 block text-xs font-medium text-notion-text-secondary">
+              Embedding Provider
             </label>
-            <input
-              value={settings.baseUrl}
-              onChange={(e) => setSettings((prev) => ({ ...prev, baseUrl: e.target.value }))}
-              className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleProviderChange('builtin')}
+                className={`rounded-xl border px-4 py-3 text-left transition-colors ${settings.embeddingProvider === 'builtin' ? 'border-violet-300 bg-violet-50' : 'border-notion-border bg-white hover:bg-notion-sidebar'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Cpu size={14} className="text-violet-500" />
+                  <p className="text-sm font-medium text-notion-text">Built-in (Recommended)</p>
+                </div>
+                <p className="mt-1 text-xs text-notion-text-secondary">
+                  Zero-config local embedding, bundled all-MiniLM-L6-v2
+                </p>
+                {settings.embeddingProvider === 'builtin' && builtinStatus.ready && (
+                  <p className="mt-1 text-[11px] text-green-600">Model ready</p>
+                )}
+                {settings.embeddingProvider === 'builtin' && builtinStatus.error && (
+                  <p className="mt-1 text-[11px] text-red-600">{builtinStatus.error}</p>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleProviderChange('ollama')}
+                className={`rounded-xl border px-4 py-3 text-left transition-colors ${settings.embeddingProvider === 'ollama' ? 'border-violet-300 bg-violet-50' : 'border-notion-border bg-white hover:bg-notion-sidebar'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Globe size={14} className="text-notion-text-secondary" />
+                  <p className="text-sm font-medium text-notion-text">Ollama (Advanced)</p>
+                </div>
+                <p className="mt-1 text-xs text-notion-text-secondary">
+                  Use a local Ollama server for custom embedding models
+                </p>
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-              Embedding Model
-            </label>
-            <input
-              value={settings.embeddingModel}
-              onChange={(e) => setSettings((prev) => ({ ...prev, embeddingModel: e.target.value }))}
-              className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-            />
-          </div>
+          {providerSwitchWarning && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Switching provider will rebuild the semantic index. All papers will be re-processed.
+            </div>
+          )}
+
+          {/* Ollama-specific settings */}
+          {settings.embeddingProvider === 'ollama' && (
+            <>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                  Ollama Base URL
+                </label>
+                <input
+                  value={settings.baseUrl}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, baseUrl: e.target.value }))}
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
+                  Embedding Model
+                </label>
+                <input
+                  value={settings.embeddingModel}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, embeddingModel: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 font-mono text-sm text-notion-text outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings((prev) => ({ ...prev, autoStartOllama: !prev.autoStartOllama }))
+                }
+                className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${settings.autoStartOllama ? 'border-violet-200 bg-violet-50' : 'border-notion-border bg-white'}`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-notion-text">Auto-start Ollama</p>
+                  <p className="mt-1 text-xs text-notion-text-secondary">
+                    When the semantic server is local and offline, Vibe Research tries to start
+                    `ollama serve` for you.
+                  </p>
+                </div>
+                <div
+                  className={`flex h-5 w-5 items-center justify-center rounded-full ${settings.autoStartOllama ? 'bg-violet-500 text-white' : 'bg-notion-sidebar text-notion-text-tertiary'}`}
+                >
+                  {settings.autoStartOllama ? <Check size={12} strokeWidth={3} /> : <X size={12} />}
+                </div>
+              </button>
+            </>
+          )}
 
           <button
             type="button"
@@ -2963,27 +3055,6 @@ function SemanticSettingsPanel() {
               className={`flex h-5 w-5 items-center justify-center rounded-full ${settings.autoProcess ? 'bg-violet-500 text-white' : 'bg-notion-sidebar text-notion-text-tertiary'}`}
             >
               {settings.autoProcess ? <Check size={12} strokeWidth={3} /> : <X size={12} />}
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              setSettings((prev) => ({ ...prev, autoStartOllama: !prev.autoStartOllama }))
-            }
-            className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${settings.autoStartOllama ? 'border-violet-200 bg-violet-50' : 'border-notion-border bg-white'}`}
-          >
-            <div>
-              <p className="text-sm font-medium text-notion-text">Auto-start Ollama</p>
-              <p className="mt-1 text-xs text-notion-text-secondary">
-                When the semantic server is local and offline, Vibe Research tries to start `ollama
-                serve` for you.
-              </p>
-            </div>
-            <div
-              className={`flex h-5 w-5 items-center justify-center rounded-full ${settings.autoStartOllama ? 'bg-violet-500 text-white' : 'bg-notion-sidebar text-notion-text-tertiary'}`}
-            >
-              {settings.autoStartOllama ? <Check size={12} strokeWidth={3} /> : <X size={12} />}
             </div>
           </button>
         </div>
@@ -3013,7 +3084,8 @@ function SemanticSettingsPanel() {
 
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-notion-text-tertiary">
-              Semantic search falls back to normal search when Ollama or the index is unavailable.
+              Semantic search falls back to normal search when the embedding provider or index is
+              unavailable.
             </p>
             <div className="flex items-center gap-2">
               <button
