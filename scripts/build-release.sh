@@ -3,7 +3,7 @@ set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "==> Building Vibe Research (Mac release)"
+echo "==> Building ResearchClaw (Mac release)"
 
 echo "==> Step 1: Build JS bundles"
 cd "$ROOT_DIR"

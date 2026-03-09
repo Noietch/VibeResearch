@@ -96,6 +96,7 @@ export class AgentTodoRepository {
       include: {
         agent: true,
         runs: { orderBy: { createdAt: 'desc' }, take: 1 },
+        _count: { select: { results: true } },
       },
     });
   }
@@ -117,7 +118,7 @@ export class AgentTodoRepository {
   async updateTodo(
     id: string,
     data: Partial<
-      Omit<CreateAgentTodoInput, 'agentId'> & {
+      CreateAgentTodoInput & {
         sessionId?: string;
         lastRunId?: string;
         lastRunAt?: Date;

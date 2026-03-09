@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $ROOT_DIR = Split-Path -Parent $PSScriptRoot
 
-Write-Host "==> Building Vibe Research (Windows release)"
+Write-Host "==> Building ResearchClaw (Windows release)"
 
 # Step 1: Build JS bundles
 Write-Host "==> Step 1: Build JS bundles"

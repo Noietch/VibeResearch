@@ -1,12 +1,12 @@
 # 使用指南
 
-本指南介绍如何使用 Vibe Research — 一个 AI 驱动的科研管理桌面应用。
+本指南介绍如何使用 ResearchClaw — 一个 AI 驱动的科研管理桌面应用。
 
 ---
 
 ## 概述
 
-Vibe Research 围绕四个核心工作流组织：
+ResearchClaw 围绕四个核心工作流组织：
 
 | 工作流   | 位置               | 功能                              |
 | :------- | :----------------- | :-------------------------------- |
@@ -154,5 +154,5 @@ AI 会分析你的论文库并产出：
 
 ## 支持
 
-- **问题反馈**: [GitHub Issues](https://github.com/Noietch/VibeResearch/issues)
-- **讨论交流**: [GitHub Discussions](https://github.com/Noietch/VibeResearch/discussions)
+- **问题反馈**: [GitHub Issues](https://github.com/Noietch/ResearchClaw/issues)
+- **讨论交流**: [GitHub Discussions](https://github.com/Noietch/ResearchClaw/discussions)

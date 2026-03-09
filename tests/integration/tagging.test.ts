@@ -429,13 +429,13 @@ describe('tagging service integration', () => {
 // AI-powered tagging tests (require API key)
 describe('tagging service AI tests', () => {
   beforeAll(() => {
-    process.env.VIBE_RESEARCH_STORAGE_DIR = testStorageDir;
+    process.env.RESEARCH_CLAW_STORAGE_DIR = testStorageDir;
     setupTestStorage();
   });
 
   afterAllFn(() => {
     cleanupTestStorage();
-    delete process.env.VIBE_RESEARCH_STORAGE_DIR;
+    delete process.env.RESEARCH_CLAW_STORAGE_DIR;
   });
 
   beforeEach(async () => {

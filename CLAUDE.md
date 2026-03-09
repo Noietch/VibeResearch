@@ -4,7 +4,7 @@ This file defines default engineering constraints for all changes in this reposi
 
 ## Project Overview
 
-**Vibe Research** is a standalone Electron desktop app for researchers. It is NOT a Claude Code plugin.
+**ResearchClaw** is a standalone Electron desktop app for researchers. It is NOT a Claude Code plugin.
 
 ```
 src/
@@ -25,7 +25,7 @@ scripts/      # build-main.mjs, build-release.sh
 
 ## Scope and Priority
 
-- Scope: Entire repository (`vibe-research`).
+- Scope: Entire repository (`researchclaw`).
 - Priority: These rules are the default for every implementation unless the user gives explicit one-off overrides in a task.
 
 ## Mandatory standards
@@ -49,7 +49,7 @@ scripts/      # build-main.mjs, build-release.sh
 4. **Database schema changes require migration**
    - When adding new features that modify `prisma/schema.prisma`, always run `npx prisma db push` to sync the database.
    - Remind user to run migration if schema changes are detected.
-   - **Note**: Database path is `{VIBE_RESEARCH_STORAGE_DIR}/vibe-research.db` (defaults to `~/.vibe-research/vibe-research.db`). Update `.env` DATABASE_URL accordingly before running CLI commands.
+   - **Note**: Database path is `{RESEARCH_CLAW_STORAGE_DIR}/researchclaw.db` (defaults to `~/.researchclaw/researchclaw.db`). Update `.env` DATABASE_URL accordingly before running CLI commands.
 
 5. **Commit working code immediately**
    - When a feature is functionally complete and passes type checks, commit it right away.
@@ -62,8 +62,8 @@ scripts/      # build-main.mjs, build-release.sh
    - Do not stage or push files you did not touch, even if they appear in `git status`.
 
 7. **README must be updated in both Chinese and English**
-   - `README.md` contains both English and Chinese sections.
-   - When updating README, always update both language sections to keep them synchronized.
+   - `README.md` (English) and `README_CN.md` (Chinese) are separate files.
+   - When updating README, always update both files to keep them synchronized.
 
 8. **Branch and PR workflow**
    - **Main branch (`main`) is protected and must only be updated via Pull Requests.**

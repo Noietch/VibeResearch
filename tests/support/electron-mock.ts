@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
   },
   app: {
     getPath: vi.fn((name: string) => {
-      if (name === 'userData') return '/tmp/vibe-research-test';
+      if (name === 'userData') return '/tmp/researchclaw-test';
       return '/tmp';
     }),
     getVersion: vi.fn(() => '0.0.1-test'),

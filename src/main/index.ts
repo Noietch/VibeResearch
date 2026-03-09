@@ -14,6 +14,9 @@ import { startAgentLocalService, stopAgentLocalService } from './services/agent-
 import { setupTokenUsageIpc } from './ipc/token-usage.ipc';
 import { setupTaggingIpc } from './ipc/tagging.ipc';
 import { setupAgentTodoIpc, getAgentTodoService } from './ipc/agent-todo.ipc';
+import { setupSshIpc } from './ipc/ssh.ipc';
+import { setupTaskResultsIpc } from './ipc/task-results.ipc';
+import { setupExperimentReportIpc } from './ipc/experiment-report.ipc';
 import { stopAllRunners } from './services/agent-runner-registry';
 import { setupCollectionsIpc, ensureDefaultCollections } from './ipc/collections.ipc';
 import { setupCitationsIpc } from './ipc/citations.ipc';
@@ -44,7 +47,7 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('[main] Unhandled rejection at:', promise, 'reason:', reason);
 });
 
-// Set DATABASE_URL before any DB imports (use ~/.vibe-research/)
+// Set DATABASE_URL before any DB imports (use ~/.researchclaw/)
 ensureStorageDir();
 const dbPath = getDbPath();
 process.env.DATABASE_URL = `file:${dbPath}`;
@@ -277,7 +280,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'Vibe Research',
+    title: 'ResearchClaw',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 13, y: 16 },
     backgroundColor: '#ffffff',
@@ -342,7 +345,7 @@ function setupWindowControls(win: BrowserWindow) {
 function setupFileIpc() {
   // Read local file and return as base64
   ipcMain.handle('file:read', async (_event, filePath: string) => {
-    // Security: only allow files within user's vibe-research directory
+    // Security: only allow files within user's researchclaw directory
     const allowedBase = path.dirname(dbPath);
     const resolvedPath = path.resolve(filePath);
 
@@ -410,6 +413,9 @@ app.whenReady().then(async () => {
   setupTokenUsageIpc();
   setupTaggingIpc();
   setupAgentTodoIpc();
+  setupSshIpc();
+  setupTaskResultsIpc();
+  setupExperimentReportIpc();
   getAgentTodoService()
     .initialize()
     .catch((err) => console.error('[AgentTodo] Failed to initialize scheduler:', err));

@@ -1,12 +1,12 @@
 # Usage Guide
 
-This guide explains how to use Vibe Research — a standalone desktop app for AI-powered research management.
+This guide explains how to use ResearchClaw — a standalone desktop app for AI-powered research management.
 
 ---
 
 ## Overview
 
-Vibe Research is organized around four core workflows:
+ResearchClaw is organized around four core workflows:
 
 | Workflow     | Where              | What it does                                  |
 | :----------- | :----------------- | :-------------------------------------------- |
@@ -154,5 +154,5 @@ The app auto-detects installed tools and shows their version. Use the terminal p
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/Noietch/VibeResearch/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Noietch/VibeResearch/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Noietch/ResearchClaw/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Noietch/ResearchClaw/discussions)

@@ -68,13 +68,13 @@ function cleanupTestStorage() {
 describe('ai-provider service with model kind', () => {
   beforeAll(() => {
     // Set env var BEFORE any module that depends on it is imported
-    process.env.VIBE_RESEARCH_STORAGE_DIR = testStorageDir;
+    process.env.RESEARCH_CLAW_STORAGE_DIR = testStorageDir;
     setupTestStorage();
   });
 
   afterAll(() => {
     cleanupTestStorage();
-    delete process.env.VIBE_RESEARCH_STORAGE_DIR;
+    delete process.env.RESEARCH_CLAW_STORAGE_DIR;
   });
 
   describe('getLanguageModelFromConfig', () => {

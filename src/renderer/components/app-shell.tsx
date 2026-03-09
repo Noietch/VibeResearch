@@ -53,7 +53,7 @@ const workspaceNavItems = [
   { to: '/agent-todos', label: 'Tasks', icon: Bot },
 ];
 
-const SIDEBAR_COLLAPSED_KEY = 'vibe-research-sidebar-collapsed';
+const SIDEBAR_COLLAPSED_KEY = 'researchclaw-sidebar-collapsed';
 const LIBRARY_EXPANDED_KEY = 'vibe-research-library-expanded';
 
 // ── Collection tree helpers ──────────────────────────────────────────────

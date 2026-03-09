@@ -482,13 +482,13 @@ describe('end-to-end workflow tests', () => {
 // AI-powered end-to-end tests (require API key)
 describe('end-to-end AI workflow tests', () => {
   beforeAll(() => {
-    process.env.VIBE_RESEARCH_STORAGE_DIR = testStorageDir;
+    process.env.RESEARCH_CLAW_STORAGE_DIR = testStorageDir;
     setupTestStorage();
   });
 
   afterAll(() => {
     cleanupTestStorage();
-    delete process.env.VIBE_RESEARCH_STORAGE_DIR;
+    delete process.env.RESEARCH_CLAW_STORAGE_DIR;
   });
 
   beforeEach(async () => {

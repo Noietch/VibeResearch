@@ -328,7 +328,197 @@
 
 **Validation**: 7/7 new tests pass, 13/13 existing tests pass, build succeeds, no new type errors
 
+## 2026-03-09
+
+### refactor: Rename project from Vibe Research to ResearchClaw
+
+**Scope**: Project-wide — config files, docs, storage paths, tests
+
+**Changes**:
+
+- **Core config**: `package.json` (name, description), `electron-builder.yml` (appId, productName, copyright)
+- **Storage paths**: `src/main/store/storage-path.ts` — env var `VIBE_RESEARCH_STORAGE_DIR` → `RESEARCH_CLAW_STORAGE_DIR`, db file `vibe-research.db` → `researchclaw.db`, directory `~/.vibe-research` → `~/.researchclaw`
+- **UI**: `src/renderer/index.html` (title), `src/main/index.ts` (window title), `src/renderer/components/app-shell.tsx` (sidebar collapsed key)
+- **Docs**: `README.md`, `LICENSE`, `docs/usage-en.md`, `docs/usage-zh.md`, `CLAUDE.md`
+- **Build scripts**: `scripts/build-release.sh`, `scripts/build-release-win.sh`, `scripts/build-release-linux.sh`, `scripts/build-release-win.ps1`
+- **Tests**: `tests/support/electron-mock.ts`, `tests/integration/*.test.ts` (env var rename)
+- **Other**: `.env.example`, `scripts/strip-arxiv-prefix.mjs`
+
+**Naming Convention**:
+| Type | Old | New |
+|------|-----|-----|
+| Product | Vibe Research | ResearchClaw |
+| Package | vibe-research | researchclaw |
+| Directory | ~/.vibe-research | ~/.researchclaw |
+| Env var | VIBE*RESEARCH*_ | RESEARCH*CLAW*_ |
+| App ID | com.vibe-research.app | com.researchclaw.app |
+
+### feat: SSH Config auto-scan
+
+**Scope**: `src/shared/types/ssh.ts`, `src/main/ipc/ssh.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/components/settings/SshServerSettings.tsx`
+
+**Changes**:
+
+- Added `SshConfigEntry` type to shared types.
+- Added `ssh:scan-config` IPC handler that parses `~/.ssh/config` (Host, HostName, Port, User, IdentityFile directives; wildcard patterns skipped).
+- Added `scanSshConfig()` IPC client method in renderer.
+- Added "Scan SSH Config" button to SSH Servers settings page — opens a modal listing all parsed hosts with checkboxes, allowing batch import into the server list.
+- Imported entries auto-detect auth method (privateKey if IdentityFile present, password otherwise).
+
+### fix: Filter codex-acp noisy stderr warnings
+
+**Scope**: `src/main/services/agent-task-runner.ts`
+
+**Changes**: Suppress `No onPostToolUseHook found for tool use ID:` messages emitted by the `@zed-industries/codex-acp` bridge to stderr. These are harmless internal warnings that polluted the "Agent output" panel in the UI.
+
+### feat: Research workflow — Task Results + Report Generation
+
+**Scope**: Full stack — `prisma/schema.prisma`, `src/db/repositories/`, `src/main/services/`, `src/main/ipc/`, `src/shared/types/`, `src/renderer/components/project/`
+
+**Changes**:
+
+- **Data Models**: Added `TaskResult` and `ExperimentReport` models to Prisma schema.
+  - `TaskResult`: Tracks output files from agent tasks (data, figures, logs, documents).
+  - `ExperimentReport`: AI-generated reports with streaming content.
+- **Repositories**: `task-results.repository.ts` and `experiment-report.repository.ts` for database operations.
+- **Services**:
+  - `task-results.service.ts`: Scan task output directories, register files, manage results.
+  - `experiment-report.service.ts`: Streaming report generation using Vercel AI SDK with project context and task results.
+- **IPC Handlers**: `task-results.ipc.ts` and `experiment-report.ipc.ts` with streaming events (`report:generate:chunk`, `report:generate:done`, `report:generate:error`).
+- **UI Components**:
+  - `ReportsTab.tsx`: List reports with Markdown preview, generate new reports.
+  - `ReportGeneratorModal.tsx`: Task/result selection modal with real-time streaming preview.
+- **TodoCard**: Shows results count badge for each task.
+- **Project Page**: Added "Reports" tab to project detail view.
+
+**Design**: Research workflow: Idea → Task → Results → Report. Results are task attributes (displayed on TodoCard), scanned from task output directories or manually added. Reports are AI-generated summaries with streaming preview.
+
+### feat: SSH Remote Agent Execution
+
+**Scope**: Full stack — `src/main/store/ssh-server-store.ts`, `src/main/services/ssh-connection.service.ts`, `src/main/agent/acp-connection.ts`, `src/main/services/agent-task-runner.ts`, `src/main/services/agent-todo.service.ts`, `src/main/ipc/ssh.ipc.ts`, `prisma/schema.prisma`, UI components
+
+**Changes**:
+
+- **SSH Server Management**: New `ssh-server-store.ts` stores SSH server configs in `~/.vibe-research/ssh-servers.json` with encrypted passwords via `safeStorage`.
+- **SSH Connection Service**: `ssh-connection.service.ts` wraps `ssh2` for remote process spawning, SFTP directory browsing, and remote agent detection.
+- **ACP over SSH**: Modified `acp-connection.ts` to support spawning agents on remote servers via SSH. The stdin/stdout pipes are transparently forwarded through SSH channels.
+- **Project-level SSH**: Added `sshServerId` and `remoteWorkdir` fields to Project model. Projects can optionally associate with an SSH server.
+- **Task Execution**: `agent-task-runner.ts` now supports `sshConfig` parameter. When provided, agents spawn on remote servers instead of locally.
+- **Settings UI**: New SSH tab in Settings for managing SSH servers (add/edit/delete, test connection, detect remote agents).
+- **Project UI**: `SshServerSelector` component for choosing SSH server, `RemoteCwdPicker` for browsing remote directories via SFTP.
+- **TodoForm**: Shows remote indicator badge when project has SSH configured, uses remote workdir as default.
+
+**Design**: Dual-mode execution — local (default, unchanged) vs remote (optional). When a project is associated with an SSH server, its tasks automatically run on the remote server.
+
+### fix: Chrome history scan "Today" filter now uses local midnight instead of 24h ago
+
+**Scope**: `src/main/services/ingest.service.ts`, `src/renderer/components/import-modal.tsx`
+
+**Changes**:
+
+- Added `daysToSince(days)` helper that computes start of day at local midnight: `days=1` → today 00:00, `days=7` → 6 days ago 00:00 (inclusive 7-day window).
+- Replaced `new Date(); since.setDate(since.getDate() - days)` with `daysToSince(days)` in both `scanChromeHistory` and `importChromeHistoryAuto`.
+- Renamed UI label `'Last 1 day'` → `'Today'` to accurately reflect the new behavior.
+- Root cause: previous code used rolling 24h window, so at 00:30 CST scanning "last 1 day" would include all of yesterday. Now it always starts at local midnight.
+
+### fix: Display arXiv submittedAt dates in UTC to prevent timezone shift
+
+**Scope**: `src/renderer/components/dashboard-content.tsx`, `src/renderer/components/search-content.tsx`, `src/renderer/components/papers-by-tag.tsx`, `src/renderer/pages/papers/overview/page.tsx`, `src/renderer/pages/papers/reader/page.tsx`
+
+**Changes**:
+
+- Added `timeZone: 'UTC'` to all `toLocaleDateString()` calls that display `paper.submittedAt`.
+- Changed `getFullYear()` → `getUTCFullYear()` in `papers-by-tag.tsx` for year filter and display.
+- Root cause: arXiv submission dates are stored as UTC timestamps. Without `timeZone: 'UTC'`, UTC+8 users see dates shifted by 8 hours — e.g., a paper submitted UTC 2025-03-08 00:30 would display as 2025-03-08 locally, but a paper submitted UTC 2025-03-07 20:00 would incorrectly display as 2025-03-08 instead of 2025-03-07.
+
+## 2026-03-09
+
+### test: Add agent ACP connectivity test script
+
+**Scope**: `scripts/test-agents.mjs`
+
+**Changes**:
+
+- Added `scripts/test-agents.mjs` — tests ACP connectivity for all configured agents using real DB credentials.
+- Tests 花叶 (claude-agent-acp@0.18.0 + custom Anthropic endpoint), WK (codex-acp + codex-wk config), OpenCode (opencode acp HTTP server).
+- All 3 agents: **PASS** — initialize + session/new confirmed working.
+- OpenCode note: `opencode acp` uses HTTP/WebSocket transport (not stdio), so only server startup is verified.
+
+### refactor: Replace hand-rolled ACP JSON-RPC with @agentclientprotocol/sdk
+
+**Scope**: `src/main/agent/acp-connection.ts`, `src/main/agent/acp-types.ts`, `src/main/agent/acp-adapter.ts`, `src/main/agent/agent-detector.ts`, `src/main/services/agent-task-runner.ts`
+
+**Changes**:
+
+- Installed `@agentclientprotocol/sdk` as a dependency.
+- `acp-connection.ts`: Replaced 277-line manual JSON-RPC implementation with `ClientSideConnection` + `ndJsonStream` from the SDK. Handles `sessionUpdate`, `requestPermission`, `readTextFile`, `writeTextFile` via the SDK's `Client` interface.
+- `acp-types.ts`: Removed hand-written `AcpSessionUpdate` / `AcpPermissionRequest` types; now re-exports `SessionNotification`, `SessionUpdate`, `RequestPermissionRequest`, `RequestPermissionResponse` from the SDK.
+- `acp-adapter.ts`: Updated `transformAcpUpdate()` to accept `SessionUpdate` (SDK type) with proper discriminant narrowing.
+- `agent-detector.ts`: Added `claude-agent-acp` bridge detection (local build at `~/Workspace/claude-agent-acp/dist/index.js` or global `claude-agent-acp` binary). Removed `claude --experimental-acp` which was removed in Claude Code 2.x.
+- `agent-task-runner.ts`: Updated to use `SessionUpdate` type; permission `requestId` changed from `number` to `string` (JSON-serializable, safe over IPC).
+- `agent-todo.service.ts`: Updated `confirmPermission(requestId)` from `number` → `string`.
+
+**Root cause fixed**: The original `acp-connection.ts` spawned `claude --experimental-acp` which was removed in Claude Code 2.x, causing `-32000 Authentication required` errors. The correct approach is to spawn the `claude-agent-acp` bridge (which uses `@anthropic-ai/claude-agent-sdk` internally) and communicate via the standard ACP protocol.
+
+## 2026-03-09
+
+### fix: Add missing stop/cancel buttons in import and chat flows
+
+**Scope**: `src/renderer/components/import-modal.tsx`, `src/renderer/components/ideas/IdeaChatModal.tsx`
+
+**Changes**:
+
+- `import-modal.tsx`: Added Cancel button during `scanning` stage (Chrome History tab) — previously there was no way to abort a scan in progress.
+- `import-modal.tsx`: Hid the "Cancel Import" button when `tab === 'local'` during `importing` stage — the button was shown but called `cancelImport()` which has no effect on local PDF / arXiv download operations.
+- `IdeaChatModal.tsx`: Added a red Stop button (square icon) in the chat input when streaming — replaces the disabled send button and calls `ipc.killIdeaChat(sessionId)` to abort the in-flight model stream. Also removed `disabled` on the textarea during streaming so users can pre-type the next message.
+
+### fix: Allow updating agent assignment in task edit form
+
+**Scope**: `src/db/repositories/agent-todo.repository.ts`
+
+**Changes**:
+
+- Removed `Omit<..., 'agentId'>` from `updateTodo` method's type parameter.
+- Previously, the `agentId` field was excluded from the update data type, preventing Prisma from updating the task's assigned agent.
+- Now when editing a task, users can change the agent assignment and the change will be persisted correctly.
+
+**Test design**: Create a task with agent A, edit it via the Edit button, select agent B, save, and verify the task's agent is updated.
+
 ## 2026-03-08
+
+### fix: Stop button correctly cancels running agent task
+
+**Scope**: `src/main/services/agent-task-runner.ts`
+
+**Changes**:
+
+- Fixed race condition where `start()` and `sendMessage()` catch blocks would overwrite the `cancelled` status with `failed` after `stop()` was called.
+- When the process is killed by `stop()`, `rejectAllPending` causes the awaited Promise to reject, triggering the catch block. The catch block now checks `this.status !== 'cancelled'` before setting `failed` and pushing an error event.
+- This prevents the UI `streamStatus` from flickering to `failed` after a stop, ensuring the stop button disappears and the status correctly shows `cancelled`.
+
+### feat: Add edit button to task cards and detail page
+
+**Scope**: `src/renderer/pages/agent-todos/page.tsx`, `src/renderer/pages/agent-todos/[id]/page.tsx`
+
+**Changes**:
+
+- Added `Settings2` edit icon to `TodoCard` component (visible on hover, alongside Run and Delete buttons).
+- Added "Edit" button to task detail page header, between status dot and Run/Stop button.
+- Both entry points open the existing `TodoForm` modal with pre-filled values for title, prompt, cwd, agent, priority, and YOLO mode.
+- Completes the CRUD flow for agent tasks: Create → Read → Update → Delete.
+
+**Test design**: Hover over a task card, click the settings icon, verify the edit form opens with correct values. Navigate to task detail page, click Edit button, verify same behavior.
+
+### fix: Modal dialogs no longer close when dragging text selection outside
+
+**Scope**: `src/renderer/components/agent-todo/TodoForm.tsx`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/download-modal.tsx`, `src/renderer/components/import-modal.tsx`
+
+**Changes**:
+
+- Removed `onClick` backdrop-close handlers from all modal overlays. Previously, clicking or dragging outside a modal would close it, causing accidental dismissal when selecting text in an input and moving the mouse outside the modal card.
+- Modals now only close via their explicit Cancel/X buttons or ESC key, consistent with the fix previously applied to the Settings page modals.
+
+**Affected modals**: TodoForm (Add/Edit Agent Task), Projects task form, Projects edit project modal, Download modal, Import modal.
 
 ### feat: Task detail conversation UI redesign (Codex-inspired)
 

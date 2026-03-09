@@ -31,8 +31,8 @@ interface AgentRow {
 async function getEnabledAgent(): Promise<AgentRow | null> {
   const { execSync } = await import('child_process');
   const storageDir =
-    process.env.VIBE_RESEARCH_STORAGE_DIR ?? path.join(os.homedir(), '.vibe-research');
-  const dbPath = path.join(storageDir, 'vibe-research.db');
+    process.env.RESEARCH_CLAW_STORAGE_DIR ?? path.join(os.homedir(), '.researchclaw');
+  const dbPath = path.join(storageDir, 'researchclaw.db');
 
   try {
     const sql = `SELECT id, name, cliPath, backend, acpArgs, extraEnv, enabled FROM AgentConfig WHERE enabled = 1 ORDER BY createdAt ASC LIMIT 1;`;

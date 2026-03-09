@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Play, Square, Settings2, Trash2, User, Folder, Clock } from 'lucide-react';
+import { Play, Square, Settings2, Trash2, User, Folder, Clock, FileBox } from 'lucide-react';
 import { ipc } from '../../hooks/use-ipc';
 import type { AgentTodoItem } from '@shared';
 import { StatusDot } from './StatusDot';
@@ -99,6 +99,14 @@ export function TodoCard({ todo, onRefresh, onEdit, from }: TodoCardProps) {
               <Clock size={10} className="text-notion-text-tertiary" />
               <span>{todo.lastRunAt ? formatRelative(todo.lastRunAt) : 'Never run'}</span>
             </span>
+
+            {/* Results count */}
+            {todo.resultsCount && todo.resultsCount > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <FileBox size={10} className="text-notion-accent" />
+                <span className="text-notion-accent">{todo.resultsCount} results</span>
+              </span>
+            )}
           </div>
         </div>
 

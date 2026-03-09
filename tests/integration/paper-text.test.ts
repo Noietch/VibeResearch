@@ -172,16 +172,16 @@ describe('paper text service integration', () => {
 
 // Integration with file system (requires storage directory)
 describe('paper text file operations', () => {
-  const testStorageDir = path.join(os.tmpdir(), 'vibe-research-text-test-' + Date.now());
+  const testStorageDir = path.join(os.tmpdir(), 'researchclaw-text-test-' + Date.now());
 
   beforeAll(() => {
     fs.mkdirSync(path.join(testStorageDir, 'papers'), { recursive: true });
-    process.env.VIBE_RESEARCH_STORAGE_DIR = testStorageDir;
+    process.env.RESEARCH_CLAW_STORAGE_DIR = testStorageDir;
   });
 
   afterAllFn(() => {
     fs.rmSync(testStorageDir, { recursive: true, force: true });
-    delete process.env.VIBE_RESEARCH_STORAGE_DIR;
+    delete process.env.RESEARCH_CLAW_STORAGE_DIR;
   });
 
   beforeEach(async () => {

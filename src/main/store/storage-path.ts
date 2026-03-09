@@ -8,7 +8,7 @@ import fs from 'fs';
  * anything else (DB path, etc.) is resolved.
  */
 export function getBootstrapConfigPath(): string {
-  return path.join(os.homedir(), '.vibe-research-config.json');
+  return path.join(os.homedir(), '.researchclaw-config.json');
 }
 
 interface BootstrapConfig {
@@ -33,24 +33,24 @@ function writeBootstrapConfig(config: BootstrapConfig): void {
 }
 
 /**
- * Platform-appropriate default data directory for Vibe Research:
- *   Windows : %APPDATA%\VibeResearch
- *   macOS   : ~/.vibe-research
- *   Linux   : $XDG_DATA_HOME/vibe-research  (default: ~/.local/share/vibe-research)
+ * Platform-appropriate default data directory for ResearchClaw:
+ *   Windows : %APPDATA%\ResearchClaw
+ *   macOS   : ~/.researchclaw
+ *   Linux   : $XDG_DATA_HOME/researchclaw  (default: ~/.local/share/researchclaw)
  */
 function getPlatformDefaultDir(): string {
   switch (process.platform) {
     case 'win32': {
       const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
-      return path.join(appData, 'VibeResearch');
+      return path.join(appData, 'ResearchClaw');
     }
     case 'linux': {
       const xdgData = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share');
-      return path.join(xdgData, 'vibe-research');
+      return path.join(xdgData, 'researchclaw');
     }
     default:
       // macOS — keep legacy path for backwards compatibility
-      return path.join(os.homedir(), '.vibe-research');
+      return path.join(os.homedir(), '.researchclaw');
   }
 }
 
@@ -59,8 +59,8 @@ function getPlatformDefaultDir(): string {
  * Priority: env var > bootstrap config > platform default
  */
 export function getConfiguredStorageDir(): string {
-  if (process.env.VIBE_RESEARCH_STORAGE_DIR) {
-    return process.env.VIBE_RESEARCH_STORAGE_DIR;
+  if (process.env.RESEARCH_CLAW_STORAGE_DIR) {
+    return process.env.RESEARCH_CLAW_STORAGE_DIR;
   }
   const config = readBootstrapConfig();
   if (config.storageDir) {
@@ -95,7 +95,7 @@ export function ensureStorageDir(): void {
 }
 
 export function getDbPath(): string {
-  return path.join(getBaseDir(), 'vibe-research.db');
+  return path.join(getBaseDir(), 'researchclaw.db');
 }
 
 export function getProviderConfigPath(): string {
@@ -108,6 +108,10 @@ export function getAppSettingsPath(): string {
 
 export function getCliToolsPath(): string {
   return path.join(getBaseDir(), 'cli-tools.json');
+}
+
+export function getSshServersPath(): string {
+  return path.join(getBaseDir(), 'ssh-servers.json');
 }
 
 export function getPapersBaseDir(): string {
@@ -129,7 +133,7 @@ export function migrateStorageDir(
     }
 
     const filesToCopy = [
-      'vibe-research.db',
+      'researchclaw.db',
       'app-settings.json',
       'provider-config.json',
       'cli-tools.json',

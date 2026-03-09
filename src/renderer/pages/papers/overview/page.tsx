@@ -1386,6 +1386,7 @@ export function OverviewPage() {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',
+                    timeZone: 'UTC',
                   })}
                 </span>
               </div>

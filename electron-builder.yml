@@ -1,6 +1,6 @@
-appId: com.vibe-research.app
-productName: Vibe Research
-copyright: Copyright © 2026 Vibe Research
+appId: com.researchclaw.app
+productName: ResearchClaw
+copyright: Copyright © 2026 ResearchClaw
 
 directories:
   output: release

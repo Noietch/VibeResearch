@@ -121,13 +121,13 @@ describe('reading service integration', () => {
 // AI Chat tests - require API key via environment variables
 describe('reading service AI chat', () => {
   beforeAll(() => {
-    process.env.VIBE_RESEARCH_STORAGE_DIR = testStorageDir;
+    process.env.RESEARCH_CLAW_STORAGE_DIR = testStorageDir;
     setupTestStorage();
   });
 
   afterAll(() => {
     cleanupTestStorage();
-    delete process.env.VIBE_RESEARCH_STORAGE_DIR;
+    delete process.env.RESEARCH_CLAW_STORAGE_DIR;
   });
 
   maybeIt(

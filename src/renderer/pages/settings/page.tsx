@@ -44,11 +44,13 @@ import {
   Pencil,
   X,
   Bot,
+  Server,
   Sparkles,
 } from 'lucide-react';
 import { ResponsiveLine } from '@nivo/line';
 import { ModelCombobox } from '../../components/model-combobox';
 import { AgentSettings } from '../../components/settings/AgentSettings';
+import { SshServerSettings } from '../../components/settings/SshServerSettings';
 
 // ─── Editor SVG Icons ─────────────────────────────────────────────────────────
 
@@ -111,7 +113,7 @@ const EDITOR_OPTIONS = [
   { id: 'custom', name: 'Custom', command: '', Icon: Code2 },
 ] as const;
 
-type Tab = 'models' | 'storage' | 'editor' | 'proxy' | 'agents';
+type Tab = 'models' | 'storage' | 'editor' | 'proxy' | 'agents' | 'ssh' | 'semantic';
 
 // ─── Provider selector ───────────────────────────────────────────────────────
 
@@ -3477,6 +3479,8 @@ export function SettingsPage() {
   const tabs: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
     { id: 'agents', label: 'Agents', icon: Bot },
     { id: 'models', label: 'Models', icon: Cpu },
+    { id: 'ssh', label: 'SSH Servers', icon: Server },
+    { id: 'semantic', label: 'Semantic', icon: Sparkles },
     { id: 'editor', label: 'Editor', icon: Code2 },
     { id: 'storage', label: 'Storage', icon: HardDrive },
     { id: 'proxy', label: 'Proxy', icon: Globe },
@@ -3537,6 +3541,7 @@ export function SettingsPage() {
         {activeTab === 'storage' && <StorageSettings />}
         {activeTab === 'proxy' && <ProxySettings />}
         {activeTab === 'agents' && <AgentSettings />}
+        {activeTab === 'ssh' && <SshServerSettings />}
       </div>
     </>
   );
