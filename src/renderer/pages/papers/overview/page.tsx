@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTabs } from '../../../hooks/use-tabs';
 import {
@@ -1142,16 +1142,18 @@ export function OverviewPage() {
 
   const toast = useToast();
   const [copyingBibtex, setCopyingBibtex] = useState(false);
+  const [bibtexContent, setBibtexContent] = useState<string | null>(null);
+  const [bibtexCopied, setBibtexCopied] = useState(false);
 
   const handleCopyBibtex = useCallback(async () => {
     if (!paper) return;
     setCopyingBibtex(true);
     try {
       const bibtex = await ipc.exportBibtex([paper.id]);
-      await navigator.clipboard.writeText(bibtex);
-      toast.success('BibTeX copied to clipboard');
+      setBibtexContent(bibtex);
+      setBibtexCopied(false);
     } catch {
-      toast.error('Failed to copy BibTeX');
+      toast.error('Failed to get BibTeX');
     } finally {
       setCopyingBibtex(false);
     }
@@ -1473,6 +1475,56 @@ export function OverviewPage() {
           </div>
         </div>
       </div>
+
+      {/* BibTeX Modal */}
+      <AnimatePresence>
+        {bibtexContent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+            onClick={() => setBibtexContent(null)}
+            onKeyDown={(e) => e.key === 'Escape' && setBibtexContent(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-notion-text">BibTeX</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(bibtexContent);
+                      setBibtexCopied(true);
+                      setTimeout(() => setBibtexCopied(false), 2000);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-notion-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-notion-accent/90"
+                  >
+                    {bibtexCopied ? <Check size={14} /> : <Copy size={14} />}
+                    {bibtexCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={() => setBibtexContent(null)}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-notion-sidebar-hover"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+              <pre className="max-h-96 overflow-auto rounded-lg bg-notion-sidebar p-4 text-xs text-notion-text font-mono whitespace-pre-wrap">
+                {bibtexContent}
+              </pre>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Clone Repo Modal */}
       {showCloneModal && (
