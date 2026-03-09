@@ -743,37 +743,30 @@ export function ComparePage() {
 
                 {/* Chat messages */}
                 {chatMessages.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {chatMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}
-                      >
-                        {msg.role === 'assistant' && (
-                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-notion-accent-light">
-                            <Bot size={14} className="text-notion-accent" />
+                      <div key={i}>
+                        {msg.role === 'user' ? (
+                          <div className="flex items-start gap-2.5">
+                            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-notion-sidebar">
+                              <User size={12} className="text-notion-text-tertiary" />
+                            </div>
+                            <div className="mt-0.5 rounded-lg bg-notion-sidebar px-4 py-2.5 text-sm text-notion-text">
+                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                            </div>
                           </div>
-                        )}
-                        <div
-                          className={`max-w-[80%] rounded-lg px-4 py-3 text-sm leading-relaxed ${
-                            msg.role === 'user'
-                              ? 'bg-notion-accent text-white'
-                              : 'border border-notion-border bg-white'
-                          }`}
-                        >
-                          {msg.role === 'assistant' ? (
-                            <MarkdownContent
-                              content={msg.content}
-                              className="chat-message"
-                              proseClassName="max-w-none text-sm"
-                            />
-                          ) : (
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
-                          )}
-                        </div>
-                        {msg.role === 'user' && (
-                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-notion-sidebar">
-                            <User size={14} className="text-notion-text-tertiary" />
+                        ) : (
+                          <div className="flex items-start gap-2.5">
+                            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-notion-accent-light">
+                              <Bot size={12} className="text-notion-accent" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <MarkdownContent
+                                content={msg.content}
+                                className="comparison-article"
+                                proseClassName="max-w-none break-words"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -783,17 +776,17 @@ export function ComparePage() {
 
                 {/* Streaming assistant response */}
                 {chatStreaming && chatStreamingText && (
-                  <div className="flex gap-3">
-                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-notion-accent-light">
-                      <Bot size={14} className="text-notion-accent" />
+                  <div className="flex items-start gap-2.5">
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-notion-accent-light">
+                      <Bot size={12} className="text-notion-accent" />
                     </div>
-                    <div className="max-w-[80%] rounded-lg border border-notion-accent/20 bg-white px-4 py-3 text-sm leading-relaxed">
+                    <div className="min-w-0 flex-1">
                       <MarkdownContent
                         content={chatStreamingText}
-                        className="chat-message"
-                        proseClassName="max-w-none text-sm"
+                        className="comparison-article"
+                        proseClassName="max-w-none break-words"
                       />
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-notion-accent">
+                      <div className="mt-2 flex items-center gap-1.5 text-xs text-notion-accent">
                         <Loader2 size={10} className="animate-spin" />
                         <span>Writing…</span>
                       </div>
@@ -803,12 +796,12 @@ export function ComparePage() {
 
                 {/* Streaming indicator when no text yet */}
                 {chatStreaming && !chatStreamingText && (
-                  <div className="flex gap-3">
-                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-notion-accent-light">
-                      <Bot size={14} className="text-notion-accent" />
+                  <div className="flex items-start gap-2.5">
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-notion-accent-light">
+                      <Bot size={12} className="text-notion-accent" />
                     </div>
-                    <div className="flex items-center gap-2 rounded-lg border border-notion-accent/20 bg-white px-4 py-3 text-sm text-notion-text-secondary">
-                      <Loader2 size={12} className="animate-spin text-notion-accent" />
+                    <div className="flex items-center gap-2 text-sm text-notion-text-secondary">
+                      <Loader2 size={14} className="animate-spin text-notion-accent" />
                       Thinking…
                     </div>
                   </div>
