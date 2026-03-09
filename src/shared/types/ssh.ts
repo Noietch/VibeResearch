@@ -49,6 +49,17 @@ export interface RemoteAgentInfo {
 }
 
 /**
+ * Parsed entry from ~/.ssh/config
+ */
+export interface SshConfigEntry {
+  host: string; // The Host alias/pattern from ssh config
+  hostname?: string; // HostName directive
+  port?: number; // Port directive
+  user?: string; // User directive
+  identityFile?: string; // IdentityFile directive
+}
+
+/**
  * SSH connection test result
  */
 export interface SshTestResult {

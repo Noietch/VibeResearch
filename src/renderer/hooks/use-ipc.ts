@@ -625,6 +625,14 @@ export interface SshTestResult {
   };
 }
 
+export interface SshConfigEntry {
+  host: string;
+  hostname?: string;
+  port?: number;
+  user?: string;
+  identityFile?: string;
+}
+
 export const ipc = {
   // Papers
   listPapers: (query?: {
@@ -1091,6 +1099,8 @@ export const ipc = {
     ),
   selectSshKeyFile: () =>
     invoke<{ canceled: boolean; path?: string | null }>('ssh:select-key-file'),
+  scanSshConfig: () => invoke<SshConfigEntry[]>('ssh:scan-config'),
+  parseConfigFile: () => invoke<SshConfigEntry[]>('ssh:parse-config-file'),
 
   // Window controls (for Windows title bar)
   windowClose: () => {

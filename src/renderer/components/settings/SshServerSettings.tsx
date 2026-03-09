@@ -23,6 +23,7 @@ import {
   type SshServerItem,
   type RemoteDirEntry,
   type RemoteAgentInfo,
+  type SshConfigEntry,
 } from '../../hooks/use-ipc';
 
 // ─── Add/Edit SSH Server Modal ────────────────────────────────────────────────
@@ -80,6 +81,47 @@ function SshServerModal({
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [configEntries, setConfigEntries] = useState<SshConfigEntry[]>([]);
+  const [showConfigDropdown, setShowConfigDropdown] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
+  // Load default SSH config entries when opening in add mode
+  useEffect(() => {
+    if (!server) {
+      ipc
+        .scanSshConfig()
+        .then(setConfigEntries)
+        .catch(() => {});
+    }
+  }, [server]);
+
+  const handleBrowseConfigFile = async () => {
+    setLoadingConfig(true);
+    try {
+      const entries = await ipc.parseConfigFile();
+      if (entries.length > 0) {
+        setConfigEntries(entries);
+        setShowConfigDropdown(true);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
+
+  const handleSelectConfigEntry = (entry: SshConfigEntry) => {
+    setForm((f) => ({
+      ...f,
+      label: entry.host,
+      host: entry.hostname ?? entry.host,
+      port: entry.port ?? 22,
+      username: entry.user ?? f.username,
+      authMethod: entry.identityFile ? 'privateKey' : f.authMethod,
+      privateKeyPath: entry.identityFile ?? f.privateKeyPath,
+    }));
+    setShowConfigDropdown(false);
+  };
 
   // ESC to close
   useEffect(() => {
@@ -204,6 +246,67 @@ function SshServerModal({
             <X size={18} className="text-notion-text-tertiary" />
           </button>
         </div>
+
+        {/* Import from SSH config — only in add mode */}
+        {!server && (
+          <div className="relative mb-4 flex gap-2">
+            {/* Dropdown trigger — shows entries if available */}
+            <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={() => configEntries.length > 0 && setShowConfigDropdown((v) => !v)}
+                disabled={configEntries.length === 0}
+                className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2 text-sm text-notion-text-secondary transition-colors hover:bg-notion-accent-light hover:border-notion-accent/30 disabled:opacity-40 disabled:cursor-default"
+              >
+                <span>
+                  {configEntries.length > 0
+                    ? `SSH Config (${configEntries.length} hosts)`
+                    : 'No SSH config found'}
+                </span>
+                {configEntries.length > 0 && (
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform ${showConfigDropdown ? 'rotate-180' : ''}`}
+                  />
+                )}
+              </button>
+              {showConfigDropdown && configEntries.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-52 overflow-y-auto rounded-lg border border-notion-border bg-white shadow-lg">
+                  {configEntries.map((entry) => (
+                    <button
+                      key={entry.host}
+                      type="button"
+                      onClick={() => handleSelectConfigEntry(entry)}
+                      className="flex w-full flex-col px-3 py-2.5 text-left transition-colors hover:bg-notion-accent-light"
+                    >
+                      <span className="text-sm font-medium text-notion-text">{entry.host}</span>
+                      <span className="text-xs text-notion-text-tertiary">
+                        {entry.user ? `${entry.user}@` : ''}
+                        {entry.hostname ?? entry.host}
+                        {entry.port && entry.port !== 22 ? `:${entry.port}` : ''}
+                        {entry.identityFile ? ` · ${entry.identityFile.split('/').pop()}` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Browse for a custom SSH config file */}
+            <button
+              type="button"
+              onClick={handleBrowseConfigFile}
+              disabled={loadingConfig}
+              className="flex items-center gap-1.5 rounded-lg border border-notion-border px-3 py-2 text-sm text-notion-text-secondary hover:bg-notion-sidebar disabled:opacity-50 transition-colors"
+            >
+              {loadingConfig ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <FolderOpen size={14} />
+              )}
+              Browse…
+            </button>
+          </div>
+        )}
 
         <div className="space-y-4">
           {/* Label */}

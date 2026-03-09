@@ -1,4 +1,7 @@
 import { ipcMain, dialog } from 'electron';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   listSshServers,
   getSshServer,
@@ -9,7 +12,52 @@ import {
   updateDefaultCwd,
 } from '../store/ssh-server-store';
 import { SshConnectionService } from '../services/ssh-connection.service';
-import { type IpcResult, ok, err, type SshServerConfig, type SshConnectConfig } from '@shared';
+import {
+  type IpcResult,
+  ok,
+  err,
+  type SshServerConfig,
+  type SshConnectConfig,
+  type SshConfigEntry,
+} from '@shared';
+
+function parseSshConfig(content: string): SshConfigEntry[] {
+  const entries: SshConfigEntry[] = [];
+  let current: SshConfigEntry | null = null;
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const spaceIdx = line.indexOf(' ');
+    if (spaceIdx === -1) continue;
+    const key = line.slice(0, spaceIdx).toLowerCase();
+    const value = line.slice(spaceIdx + 1).trim();
+
+    if (key === 'host') {
+      if (current) entries.push(current);
+      // Skip wildcard patterns
+      if (value === '*' || value.includes('*') || value.includes('?')) {
+        current = null;
+      } else {
+        current = { host: value };
+      }
+    } else if (current) {
+      if (key === 'hostname') {
+        current.hostname = value;
+      } else if (key === 'port') {
+        const p = parseInt(value, 10);
+        if (!isNaN(p)) current.port = p;
+      } else if (key === 'user') {
+        current.user = value;
+      } else if (key === 'identityfile') {
+        current.identityFile = value.replace(/^~/, os.homedir());
+      }
+    }
+  }
+  if (current) entries.push(current);
+  return entries;
+}
 
 export function setupSshIpc() {
   // List all SSH servers
@@ -162,4 +210,61 @@ export function setupSshIpc() {
       }
     },
   );
+
+  // Scan default SSH config locations (cross-platform) and return parsed entries
+  ipcMain.handle('ssh:scan-config', async (): Promise<IpcResult<SshConfigEntry[]>> => {
+    try {
+      const candidates: string[] = [];
+      const home = os.homedir();
+      const platform = process.platform;
+
+      if (platform === 'win32') {
+        // Windows: %USERPROFILE%\.ssh\config, %PROGRAMDATA%\ssh\config
+        candidates.push(path.join(home, '.ssh', 'config'));
+        const programData = process.env.PROGRAMDATA;
+        if (programData) candidates.push(path.join(programData, 'ssh', 'config'));
+      } else {
+        // macOS / Linux: ~/.ssh/config (standard location)
+        candidates.push(path.join(home, '.ssh', 'config'));
+      }
+
+      for (const configPath of candidates) {
+        if (fs.existsSync(configPath)) {
+          const content = fs.readFileSync(configPath, 'utf-8');
+          const entries = parseSshConfig(content);
+          if (entries.length > 0) return ok(entries);
+        }
+      }
+      return ok([]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[ssh:scan-config] Error:', msg);
+      return err(msg);
+    }
+  });
+
+  // Parse a user-selected SSH config file
+  ipcMain.handle('ssh:parse-config-file', async (): Promise<IpcResult<SshConfigEntry[]>> => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Select SSH Config File',
+        properties: ['openFile'],
+        filters: [
+          { name: 'SSH Config', extensions: ['*'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+        defaultPath: path.join(os.homedir(), '.ssh'),
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return ok([]);
+      }
+      const content = fs.readFileSync(result.filePaths[0], 'utf-8');
+      const entries = parseSshConfig(content);
+      return ok(entries);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[ssh:parse-config-file] Error:', msg);
+      return err(msg);
+    }
+  });
 }

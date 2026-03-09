@@ -240,6 +240,8 @@ export class AgentTaskRunner extends EventEmitter {
     });
 
     this.connection.on('stderr', (text: string) => {
+      // Filter known noisy codex-acp warnings that are harmless
+      if (text.includes('No onPostToolUseHook found for tool use ID:')) return;
       this.pushEvent('stderr', {
         todoId: this.config.todoId,
         runId: this.config.runId,
