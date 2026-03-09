@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-09
+
+### feat: Add paper comparison view with LLM analysis
+
+- **Scope**: `src/shared/prompts/comparison.prompt.ts`, `src/main/services/comparison.service.ts`, `src/main/ipc/comparison.ipc.ts`, `src/main/index.ts`, `src/shared/index.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/compare/page.tsx`, `src/renderer/router.tsx`, `src/renderer/components/papers-by-tag.tsx`, `tests/integration/comparison.test.ts`
+- **Feature**: Multi-paper comparison (2-3 papers) with structured LLM analysis. Select papers in the library, click Compare to open a dedicated page that streams a structured comparison covering Overview, Similarities, Differences, Methodology, Research Gaps, and Synthesis.
+- **Implementation**: New comparison prompt, service (streaming via `streamText`), IPC handler with job tracking and AbortController, and a React page with paper cards, streaming markdown output, and Stop/Regenerate/Copy controls.
+- **Design decisions**: No schema changes (comparison results are not persisted); limited to 2-3 papers to control token usage; reuses existing MarkdownContent component and selection toolbar pattern.
+- **Tests**: Prompt builder tests (2-paper, 3-paper, missing fields, PDF excerpt), system prompt section verification, service tests with mocked LLM (streaming callback, boundary validation).
+
 ## 2026-03-09 (session 35)
 
 ### fix: Rebuild better-sqlite3 for Electron installs
@@ -2491,4 +2501,15 @@
   - Added integration coverage to verify top recommendations span multiple local seed papers when relevant candidates exist
 - **Rationale**: After adding hybrid reranking and semantic query expansion, the remaining failure mode was over-concentration on one dominant seed paper; diversifying the final list makes recommendations better reflect multiple active research threads
 - **Test Design**: Validate semantic trigger assignment and diversified ranking with multiple seed papers plus the existing semantic fallback scenarios
+- **Validation**: `npx vitest run tests/integration/recommendations.test.ts`, `npm run build:main`
+
+### Improvement: Reduce Homogeneous Recommendation Clusters
+
+- **Scope**: `src/main/services/recommendation.service.ts`, `tests/integration/recommendations.test.ts`
+- **Changes**:
+  - Added candidate-level semantic redundancy penalties during final selection so near-duplicate papers are less likely to occupy multiple top slots
+  - Kept the existing seed-aware diversification and layered the new novelty penalty on top of it for within-cluster exploration
+  - Added integration coverage to confirm top results avoid highly similar duplicate candidates when a more varied alternative exists
+- **Rationale**: After seed diversification, recommendations could still feel repetitive when multiple nearly identical candidates were fetched for the same seed paper; light semantic deduplication improves exploration without discarding strong candidates entirely
+- **Test Design**: Validate the diversified selector prefers a more distinct candidate over a near-duplicate while keeping the existing fallback and multi-seed behaviors intact
 - **Validation**: `npx vitest run tests/integration/recommendations.test.ts`, `npm run build:main`

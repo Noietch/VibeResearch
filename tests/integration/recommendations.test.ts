@@ -359,6 +359,71 @@ describe('RecommendationService hybrid recall and reranking', () => {
     );
   });
 
+  it('reduces near-duplicate candidates within the same seed cluster', async () => {
+    mocks.semanticKeywordSearch.mockResolvedValue([
+      {
+        source: 'semantic_scholar',
+        externalId: 'dup-a',
+        title: 'Transformer routing with sparse attention',
+        authors: ['Researcher X'],
+        abstract: 'Sparse transformer routing for language systems.',
+        sourceUrl: 'https://example.com/dup-a',
+        pdfUrl: null,
+        publishedAt: new Date('2025-12-01T00:00:00Z'),
+        venue: 'ACL',
+        citationCount: 10,
+        metadata: {},
+      },
+      {
+        source: 'semantic_scholar',
+        externalId: 'dup-b',
+        title: 'Transformer routing with efficient sparse attention',
+        authors: ['Researcher Y'],
+        abstract: 'Efficient sparse transformer routing for language systems.',
+        sourceUrl: 'https://example.com/dup-b',
+        pdfUrl: null,
+        publishedAt: new Date('2025-11-15T00:00:00Z'),
+        venue: 'EMNLP',
+        citationCount: 9,
+        metadata: {},
+      },
+      {
+        source: 'semantic_scholar',
+        externalId: 'alt-c',
+        title: 'Transformer planning with memory routing',
+        authors: ['Researcher Z'],
+        abstract: 'Memory-guided planning for transformer systems.',
+        sourceUrl: 'https://example.com/alt-c',
+        pdfUrl: null,
+        publishedAt: new Date('2025-09-01T00:00:00Z'),
+        venue: 'ICLR',
+        citationCount: 5,
+        metadata: {},
+      },
+    ]);
+
+    mocks.embedTexts.mockImplementation(async (texts: string[]) =>
+      texts.map((text) => {
+        const value = text.toLowerCase();
+        if (value.includes('attention is all you need')) return [1, 0, 0];
+        if (value.includes('sparse attention')) return [1, 0, 0];
+        if (value.includes('efficient sparse')) return [0.99, 0.01, 0];
+        if (value.includes('memory routing')) return [0.75, 0.45, 0];
+        return [0.4, 0.4, 0];
+      }),
+    );
+
+    const service = new RecommendationService();
+    await service.generateRecommendations(2);
+    const items = await service.listRecommendations();
+
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.title)).toContain('Transformer planning with memory routing');
+    expect(
+      items.map((item) => item.title).filter((title) => title.includes('sparse attention')),
+    ).toHaveLength(1);
+  });
+
   it('falls back to rule-only ranking when embeddings fail', async () => {
     mocks.semanticKeywordSearch.mockResolvedValue([
       {

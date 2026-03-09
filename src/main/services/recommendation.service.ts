@@ -29,10 +29,12 @@ interface InterestProfile {
 interface SemanticCandidateContext {
   semanticScore: number;
   triggerPaper: InterestProfile['seedPapers'][number] | null;
+  candidateEmbedding: number[] | null;
 }
 
 interface ScoredCandidate {
   persistedCandidate: { id: string };
+  candidateEmbedding: number[] | null;
   score: number;
   relevanceScore: number;
   freshnessScore: number;
@@ -66,6 +68,9 @@ const QUERY_STOP_WORDS = new Set([
   'using',
   'with',
 ]);
+
+const NOVELTY_PENALTY_WEIGHT = 0.14;
+const HIGH_SIMILARITY_THRESHOLD = 0.88;
 
 const HYBRID_WEIGHTS = {
   relevance: 0.35,
@@ -130,6 +135,7 @@ export class RecommendationService {
             semanticContext.get(candidate.persistedCandidate.id) ?? {
               semanticScore: 0,
               triggerPaper: null,
+              candidateEmbedding: null,
             },
           ),
         )
@@ -478,6 +484,7 @@ export class RecommendationService {
 
     return {
       ...candidate,
+      candidateEmbedding: semanticContext.candidateEmbedding,
       score,
       relevanceScore,
       freshnessScore,
@@ -593,6 +600,7 @@ export class RecommendationService {
         scores.set(candidates[index].persistedCandidate.id, {
           semanticScore: this.normalizeSemanticScore(similarity),
           triggerPaper: this.normalizeSemanticScore(bestSeedSimilarity) >= 0.35 ? bestSeed : null,
+          candidateEmbedding: Array.isArray(embedding) && embedding.length > 0 ? embedding : null,
         });
       });
     } catch (error) {
@@ -616,13 +624,19 @@ export class RecommendationService {
 
     const selected: ScoredCandidate[] = [];
     while (selected.length < limit) {
-      const rankedGroups = [...groups.values()]
-        .filter((items) => items.length > 0)
-        .sort((left, right) => right[0].score - left[0].score);
+      const rankedGroups = [...groups.entries()]
+        .filter(([, items]) => items.length > 0)
+        .map(([key, items]) => ({ key, items }))
+        .sort(
+          (left, right) =>
+            this.adjustedCandidateScore(right.items[0], selected) -
+            this.adjustedCandidateScore(left.items[0], selected),
+        );
       if (rankedGroups.length === 0) break;
 
       for (const group of rankedGroups) {
-        const next = group.shift();
+        const bestIndex = this.findBestCandidateIndex(group.items, selected);
+        const [next] = group.items.splice(bestIndex, 1);
         if (!next) continue;
         selected.push(next);
         if (selected.length >= limit) break;
@@ -630,6 +644,40 @@ export class RecommendationService {
     }
 
     return selected;
+  }
+
+  private findBestCandidateIndex(
+    candidates: ScoredCandidate[],
+    selected: ScoredCandidate[],
+  ): number {
+    let bestIndex = 0;
+    let bestScore = -Infinity;
+
+    candidates.forEach((candidate, index) => {
+      const adjusted = this.adjustedCandidateScore(candidate, selected);
+      if (adjusted > bestScore) {
+        bestScore = adjusted;
+        bestIndex = index;
+      }
+    });
+
+    return bestIndex;
+  }
+
+  private adjustedCandidateScore(candidate: ScoredCandidate, selected: ScoredCandidate[]): number {
+    if (selected.length === 0 || !candidate.candidateEmbedding) return candidate.score;
+
+    const maxSimilarity = selected.reduce((currentMax, item) => {
+      if (!item.candidateEmbedding) return currentMax;
+      return Math.max(
+        currentMax,
+        cosineSimilarity(candidate.candidateEmbedding ?? [], item.candidateEmbedding),
+      );
+    }, -1);
+
+    const penalty =
+      maxSimilarity >= HIGH_SIMILARITY_THRESHOLD ? maxSimilarity * NOVELTY_PENALTY_WEIGHT : 0;
+    return candidate.score - penalty;
   }
 
   private buildSeedPaperSemanticText(seedPaper: InterestProfile['seedPapers'][number]): string {
