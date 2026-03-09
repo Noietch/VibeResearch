@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-09 (session 39)
+
+### fix: Skip unnecessary Prisma db push on startup via schema hash caching
+
+- **Scope**: `src/main/index.ts`
+- **Problem**: Every app startup ran `prisma db push`, which failed on sqlite-vec virtual tables, causing vec tables to be dropped and rebuilt (~500+ chunks re-indexed each time).
+- **Solution**: Cache `schema.prisma` content hash in `vec_meta` table. On startup, compare current hash with saved hash — skip `db push` if unchanged. When schema changes, proactively drop vec tables before running `db push` (avoids error-retry flow).
+- **Effect**: Normal startups skip db push entirely; vec index preserved. Schema changes trigger one-time rebuild.
+
 ## 2026-03-09 (session 38)
 
 ### feat: Paper Collections (分类) with Research Profile
