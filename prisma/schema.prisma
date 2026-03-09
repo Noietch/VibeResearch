@@ -215,11 +215,15 @@ model Collection {
   description String?
   isDefault   Boolean           @default(false)
   sortOrder   Int               @default(0)
+  parentId    String?
+  parent      Collection?       @relation("CollectionHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Collection[]      @relation("CollectionHierarchy")
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   papers      PaperCollection[]
 
   @@index([sortOrder])
+  @@index([parentId])
 }
 
 model PaperCollection {
@@ -394,6 +398,15 @@ model RecommendationFeedback {
   @@index([candidateId])
   @@index([action])
   @@index([createdAt])
+}
+
+model ComparisonNote {
+  id           String   @id @default(cuid())
+  paperIdsJson String
+  titlesJson   String   @default("[]")
+  contentMd    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model PaperCitation {

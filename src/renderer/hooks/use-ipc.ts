@@ -16,6 +16,9 @@ import type {
   AgentToolKind,
   GraphData,
   RecommendationItem,
+  ComparisonNoteItem,
+  UserProfileState,
+  UserProfile,
 } from '@shared';
 
 declare global {
@@ -561,6 +564,7 @@ export interface CollectionItem {
   description?: string | null;
   isDefault: boolean;
   sortOrder: number;
+  parentId?: string | null;
   paperCount: number;
   createdAt: string;
   updatedAt: string;
@@ -570,6 +574,8 @@ export interface RecommendationRefreshResult {
   generatedAt: string;
   count: number;
 }
+
+export type { UserProfileState, UserProfile };
 export interface ResearchProfile {
   tagDistribution: Array<{ name: string; category: string; count: number }>;
   yearDistribution: Array<{ year: number; count: number }>;
@@ -871,8 +877,15 @@ export const ipc = {
 
   // Collections
   listCollections: () => invoke<CollectionItem[]>('collections:list'),
-  createCollection: (data: { name: string; icon?: string; color?: string; description?: string }) =>
-    invoke<CollectionItem>('collections:create', data),
+  createCollection: (data: {
+    name: string;
+    icon?: string;
+    color?: string;
+    description?: string;
+    parentId?: string | null;
+  }) => invoke<CollectionItem>('collections:create', data),
+  moveCollection: (id: string, parentId: string | null, sortOrder?: number) =>
+    invoke<CollectionItem>('collections:move', { id, parentId, sortOrder }),
   updateCollection: (
     id: string,
     data: { name?: string; icon?: string; color?: string; description?: string },
@@ -891,6 +904,12 @@ export const ipc = {
   getResearchProfile: (collectionId: string) =>
     invoke<ResearchProfile>('collections:researchProfile', collectionId),
 
+  // User profile
+  getUserProfile: () => invoke<UserProfileState>('userProfile:get'),
+  updateUserProfile: (input: Partial<UserProfile>) =>
+    invoke<UserProfileState>('userProfile:update', input),
+  generateUserProfileSummary: () => invoke<UserProfileState>('userProfile:generateSummary'),
+
   // Recommendations
   listRecommendations: (filter?: { status?: 'new' | 'ignored' | 'saved' }) =>
     invoke<RecommendationItem[]>('recommendations:list', filter ?? {}),
@@ -902,11 +921,19 @@ export const ipc = {
     invoke<PaperItem>('recommendations:save', candidateId),
   trackRecommendationOpened: (candidateId: string) =>
     invoke<{ success: boolean }>('recommendations:opened', candidateId),
+  moreLikeRecommendation: (candidateId: string) =>
+    invoke<{ success: boolean }>('recommendations:moreLikeThis', candidateId),
+  lessLikeRecommendation: (candidateId: string) =>
+    invoke<{ success: boolean }>('recommendations:lessLikeThis', candidateId),
 
   // Comparison
   startComparison: (input: { sessionId: string; paperIds: string[] }) =>
     invoke<{ jobId: string; started: boolean }>('comparison:start', input),
   killComparison: (jobId: string) => invoke<{ killed: boolean }>('comparison:kill', jobId),
+  saveComparison: (input: { paperIds: string[]; titles: string[]; contentMd: string }) =>
+    invoke<ComparisonNoteItem>('comparison:save', input),
+  listComparisons: () => invoke<ComparisonNoteItem[]>('comparison:list'),
+  deleteComparison: (id: string) => invoke<{ success: boolean }>('comparison:delete', id),
 
   // Citations & Graph
   extractCitations: (paper: {

@@ -2,6 +2,24 @@
 
 ## 2026-03-09
 
+### feat: Dashboard Recent Comparisons card + Nested Collection Folders
+
+- **Scope**: `prisma/schema.prisma`, `src/db/repositories/collections.repository.ts`, `src/main/services/collections.service.ts`, `src/main/ipc/collections.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/components/dashboard-content.tsx`, `src/renderer/components/app-shell.tsx`, `src/renderer/components/collection-modal.tsx`, `src/renderer/pages/collections/page.tsx`
+- **Dashboard Comparisons**: Added "Recent Comparisons" section to dashboard showing up to 6 saved comparisons with paper titles, date, and paper count. Cards link to `/compare?saved=<id>`. Section is hidden when no comparisons exist.
+- **Nested Collections**: Collections now support infinite nesting via `parentId` self-reference on the `Collection` model. Sidebar renders collections as a recursive tree with expand/collapse toggles and HTML5 drag & drop for reorganization. Default collections are protected from being moved into sub-folders. Cycle detection prevents invalid parent assignments.
+- **Collection Modal**: Added optional "Parent Folder" dropdown to the create/edit collection modal.
+- **Breadcrumb Navigation**: Collection page header shows breadcrumb path when collection has parent ancestors.
+- **Schema**: Added `parentId`, `parent`, `children` fields to `Collection` model with `onDelete: SetNull`.
+
+### feat: Persist comparison results with history panel
+
+- **Scope**: `prisma/schema.prisma`, `src/db/repositories/comparisons.repository.ts`, `src/shared/types/domain.ts`, `src/main/ipc/comparison.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/compare/page.tsx`, `tests/integration/comparison.test.ts`
+- **Feature**: Comparison results are now persisted to the database. Users can save completed comparisons, browse saved history in a collapsible sidebar panel, and reload previous comparisons via `?saved=<id>` URL parameter.
+- **Schema**: New `ComparisonNote` model storing paper IDs (JSON array), paper titles (JSON array), and full markdown content.
+- **UI**: Header now includes Save button (appears after comparison completes), History toggle button that reveals a left sidebar with saved comparisons, and Saved indicator badge. History items show paper titles, date, and paper count with delete option.
+- **Data flow**: New comparisons via `?ids=a,b,c` auto-generate then can be saved; saved comparisons load via `?saved=<id>` from DB; Regenerate creates fresh comparison from same papers.
+- **Tests**: Added `ComparisonNoteItem` type tests covering 2-paper and 3-paper shapes and JSON round-trip serialization.
+
 ### feat: Add paper comparison view with LLM analysis
 
 - **Scope**: `src/shared/prompts/comparison.prompt.ts`, `src/main/services/comparison.service.ts`, `src/main/ipc/comparison.ipc.ts`, `src/main/index.ts`, `src/shared/index.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/compare/page.tsx`, `src/renderer/router.tsx`, `src/renderer/components/papers-by-tag.tsx`, `tests/integration/comparison.test.ts`
@@ -9,6 +27,15 @@
 - **Implementation**: New comparison prompt, service (streaming via `streamText`), IPC handler with job tracking and AbortController, and a React page with paper cards, streaming markdown output, and Stop/Regenerate/Copy controls.
 - **Design decisions**: No schema changes (comparison results are not persisted); limited to 2-3 papers to control token usage; reuses existing MarkdownContent component and selection toolbar pattern.
 - **Tests**: Prompt builder tests (2-paper, 3-paper, missing fields, PDF excerpt), system prompt section verification, service tests with mocked LLM (streaming callback, boundary validation).
+
+### feat: Improve comparison page UX and add entry points
+
+- **Scope**: `src/renderer/pages/compare/page.tsx`, `src/renderer/pages/collections/page.tsx`, `src/renderer/pages/papers/overview/page.tsx`, `src/renderer/components/papers-by-tag.tsx`
+- **Visual redesign**: Compare page now uses Notion-inspired design with proper header bar, animated paper cards with icons and metadata, section divider for analysis output, and streaming indicator.
+- **URL query params**: Compare page now uses `/compare?ids=a,b,c` instead of `location.state`, surviving page refreshes.
+- **Auto-kill**: Comparison job is automatically cancelled when navigating away from the page.
+- **Collection page**: Added paper selection checkboxes and a Compare toolbar to the collection papers list.
+- **Paper overview**: Added "Compare with…" button that opens a paper picker modal to select 1-2 papers for comparison.
 
 ## 2026-03-09 (session 35)
 
@@ -2535,3 +2562,80 @@
 - **Rationale**: Once exploration became user-configurable, the recommendation UI needed to explain why a more novel paper surfaced so the ranking stays understandable and trustworthy
 - **Test Design**: Validate explanation notes stay absent for focused selections and appear for higher-exploration novelty wins while preserving the existing recommendation flows
 - **Validation**: `npx vitest run tests/integration/recommendations.test.ts`, `npx prisma generate`, `npm run build:main`
+
+### Improvement: Add Recommendation Mode Shortcuts on the Recommendations Page
+
+- **Scope**: `src/renderer/pages/recommendations/page.tsx`
+- **Changes**:
+  - Added in-page `Focused`, `Balanced`, and `Exploratory` recommendation mode shortcuts above the recommendation list
+  - Reused the existing semantic search settings persistence so switching modes immediately updates the stored recommendation exploration level
+  - Added inline mode descriptions and saving feedback to make exploration tuning accessible without visiting Settings
+- **Rationale**: Recommendation exploration became configurable, but burying it inside Settings made iteration slow; quick controls on the recommendation page make tuning the experience much more usable
+- **Test Design**: Validate renderer and main-process builds plus recommendation integration tests after wiring the page control into the existing settings flow
+- **Validation**: `npm run build:main`, `npm run build:renderer`, `npx vitest run tests/integration/recommendations.test.ts`
+
+### Improvement: Add Inline Recommendation Feedback Actions
+
+- **Scope**: `src/renderer/pages/recommendations/page.tsx`
+- **Changes**:
+  - Added visible `More like this` and `Fewer like this` controls to recommendation cards using the existing IPC feedback handlers
+  - Disabled ignore/down-rank actions once a recommendation is already ignored or saved so card actions better match result status
+  - Kept `less like this` removal behavior for active recommendation lists while avoiding unnecessary disappearance inside the ignored tab
+- **Rationale**: The recommendation pipeline already collected positive and negative feedback signals, but the page did not expose those controls, leaving an important tuning loop unreachable from the UI
+- **Test Design**: Validate the renderer build after wiring the existing handlers into the card actions and re-run recommendation integration coverage for regression safety
+- **Validation**: `npm run build:renderer`, `npx vitest run tests/integration/recommendations.test.ts`
+
+### Improvement: Make Recommendation Feedback and Signals Easier to Read
+
+- **Scope**: `src/renderer/pages/recommendations/page.tsx`
+- **Changes**:
+  - Added immediate in-card feedback badges and recorded button states after `More like this` / `Fewer like this` actions
+  - Preserved those acknowledgements during the current session so recommendation tuning feels responsive without waiting for a refresh
+  - Added compact signal chips such as seed-paper match, semantic strength, and exploration boost to make ranking cues easier to scan
+- **Rationale**: After exposing feedback actions, the remaining usability gap was weak acknowledgement and opaque ranking context; clearer inline state and signal summaries make the recommendation loop feel more trustworthy
+- **Test Design**: Validate the renderer build and rerun recommendation integration coverage to ensure the UI changes do not regress the existing service behavior
+- **Validation**: `npm run build:renderer`, `npx vitest run tests/integration/recommendations.test.ts`
+
+### Improvement: Simplify Sidebar Navigation and Move Secondary Tools into Dashboard
+
+- **Scope**: `src/renderer/components/app-shell.tsx`, `src/renderer/components/dashboard-content.tsx`
+- **Changes**:
+  - Removed `Graph` and `Recommendations` from the sidebar's top-level navigation to keep the left rail focused on core workflows
+  - Reorganized the sidebar so `Collections` live under a dedicated `In Library` secondary section with `All Papers`
+  - Expanded the dashboard into a lightweight home surface with quick-access cards for `Recommendations`, `Graph`, and `Library`
+- **Rationale**: The previous sidebar treated too many pages as primary destinations, which made the app feel busier than it needed to be; moving lower-frequency tools into the dashboard keeps navigation simpler while preserving fast access
+- **Test Design**: Validate the renderer build after restructuring the sidebar and dashboard entry points
+- **Validation**: `npm run build:renderer`
+
+### Improvement: Add Collapsible Library Navigation and Global Back Button
+
+- **Scope**: `src/renderer/components/app-shell.tsx`
+- **Changes**:
+  - Turned `Library` into a dedicated collapsible sidebar section with persistent expanded state and nested `All Papers` / `Collections`
+  - Moved `Projects` and `Tasks` into a lower-priority `Workspace` section while keeping them accessible in collapsed mode
+  - Added a global `返回上一页` action above page content so every page has a consistent back-navigation affordance
+- **Rationale**: After simplifying the sidebar, the next step was clarifying hierarchy inside it and ensuring users always have an obvious way to back out of deeper pages
+- **Test Design**: Validate the renderer build after changing the shared app shell structure and navigation controls
+- **Validation**: `npm run build:renderer`
+
+### Improvement: Reduce Back Navigation Footprint and Fix Library Collapse Behavior
+
+- **Scope**: `src/renderer/components/app-shell.tsx`
+- **Changes**:
+  - Replaced the full-width back-navigation row with a compact floating `返回上一页` button so shared navigation takes less vertical space
+  - Removed the auto-reopen behavior that immediately expanded the `Library` section again after manually collapsing it on library-related pages
+- **Rationale**: The previous back control consumed too much space in the shell, and the Library accordion felt broken because user intent could not override route-based auto-expansion
+- **Test Design**: Validate the renderer build after refining the shared shell interactions
+- **Validation**: `npm run build:renderer`
+
+### Improvement: Add Editable User Profile with Library-Based AI Summary
+
+- **Scope**: `src/main/services/user-profile.service.ts`, `src/main/ipc/user-profile.ipc.ts`, `src/main/store/app-settings-store.ts`, `src/renderer/pages/profile/page.tsx`, `src/renderer/components/dashboard-content.tsx`, `src/renderer/router.tsx`, `src/renderer/hooks/use-ipc.ts`, `src/shared/types/domain.ts`, `tests/integration/user-profile.test.ts`
+- **Changes**:
+  - Added a standalone `Profile` page where users can edit their researcher identity, interests, goals, and short bio
+  - Added persisted profile storage plus a library snapshot derived from the current paper collection
+  - Added an AI summary action that uses the editable profile together with library patterns to generate a living researcher profile
+  - Added a dashboard quick-access entry for `Profile` so it stays discoverable without adding more sidebar clutter
+- **Rationale**: A personal profile gives the app a user-centered memory layer; combining manual edits with library-derived signals makes the profile both editable and grounded in actual reading behavior
+- **Test Design**: Validate profile snapshot aggregation, manual edits, summary generation, and empty-library guardrails through a focused service test, then run main and renderer builds
+- **Validation**: `npx vitest run tests/integration/user-profile.test.ts`, `npm run build:main`, `npm run build:renderer`
