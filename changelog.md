@@ -251,6 +251,28 @@
 
 ## 2026-03-09
 
+### feat: Research workflow — Task Results + Report Generation
+
+**Scope**: Full stack — `prisma/schema.prisma`, `src/db/repositories/`, `src/main/services/`, `src/main/ipc/`, `src/shared/types/`, `src/renderer/components/project/`
+
+**Changes**:
+
+- **Data Models**: Added `TaskResult` and `ExperimentReport` models to Prisma schema.
+  - `TaskResult`: Tracks output files from agent tasks (data, figures, logs, documents).
+  - `ExperimentReport`: AI-generated reports with streaming content.
+- **Repositories**: `task-results.repository.ts` and `experiment-report.repository.ts` for database operations.
+- **Services**:
+  - `task-results.service.ts`: Scan task output directories, register files, manage results.
+  - `experiment-report.service.ts`: Streaming report generation using Vercel AI SDK with project context and task results.
+- **IPC Handlers**: `task-results.ipc.ts` and `experiment-report.ipc.ts` with streaming events (`report:generate:chunk`, `report:generate:done`, `report:generate:error`).
+- **UI Components**:
+  - `ResultsTab.tsx`: Display task results grouped by task, with scan-all and manual add capabilities.
+  - `ReportsTab.tsx`: List reports with Markdown preview, generate new reports.
+  - `ReportGeneratorModal.tsx`: Task/result selection modal with real-time streaming preview.
+- **Project Page**: Added "Results" and "Reports" tabs to project detail view.
+
+**Design**: Research workflow: Idea → Task → Results → Report. Results are automatically scanned from task output directories or manually added. Reports are AI-generated summaries with streaming preview.
+
 ### feat: SSH Remote Agent Execution
 
 **Scope**: Full stack — `src/main/store/ssh-server-store.ts`, `src/main/services/ssh-connection.service.ts`, `src/main/agent/acp-connection.ts`, `src/main/services/agent-task-runner.ts`, `src/main/services/agent-todo.service.ts`, `src/main/ipc/ssh.ipc.ts`, `prisma/schema.prisma`, UI components
