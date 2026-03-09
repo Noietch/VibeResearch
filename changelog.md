@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-09 (session 58)
+
+### fix: Disable automatic model download — require manual trigger via Settings
+
+- **Scope**: `src/main/services/builtin-embedding-provider.ts`
+- **Changes**:
+  - Set `env.allowRemoteModels = false` unconditionally (was `true` in dev when model missing)
+  - Model download is now only triggered by the "Download Model" button in Settings → Semantic Search
+
 ## 2026-03-09 (session 57)
 
 ### chore: Remove model weights from git and document download steps
