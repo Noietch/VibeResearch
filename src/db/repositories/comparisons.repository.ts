@@ -25,6 +25,13 @@ export class ComparisonsRepository {
     });
   }
 
+  async update(id: string, data: { contentMd: string }) {
+    return this.prisma.comparisonNote.update({
+      where: { id },
+      data: { contentMd: data.contentMd },
+    });
+  }
+
   async delete(id: string) {
     return this.prisma.comparisonNote.delete({
       where: { id },

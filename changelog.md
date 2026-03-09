@@ -2,6 +2,14 @@
 
 ## 2026-03-09
 
+### feat: Auto-persist comparisons + improved comparison UI
+
+- **Scope**: `src/main/ipc/comparison.ipc.ts`, `src/db/repositories/comparisons.repository.ts`, `src/renderer/pages/compare/page.tsx`, `src/renderer/hooks/use-ipc.ts`, `src/main/services/comparison.service.ts`
+- **Auto-persist**: Comparisons are now saved to the database immediately when started (not after manual Save). History shows in-progress comparisons. Content is updated in DB when streaming completes. Empty records are cleaned up on cancellation.
+- **Progress feedback**: Added `onProgress` callback to `ComparisonService` so the preparing stage shows which paper is being read (e.g. "Reading paper 1/3: Title…").
+- **UI improvements**: Removed manual Save button (auto-save). Improved streaming indicator with status message. Cleaned up markdown output styling with better prose typography (heading borders, relaxed leading, notion color scheme).
+- **Removed**: `comparison:save` IPC handler (replaced by auto-persist on start).
+
 ### refactor: Merge normal and semantic search into unified search mode
 
 - **Scope**: `src/renderer/components/search-content.tsx`

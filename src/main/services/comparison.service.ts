@@ -15,6 +15,7 @@ export class ComparisonService {
     input: { paperIds: string[] },
     onChunk: (chunk: string) => void,
     signal?: AbortSignal,
+    onProgress?: (message: string) => void,
   ): Promise<string> {
     if (input.paperIds.length < 2 || input.paperIds.length > 3) {
       throw new Error('Comparison requires 2 or 3 papers');
@@ -33,37 +34,41 @@ export class ComparisonService {
     const model = getLanguageModelFromConfig(configWithKey);
 
     // Fetch all papers
+    onProgress?.('Loading paper metadata…');
     const papers = await Promise.all(
       input.paperIds.map((id) => this.papersRepository.findById(id)),
     );
 
-    // Build comparison input with optional PDF excerpts
-    const comparisonInputs: ComparisonPaperInput[] = await Promise.all(
-      papers.map(async (paper) => {
-        let pdfExcerpt = '';
-        if (paper.shortId && (paper.pdfUrl || paper.pdfPath)) {
-          try {
-            pdfExcerpt = await getPaperExcerptCached(
-              paper.id,
-              paper.shortId,
-              paper.pdfUrl ?? undefined,
-              paper.pdfPath ?? undefined,
-              3000,
-            );
-          } catch {
-            // PDF extraction failed, continue without it
-          }
+    // Build comparison input with optional PDF excerpts (sequentially for progress)
+    const comparisonInputs: ComparisonPaperInput[] = [];
+    for (let i = 0; i < papers.length; i++) {
+      const paper = papers[i];
+      onProgress?.(`Reading paper ${i + 1}/${papers.length}: ${paper.title.slice(0, 60)}…`);
+      let pdfExcerpt = '';
+      if (paper.shortId && (paper.pdfUrl || paper.pdfPath)) {
+        try {
+          pdfExcerpt = await getPaperExcerptCached(
+            paper.id,
+            paper.shortId,
+            paper.pdfUrl ?? undefined,
+            paper.pdfPath ?? undefined,
+            3000,
+          );
+        } catch {
+          // PDF extraction failed, continue without it
         }
+      }
 
-        return {
-          title: paper.title,
-          authors: (paper.authors as string[]) ?? [],
-          year: paper.submittedAt ? new Date(paper.submittedAt).getFullYear() : null,
-          abstract: paper.abstract ?? undefined,
-          pdfExcerpt: pdfExcerpt || undefined,
-        };
-      }),
-    );
+      comparisonInputs.push({
+        title: paper.title,
+        authors: (paper.authors as string[]) ?? [],
+        year: paper.submittedAt ? new Date(paper.submittedAt).getFullYear() : null,
+        abstract: paper.abstract ?? undefined,
+        pdfExcerpt: pdfExcerpt || undefined,
+      });
+    }
+
+    onProgress?.('Sending to AI model…');
 
     const userPrompt = buildComparisonUserPrompt(comparisonInputs);
 

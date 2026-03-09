@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { ComparisonService } from '../services/comparison.service';
-import { ComparisonsRepository } from '@db';
+import { ComparisonsRepository, PapersRepository } from '@db';
 import type { ComparisonNoteItem } from '@shared';
 
 type ComparisonJobStage = 'preparing' | 'streaming' | 'done' | 'error' | 'cancelled';
@@ -13,6 +13,7 @@ interface ComparisonJobStatus {
   partialText: string;
   message: string;
   error: string | null;
+  savedId: string | null;
   startedAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -80,6 +81,9 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function setupComparisonIpc() {
+  const repo = new ComparisonsRepository();
+  const papersRepo = new PapersRepository();
+
   ipcMain.handle(
     'comparison:start',
     async (_, input: { sessionId: string; paperIds: string[] }) => {
@@ -89,6 +93,21 @@ export function setupComparisonIpc() {
 
       activeComparisons.set(jobId, controller);
 
+      // Immediately persist to DB so it appears in history
+      let savedId: string | null = null;
+      try {
+        const papers = await Promise.all(input.paperIds.map((id) => papersRepo.findById(id)));
+        const titles = papers.map((p) => p.title);
+        const row = await repo.create({
+          paperIds: input.paperIds,
+          titles,
+          contentMd: '',
+        });
+        savedId = row.id;
+      } catch {
+        // Non-fatal — comparison still runs, just won't be in history until done
+      }
+
       saveComparisonJob({
         jobId,
         paperIds: input.paperIds,
@@ -97,6 +116,7 @@ export function setupComparisonIpc() {
         partialText: '',
         message: 'Preparing comparison…',
         error: null,
+        savedId,
         startedAt: now,
         updatedAt: now,
         completedAt: null,
@@ -115,7 +135,19 @@ export function setupComparisonIpc() {
               });
             },
             controller.signal,
+            (progressMessage) => {
+              updateComparisonJob(jobId, {
+                stage: 'preparing',
+                message: progressMessage,
+              });
+            },
           );
+
+          const finalJob = comparisonJobs.get(jobId);
+          // Update DB with final content
+          if (savedId && finalJob?.partialText) {
+            await repo.update(savedId, { contentMd: finalJob.partialText }).catch(() => undefined);
+          }
 
           updateComparisonJob(jobId, {
             active: false,
@@ -127,11 +159,23 @@ export function setupComparisonIpc() {
         } catch (err) {
           const aborted = isAbortError(err);
           const message = err instanceof Error ? err.message : String(err);
+
+          // Save partial content on error/cancel too
+          const finalJob = comparisonJobs.get(jobId);
+          if (savedId && finalJob?.partialText) {
+            await repo.update(savedId, { contentMd: finalJob.partialText }).catch(() => undefined);
+          }
+          // Delete empty DB record if cancelled with no content
+          if (savedId && !finalJob?.partialText && aborted) {
+            await repo.delete(savedId).catch(() => undefined);
+          }
+
           updateComparisonJob(jobId, {
             active: false,
             stage: aborted ? 'cancelled' : 'error',
             message: aborted ? 'Comparison cancelled' : `Comparison failed: ${message}`,
             error: aborted ? null : message,
+            savedId: !finalJob?.partialText && aborted ? null : savedId,
             completedAt: new Date().toISOString(),
           });
         } finally {
@@ -140,7 +184,7 @@ export function setupComparisonIpc() {
         }
       })();
 
-      return { jobId, started: true };
+      return { jobId, savedId, started: true };
     },
   );
 
@@ -158,26 +202,6 @@ export function setupComparisonIpc() {
   });
 
   // ── Persistence handlers ──────────────────────────────────────────────────
-
-  const repo = new ComparisonsRepository();
-
-  ipcMain.handle(
-    'comparison:save',
-    async (
-      _,
-      input: { paperIds: string[]; titles: string[]; contentMd: string },
-    ): Promise<ComparisonNoteItem> => {
-      const row = await repo.create(input);
-      return {
-        id: row.id,
-        paperIds: JSON.parse(row.paperIdsJson) as string[],
-        titles: JSON.parse(row.titlesJson) as string[],
-        contentMd: row.contentMd,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      };
-    },
-  );
 
   ipcMain.handle('comparison:list', async (): Promise<ComparisonNoteItem[]> => {
     const rows = await repo.list();

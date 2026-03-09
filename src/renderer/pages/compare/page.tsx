@@ -15,7 +15,6 @@ import {
   Calendar,
   Users,
   GitCompareArrows,
-  Save,
   History,
   Trash2,
   X,
@@ -30,6 +29,7 @@ interface ComparisonStatus {
   partialText: string;
   message: string;
   error: string | null;
+  savedId: string | null;
 }
 
 export function ComparePage() {
@@ -52,6 +52,7 @@ export function ComparePage() {
   const [stage, setStage] = useState<ComparisonStatus['stage'] | null>(null);
   const [partialText, setPartialText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const startedRef = useRef(false);
   const jobIdRef = useRef<string | null>(null);
@@ -62,8 +63,6 @@ export function ComparePage() {
   const [history, setHistory] = useState<ComparisonNoteItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   // Keep jobIdRef in sync
   useEffect(() => {
@@ -82,7 +81,6 @@ export function ComparePage() {
         setCurrentSavedId(item.id);
         setPartialText(item.contentMd);
         setStage('done');
-        setSaved(true);
         // Load paper details
         const results = await Promise.all(item.paperIds.map((id) => ipc.getPaper(id)));
         if (!cancelled) {
@@ -129,7 +127,9 @@ export function ComparePage() {
       if (jobId === null) setJobId(status.jobId);
       setStage(status.stage);
       setPartialText(status.partialText);
+      if (status.message) setStatusMessage(status.message);
       if (status.error) setError(status.error);
+      if (status.savedId) setCurrentSavedId(status.savedId);
     });
     return unsub;
   }, [jobId]);
@@ -150,7 +150,9 @@ export function ComparePage() {
           setJobId(match.jobId);
           setStage(match.stage);
           setPartialText(match.partialText);
+          if (match.message) setStatusMessage(match.message);
           if (match.error) setError(match.error);
+          if (match.savedId) setCurrentSavedId(match.savedId);
         }
       } catch {
         // ignore — will fall through to auto-start
@@ -167,13 +169,14 @@ export function ComparePage() {
   const startComparison = useCallback(async () => {
     setError(null);
     setPartialText('');
+    setStatusMessage('');
     setStage('preparing');
     setCurrentSavedId(null);
-    setSaved(false);
     try {
       const sessionId = `comparison-${Date.now()}`;
       const result = await ipc.startComparison({ sessionId, paperIds });
       setJobId(result.jobId);
+      if (result.savedId) setCurrentSavedId(result.savedId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start comparison');
       setStage('error');
@@ -199,9 +202,9 @@ export function ComparePage() {
     setJobId(null);
     setStage(null);
     setPartialText('');
+    setStatusMessage('');
     setError(null);
     setCurrentSavedId(null);
-    setSaved(false);
     void startComparison();
   }, [startComparison]);
 
@@ -214,29 +217,6 @@ export function ComparePage() {
       // ignore
     }
   }, [partialText]);
-
-  // Save comparison
-  const handleSave = useCallback(async () => {
-    if (!partialText || saving) return;
-    setSaving(true);
-    try {
-      const activePaperIds = papers.map((p) => p.id);
-      const titles = papers.map((p) => cleanArxivTitle(p.title));
-      const result = await ipc.saveComparison({
-        paperIds: activePaperIds,
-        titles,
-        contentMd: partialText,
-      });
-      setCurrentSavedId(result.id);
-      setSaved(true);
-      // Update URL to reflect saved state
-      setSearchParams({ saved: result.id }, { replace: true });
-    } catch {
-      setError('Failed to save comparison');
-    } finally {
-      setSaving(false);
-    }
-  }, [partialText, papers, saving, setSearchParams]);
 
   // Load history
   const loadHistory = useCallback(async () => {
@@ -271,7 +251,6 @@ export function ComparePage() {
         setHistory((prev) => prev.filter((i) => i.id !== id));
         if (currentSavedId === id) {
           setCurrentSavedId(null);
-          setSaved(false);
         }
       } catch {
         // ignore
@@ -413,22 +392,6 @@ export function ComparePage() {
             )}
             {isDone && (
               <>
-                {!saved && (
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-notion-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-notion-accent/90 disabled:opacity-50"
-                  >
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
-                )}
-                {saved && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700">
-                    <Check size={14} />
-                    Saved
-                  </span>
-                )}
                 <button
                   onClick={handleRegenerate}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-notion-border px-3 py-1.5 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
@@ -525,36 +488,45 @@ export function ComparePage() {
             {/* Analysis */}
             {(isStreaming || isDone || partialText) && (
               <div className="space-y-4">
-                {/* Section header */}
-                <div className="flex items-center gap-2">
-                  <div className="h-px flex-1 bg-notion-border" />
-                  <span className="text-xs font-medium uppercase tracking-wider text-notion-text-tertiary">
-                    Comparative Analysis
-                  </span>
-                  <div className="h-px flex-1 bg-notion-border" />
-                </div>
-
                 {/* Streaming indicator */}
                 {isStreaming && !partialText && (
-                  <div className="flex items-center gap-2 rounded-lg border border-notion-border bg-notion-sidebar px-4 py-3 text-sm text-notion-text-secondary">
-                    <Loader2 size={14} className="animate-spin text-notion-accent" />
-                    {stage === 'preparing'
-                      ? 'Reading papers and preparing comparison…'
-                      : 'Generating comparative analysis…'}
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 rounded-xl border border-notion-accent/20 bg-notion-accent-light px-5 py-4"
+                  >
+                    <Loader2 size={16} className="animate-spin text-notion-accent" />
+                    <div>
+                      <p className="text-sm font-medium text-notion-text">
+                        {stage === 'preparing'
+                          ? 'Preparing comparison…'
+                          : 'Generating comparative analysis…'}
+                      </p>
+                      {statusMessage && (
+                        <p className="mt-0.5 text-xs text-notion-text-secondary">{statusMessage}</p>
+                      )}
+                    </div>
+                  </motion.div>
                 )}
 
                 {/* Markdown content */}
                 {partialText && (
-                  <div className="rounded-lg border border-notion-border bg-white p-6 shadow-notion">
-                    <MarkdownContent content={partialText} />
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
                     {isStreaming && (
-                      <div className="mt-4 flex items-center gap-2 border-t border-notion-border pt-3 text-xs text-notion-text-tertiary">
+                      <div className="mb-4 flex items-center gap-2 text-xs text-notion-accent">
                         <Loader2 size={12} className="animate-spin" />
-                        Generating…
+                        <span>Writing analysis…</span>
                       </div>
                     )}
-                  </div>
+                    <MarkdownContent
+                      content={partialText}
+                      proseClassName="prose prose-sm max-w-none break-words prose-headings:text-notion-text prose-headings:tracking-tight prose-h2:text-lg prose-h2:mt-8 prose-h2:mb-3 prose-h2:border-b prose-h2:border-notion-border prose-h2:pb-2 prose-h3:text-base prose-h3:mt-6 prose-p:text-notion-text-secondary prose-p:leading-relaxed prose-strong:text-notion-text prose-li:text-notion-text-secondary prose-ul:my-2 prose-li:my-0.5 prose-a:text-notion-accent prose-a:no-underline hover:prose-a:underline"
+                    />
+                  </motion.div>
                 )}
               </div>
             )}
