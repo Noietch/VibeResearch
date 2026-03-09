@@ -58,6 +58,11 @@ describe('AgentTodoService', () => {
           return repository;
         }
       },
+      ProjectsRepository: class {
+        constructor() {
+          return { findById: vi.fn().mockResolvedValue(null) };
+        }
+      },
     }));
     vi.doMock('../..//src/main/agent/agent-detector', () => ({
       detectAgents: vi.fn(),
@@ -103,6 +108,11 @@ describe('AgentTodoService', () => {
       AgentTodoRepository: class {
         constructor() {
           return repository;
+        }
+      },
+      ProjectsRepository: class {
+        constructor() {
+          return { findById: vi.fn().mockResolvedValue(null) };
         }
       },
     }));
@@ -179,6 +189,11 @@ describe('AgentTodoService', () => {
           return repository;
         }
       },
+      ProjectsRepository: class {
+        constructor() {
+          return { findById: vi.fn().mockResolvedValue(null) };
+        }
+      },
     }));
     vi.doMock('../../src/main/agent/agent-detector', () => ({
       detectAgents: vi.fn(),
@@ -225,6 +240,11 @@ describe('AgentTodoService', () => {
       AgentTodoRepository: class {
         constructor() {
           return repository;
+        }
+      },
+      ProjectsRepository: class {
+        constructor() {
+          return { findById: vi.fn().mockResolvedValue(null) };
         }
       },
     }));
@@ -279,6 +299,11 @@ describe('AgentTodoService', () => {
       AgentTodoRepository: class {
         constructor() {
           return repository;
+        }
+      },
+      ProjectsRepository: class {
+        constructor() {
+          return { findById: vi.fn().mockResolvedValue(null) };
         }
       },
     }));

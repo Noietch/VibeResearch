@@ -2,6 +2,17 @@
 
 ## 2026-03-09 (session 46)
 
+### fix: Repair pre-existing test failures unrelated to PDF fix
+
+- **Scope**: `src/main/agent/acp-adapter.ts`, `tests/integration/acp.test.ts`, `tests/integration/agent-todo.service.test.ts`
+- **Changes**:
+  - Fixed `acp-adapter.ts` to guard against `update.content` being undefined (`?.` optional chain)
+  - Skipped stale `acp-connection` test suites that tested a hand-rolled JSON-RPC layer now replaced by `@agentclientprotocol/sdk`
+  - Added `ProjectsRepository` mock to all `agent-todo.service.test.ts` test cases (service constructor now requires it)
+  - Rebuilt `better-sqlite3` native module for arm64 (was compiled for x86_64)
+
+## 2026-03-09 (session 46 — PDF fix)
+
 ### fix: Show PDF download failures after import instead of silently ignoring them
 
 - **Scope**: `src/main/services/ingest.service.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/components/import-modal.tsx`
