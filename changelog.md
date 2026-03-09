@@ -1,5 +1,147 @@
 # Changelog
 
+## 2026-03-10 (session 71)
+
+### fix: Task card click not working + AgentLogo in selectors
+
+- **Scope**: `src/renderer/components/agent-todo/TodoCard.tsx`, `src/renderer/components/agent-todo/AgentSelector.tsx`
+- **TodoCard click fix**: Added `pointer-events-none group-hover:pointer-events-auto` to the action buttons container. Previously, buttons with `opacity-0` still captured click events and called `e.stopPropagation()`, preventing the card's `onClick` navigation from firing.
+- **AgentSelector logos**: Replaced generic `Bot` icon with `AgentLogo` component, showing brand-specific logos (Claude, Codex, Gemini, Qwen, Goose, etc.) in both the selector button and dropdown items.
+- **TodoCard agent logo**: Replaced `User` icon with `AgentLogo` in the task card's agent info line.
+
+## 2026-03-10 (session 70)
+
+### feat: Agent logos in settings list + Qwen/Goose agent support
+
+- **Scope**: `src/shared/types/agent-todo.ts`, `src/renderer/components/agent-todo/AgentLogo.tsx`, `src/renderer/components/settings/AgentSettings.tsx`
+- **AgentToolKind**: Added `qwen` and `goose` to the union type and `AGENT_TOOL_META` array, matching what `agent-detector.ts` already detects (`qwen --acp`, `goose acp`).
+- **AgentLogo**: Added `QwenLogo` (purple chat bubble) and `GooseLogo` (dark bird silhouette) SVG components; both handled in the `AgentLogo` switch.
+- **Settings agent list**: Each agent card in the list now shows its `AgentLogo` icon in a small rounded badge next to the name, making it easy to identify agent types at a glance.
+- **backendToAgentTool**: Updated to map `'qwen'` → `'qwen'` and `'goose'` → `'goose'` so auto-detected agents get the correct logo.
+
+## 2026-03-10 (session 69)
+
+### refactor: Remove chat input from agent task detail page
+
+- **Scope**: `src/renderer/pages/agent-todos/[id]/page.tsx`
+- **Change**: Removed the chat input box, slash command menu, model dropdown, and YOLO toggle from the task detail page. The page now only supports agent execution (Run/Stop) without a free-form chat input.
+- **Kept**: MessageStream (tool calls, plans, permission cards), RunTimeline sidebar, prompt banner, stderr output panel, and the Edit form (which still exposes YOLO mode and model settings).
+- **Removed**: `sendAgentMessage` IPC call, `ModelDropdown` component, `canChat`/`effectiveCanChat` logic, slash command state, chat error state.
+
+## 2026-03-10 (session 68)
+
+### feat: AI-powered GitHub URL detection in Clone Repo modal
+
+- **Scope**: `src/main/ipc/papers.ipc.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/pages/papers/overview/page.tsx`
+- **New IPC handler** `papers:extractGithubUrl`: calls `generateWithActiveProvider` with a focused prompt to identify the paper's own official GitHub repository URL (not just any GitHub URL mentioned in the abstract). Returns `null` if none is confidently identified.
+- **Frontend IPC** `ipc.extractGithubUrl({ title, abstract })` added to `use-ipc.ts`.
+- **UI**: "Clone Repo" button now auto-triggers AI detection on open. Modal shows three states: detecting (spinner), detected (green badge with URL), not found (amber warning with manual entry prompt). `detectRanOnce` flag distinguishes "not yet run" from "ran and found nothing".
+
+## 2026-03-09 (session 67)
+
+### feat: Agent logos in reader chat model picker — per-agent-type SVG icons
+
+- **Scope**: `src/renderer/components/agent-todo/AgentLogo.tsx` (new), `src/renderer/pages/papers/reader/page.tsx`, `src/renderer/components/settings/AgentSettings.tsx`
+- **New file**: `AgentLogo.tsx` — shared component that renders the correct SVG logo for each `AgentToolKind` (Claude Code → Claude logo, Code X → CodeX logo, Gemini → Gemini star, OpenCLAW → claw, OpenCode → OpenCode mark, unknown → Bot icon).
+- **Reader chat picker**: Model picker trigger button and agent list items now show `AgentLogo` instead of a generic `Bot` icon. `agentTool` is stored in `chatModel` when selecting an agent. Agent empty state also uses `AgentLogo`.
+- **AgentSettings refactor**: All private Logo functions and `getAgentLogo` helper removed; replaced with the shared `AgentLogo` component import.
+
+## 2026-03-09 (session 66)
+
+### feat: Reader chat — agent execution steps rendered when using an Agent model
+
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+- **Change**: When the selected chat model is an Agent (`backend === 'cli'`), the Chat panel now renders the full agent execution trace (tool calls, text, plans, permission requests) using the same `MessageStream` + `useAgentStream` components as the Tasks detail page.
+- **Flow**: First message creates a temporary `AgentTodo` (cwd = paper directory so the agent can read the PDF), runs it via `ipc.runAgentTodo`. Follow-up messages are sent via `ipc.sendAgentMessage`. Stop button calls `ipc.stopAgentTodo`.
+- **Empty state**: Shows Bot icon + "Send a message to start the agent" before first message.
+- **API chat mode unchanged**: When a Chat Model (API) is selected, the existing `ChatBubble` + streaming text rendering is preserved.
+- **New imports**: `useAgentStream`, `MessageStream`, `Bot` icon.
+
+## 2026-03-09 (session 65)
+
+### feat: Remote Agent architecture — SSH config embedded in agent, SSH Server Settings removed
+
+- **Scope**: `prisma/schema.prisma`, `src/db/init-schema.ts`, `src/db/repositories/agent-todo.repository.ts`, `src/shared/types/agent-todo.ts`, `src/main/services/agent-todo.service.ts`, `src/renderer/components/settings/AgentSettings.tsx`, `src/renderer/pages/settings/settings-nav.ts`, `src/renderer/pages/settings/page.tsx`, `src/renderer/pages/projects/page.tsx`, `src/renderer/components/projects/RemoteAgentSelector.tsx` (new), `src/renderer/components/projects/RemoteCwdPicker.tsx`, `tests/integration/settings-nav.test.ts`
+
+- **AgentConfig DB schema**: Added SSH fields to `AgentConfig` table: `isRemote`, `sshHost`, `sshPort`, `sshUsername`, `sshAuthMethod`, `sshPrivateKeyPath`, `sshPassphraseEncrypted`, `remoteCliPath`, `remoteExtraEnv`. Added migration statements in `init-schema.ts` with try/catch for idempotency.
+- **Remote Agent concept**: SSH config now lives inside the agent itself. `AgentTodoService.runTodo()` reads SSH config from agent fields (new-style) with fallback to `project.sshServerId` (legacy).
+- **AgentSettings UI**: Added Local/Remote tab switcher. Remote tab shows a complete add form with SSH host/port/username/auth method/private key/passphrase, remote CLI path, extra env vars, and API key. Agent cards show SSH badge (`user@host:port`) for remote agents.
+- **SSH Server Settings removed**: Removed `general.ssh` nav item from settings nav, removed `SshServerSettings` component from settings page.
+- **Project page refactored**: Replaced `SshServerSelector` with `RemoteAgentSelector` (new component). `RemoteWorkdirField` now loads agent SSH config instead of SSH server. `sshServerId` field repurposed to store agent ID. `RemoteCwdPicker` updated to accept generic `RemoteSshConfig` interface.
+- **Tests**: Updated `settings-nav.test.ts` to reflect 6 sections (removed `general.ssh`).
+
+## 2026-03-09 (session 64)
+
+### feat: Reader layout toggle + redesigned chat input with inline model picker
+
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+- **Layout toggle**: Replaced single floating chat toggle button with three-mode layout switcher (Chat only / Split / PDF only) placed in the center of the top toolbar. Uses `layoutMode` state (`'split' | 'chat-only' | 'pdf-only'`).
+- **Chat input redesign**: Redesigned input box with two-row layout — textarea on top, bottom toolbar row with model picker on the left and send/stop button (rounded circle) on the right. Matches Codex-style chat UI.
+- **Inline model picker**: Dropdown in the input box bottom row shows Agents first, then Chat Models. Agents loaded via `ipc.listAgents()`, models via `ipc.listModels()`. Click outside closes the picker.
+- **New icons**: `Columns2`, `FileText`, `Bot` from lucide-react.
+
+## 2026-03-09 (session 63)
+
+### feat: Reader chat — session picker and functional New Chat button
+
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+- **Change**: The "New Chat" button previously only cleared UI state with no visible feedback. Added a session picker dropdown in the chat header: when the paper has prior chat sessions, a clickable label shows the current session title and a chevron; clicking opens an animated dropdown listing all sessions for quick switching. "New Chat" now also resets `generatedNoteId`. Fixed `setChatNotes` after job completion to correctly filter only `Chat:` prefixed notes. Click-outside closes the dropdown.
+- **New icons**: `ChevronDown`, `MessageSquare` from lucide-react.
+
+## 2026-03-09 (session 62)
+
+### feat: Related Works paper cards now match library style with tags and navigation
+
+- **Scope**: `src/renderer/pages/projects/page.tsx`
+- **Change**: Replaced the card-based layout in `RelatedWorksTab` with a list-row layout identical to the Papers library (`PaperCard`). Each row shows: FileText icon, cleaned title (truncate), year + authors snippet, and up to 3 color-coded category tags. Clicking the content area navigates to the paper detail page via `useNavigate`. Remove button remains hover-visible on the right.
+- **Imports added**: `TagCategory` type and `CATEGORY_COLORS`, `cleanArxivTitle` from `@shared`.
+
+## 2026-03-09 (session 61)
+
+### fix: remove .pdf suffix from all arXiv PDF URLs to avoid 301 redirects
+
+- **Scope**: `src/shared/utils/arxiv-extractor.ts`, `src/main/services/` (ingest, download, paper-processing, reading, pdf-extractor, arxiv-source, semantic-scholar-source), `src/renderer/pages/papers/` (reader, notes, overview)
+- **Root cause**: `https://arxiv.org/pdf/{id}.pdf` triggers a 301 redirect to `https://arxiv.org/pdf/{id}`. Before redirect support was added, this caused the download to receive an HTML page instead of a PDF.
+- **Fix**: Added `arxivPdfUrl(id)` helper in `@shared/utils/arxiv-extractor` that always produces the canonical no-suffix URL. Replaced every hardcoded `` `https://arxiv.org/pdf/${id}.pdf` `` across the entire codebase with this helper.
+
+### fix: proxyFetch now follows HTTP redirects (fixes auto-import PDF download)
+
+- **Scope**: `src/main/services/proxy-fetch.ts`
+- **Root cause**: arXiv `https://arxiv.org/pdf/{id}.pdf` returns 301 redirect to `/pdf/{id}`. `proxyFetch` did not follow redirects, so it received an HTML redirect page instead of a PDF, causing the magic-bytes check (`%PDF-`) to fail and the download to be marked as failed.
+- **Fix**: Extracted `doFetch()` helper with `redirectsLeft` counter (max 5). On 3xx response with `Location` header, drain the body and recurse with the resolved URL. Also corrected `ok` to `status < 300` (was `< 400`, which incorrectly treated redirects as success).
+- **Impact**: All `proxyFetch` callers (PDF download, metadata fetch, proxy test) now correctly follow redirects.
+
+### feat: Download PDF button on paper overview page
+
+- **Scope**: `src/renderer/pages/papers/overview/page.tsx`
+- **Changes**: Added "Download PDF" button in the action buttons area (shown only when `!paper.pdfPath && inferPdfUrl(paper)`). After download completes, automatically opens the Reader tab so the PDF is immediately visible.
+
+## 2026-03-09 (session 60)
+
+### feat: PDF download progress bar
+
+- **Scope**: `src/main/services/proxy-fetch.ts`, `src/main/services/download.service.ts`, `src/main/ipc/papers.ipc.ts`, `src/renderer/pages/papers/reader/page.tsx`
+- **Changes**:
+  - `proxyFetch` now accepts `onProgress(downloaded, total)` callback, tracking `content-length` header and each `data` chunk
+  - `DownloadService.downloadPdf/downloadPdfById` passes progress callback through
+  - `papers:downloadPdf` IPC handler broadcasts `papers:downloadProgress` events via `BrowserWindow.webContents.send`
+  - Reader page subscribes to progress events and shows a progress bar (downloaded/total MB) or "Connecting…" when `content-length` is unknown
+
+### fix: TypeScript errors across renderer (zero errors)
+
+- **Scope**: multiple renderer files
+- **Changes**:
+  - `GraphCanvas.tsx`: added `cytoscape-dagre.d.ts` type declaration
+  - `research-profile.tsx`: import `ResearchProfile` from `@shared` directly
+  - `papers-by-tag.tsx`: removed deleted `CollectionItem` import and Collection picker UI (Collections feature removed)
+  - `domain.ts`: added `TaskResultItem` and `ExperimentReportItem` interfaces
+  - `use-ipc.ts`: re-exported new types; added `listReports`, `deleteReport`, `generateReport`, `listTaskResults` stubs; extended `createProject`/`updateProject` types with `sshServerId`/`remoteWorkdir`
+  - `import-modal.tsx`: narrowed `File.path` type with type guard
+  - `SshServerSettings.tsx` / `RemoteCwdPicker.tsx`: `privateKeyPath ?? undefined` to fix null/undefined mismatch; removed non-existent `software` field
+  - `AgentSettings.tsx`: added `onAutoDetectConfig` to `EditAgentModal` props
+  - `projects/page.tsx`: guarded `authors.length` with `?? 0`
+  - `recommendations/page.tsx`: guarded `semanticScore` with `?? 0`
+
 ## 2026-03-09 (session 59)
 
 ### feat: Add fixed Built-in Model card with Download button in Models → Embedding Models
