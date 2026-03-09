@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useMatches } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search,
@@ -353,7 +353,11 @@ export function AppShell({
     pathname.startsWith('/papers/') ||
     pathname.startsWith('/collections/');
   const collapsedNavItems = [libraryNavItem, ...workspaceNavItems];
-  const canGoBack = pathname !== '/dashboard';
+  const matches = useMatches();
+  const hideBackButton = matches.some(
+    (m) => (m.handle as { hideBackButton?: boolean })?.hideBackButton,
+  );
+  const canGoBack = pathname !== '/dashboard' && !hideBackButton;
 
   const handleGoBack = () => {
     if (window.history.length > 1) {
