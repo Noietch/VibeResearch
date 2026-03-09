@@ -113,7 +113,7 @@ const EDITOR_OPTIONS = [
   { id: 'custom', name: 'Custom', command: '', Icon: Code2 },
 ] as const;
 
-type Tab = 'models' | 'storage' | 'editor' | 'proxy' | 'agents' | 'ssh' | 'semantic';
+type Tab = 'models' | 'storage' | 'basic' | 'agents' | 'semantic';
 
 // ─── Provider selector ───────────────────────────────────────────────────────
 
@@ -569,37 +569,30 @@ function EditorSettings() {
         Choose your preferred code editor for opening paper folders.
       </p>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2">
         {EDITOR_OPTIONS.map((editor) => {
           const isSelected = selectedEditor === editor.id;
           return (
             <button
               key={editor.id}
               onClick={() => handleSelectEditor(editor.id)}
-              className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-all ${
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
                 isSelected
-                  ? 'border-blue-300 bg-blue-50 shadow-sm'
-                  : 'border-notion-border bg-white hover:border-notion-text-tertiary hover:shadow-sm'
+                  ? 'border-blue-300 bg-blue-50'
+                  : 'border-notion-border bg-white hover:border-notion-text-tertiary hover:bg-notion-sidebar/40'
               }`}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-notion-sidebar">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-notion-sidebar">
                 <editor.Icon />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-sm font-medium ${isSelected ? 'text-blue-700' : 'text-notion-text'}`}
-                  >
-                    {editor.name}
-                  </span>
-                  {isSelected && <Check size={14} className="text-blue-600" />}
-                </div>
-                {editor.command && (
-                  <span className="text-xs text-notion-text-tertiary font-mono">
-                    {editor.command}
-                  </span>
-                )}
+              <div className="min-w-0 flex-1">
+                <span
+                  className={`truncate text-sm font-medium ${isSelected ? 'text-blue-700' : 'text-notion-text'}`}
+                >
+                  {editor.name}
+                </span>
               </div>
+              {isSelected && <Check size={13} className="shrink-0 text-blue-600" />}
             </button>
           );
         })}
@@ -2635,38 +2628,29 @@ function ProxySettings() {
       {/* Proxy Scope */}
       <div className="rounded-xl border border-notion-border bg-white p-5">
         <p className="mb-3 text-xs font-medium text-notion-text-secondary">Apply Proxy To</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {PROXY_SCOPE_OPTIONS.map(({ key, label, desc, Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => toggleScope(key)}
-              className={`flex flex-col items-center gap-2.5 rounded-xl border px-3 py-4 text-center transition-all ${
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
                 proxyScope[key]
-                  ? 'border-blue-200 bg-blue-50/60 shadow-sm'
+                  ? 'border-blue-200 bg-blue-50/60'
                   : 'border-notion-border bg-white hover:border-notion-text-tertiary hover:bg-notion-sidebar/40'
               }`}
             >
-              <div
-                className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                  proxyScope[key] ? 'bg-blue-100' : 'bg-notion-sidebar'
-                }`}
+              <Icon
+                size={14}
+                className={`shrink-0 ${proxyScope[key] ? 'text-blue-600' : 'text-notion-text-secondary'}`}
+              />
+              <span
+                className={`min-w-0 flex-1 truncate text-sm font-medium ${proxyScope[key] ? 'text-blue-700' : 'text-notion-text'}`}
               >
-                <Icon
-                  size={16}
-                  className={proxyScope[key] ? 'text-blue-600' : 'text-notion-text-secondary'}
-                />
-              </div>
-              <div>
-                <p
-                  className={`text-sm font-medium leading-tight ${proxyScope[key] ? 'text-blue-700' : 'text-notion-text'}`}
-                >
-                  {label}
-                </p>
-                <p className="mt-0.5 text-2xs text-notion-text-tertiary">{desc}</p>
-              </div>
+                {label}
+              </span>
               <div
-                className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                   proxyScope[key] ? 'border-blue-500 bg-blue-500' : 'border-notion-border bg-white'
                 }`}
               >
@@ -2680,7 +2664,7 @@ function ProxySettings() {
       {/* Test site cards — always visible */}
       <div className="rounded-xl border border-notion-border bg-white p-5">
         <p className="mb-3 text-xs font-medium text-notion-text-secondary">Connectivity Check</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {Object.entries(SITE_ICONS).map(([name, SiteIcon]) => {
             const result = testResults?.find((r) => r.name === name);
             const isPending = !result && !testing;
@@ -2688,7 +2672,7 @@ function ProxySettings() {
             return (
               <div
                 key={name}
-                className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-4 text-center transition-all ${
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all ${
                   result
                     ? result.success
                       ? 'border-green-200 bg-green-50'
@@ -2697,16 +2681,16 @@ function ProxySettings() {
                 }`}
               >
                 <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ${isPending ? 'opacity-50' : ''}`}
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center ${isPending ? 'opacity-50' : ''}`}
                 >
                   <SiteIcon />
                 </div>
                 <span
-                  className={`text-sm font-semibold ${isPending ? 'text-notion-text-tertiary' : 'text-notion-text'}`}
+                  className={`min-w-0 flex-1 truncate text-sm font-medium ${isPending ? 'text-notion-text-tertiary' : 'text-notion-text'}`}
                 >
                   {name}
                 </span>
-                <div className="flex h-4 items-center justify-center">
+                <div className="flex shrink-0 items-center">
                   {isLoading ? (
                     <Loader2 size={12} className="animate-spin text-notion-text-tertiary" />
                   ) : result ? (
@@ -2721,7 +2705,7 @@ function ProxySettings() {
                       <div className="flex items-center gap-1">
                         <X size={12} className="text-red-500" strokeWidth={2.5} />
                         <span
-                          className="max-w-[80px] truncate text-xs text-red-600"
+                          className="max-w-[60px] truncate text-xs text-red-600"
                           title={result.error}
                         >
                           {result.error ?? 'Failed'}
@@ -3429,16 +3413,14 @@ function SemanticSettingsPanel() {
 }
 
 export function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('agents');
+  const [activeTab, setActiveTab] = useState<Tab>('basic');
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
+    { id: 'basic', label: 'Basic', icon: Settings },
     { id: 'agents', label: 'Agents', icon: Bot },
     { id: 'models', label: 'Models', icon: Cpu },
-    { id: 'ssh', label: 'SSH Servers', icon: Server },
     { id: 'semantic', label: 'Semantic', icon: Sparkles },
-    { id: 'editor', label: 'Editor', icon: Code2 },
     { id: 'storage', label: 'Storage', icon: HardDrive },
-    { id: 'proxy', label: 'Proxy', icon: Globe },
   ];
 
   return (
@@ -3493,11 +3475,25 @@ export function SettingsPage() {
       <div>
         {activeTab === 'models' && <ModelsSettings />}
         {activeTab === 'semantic' && <SemanticSettingsPanel />}
-        {activeTab === 'editor' && <EditorSettings />}
         {activeTab === 'storage' && <StorageSettings />}
-        {activeTab === 'proxy' && <ProxySettings />}
         {activeTab === 'agents' && <AgentSettings />}
-        {activeTab === 'ssh' && <SshServerSettings />}
+        {activeTab === 'basic' && (
+          <div className="space-y-10">
+            <section>
+              <h2 className="mb-4 text-base font-semibold text-notion-text">Proxy</h2>
+              <ProxySettings />
+            </section>
+            <div className="border-t border-notion-border" />
+            <section>
+              <SshServerSettings />
+            </section>
+            <div className="border-t border-notion-border" />
+            <section>
+              <h2 className="mb-4 text-base font-semibold text-notion-text">Editor</h2>
+              <EditorSettings />
+            </section>
+          </div>
+        )}
       </div>
     </>
   );

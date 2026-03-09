@@ -508,7 +508,7 @@ function SshServerModal({
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:opacity-80 disabled:opacity-50"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving ? 'Saving…' : 'Save'}
@@ -687,7 +687,7 @@ function RemoteDirModal({
           </button>
           <button
             onClick={() => onSelect(currentPath)}
-            className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
+            className="rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:opacity-80"
           >
             Select This Directory
           </button>
@@ -896,7 +896,7 @@ export function SshServerSettings() {
             setEditingServer(null);
             setShowModal(true);
           }}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600"
+          className="flex items-center gap-1.5 rounded-lg bg-notion-text px-3 py-2 text-sm font-medium text-white hover:opacity-80"
         >
           <Plus size={14} />
           Add Server
