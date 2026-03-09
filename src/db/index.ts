@@ -8,3 +8,4 @@ export * from './repositories/agent-todo.repository';
 export * from './repositories/collections.repository';
 export * from './repositories/citations.repository';
 export * from './repositories/recommendations.repository';
+export * from './repositories/comparisons.repository';
