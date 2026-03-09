@@ -251,6 +251,12 @@
 
 ## 2026-03-09
 
+### fix: Filter codex-acp noisy stderr warnings
+
+**Scope**: `src/main/services/agent-task-runner.ts`
+
+**Changes**: Suppress `No onPostToolUseHook found for tool use ID:` messages emitted by the `@zed-industries/codex-acp` bridge to stderr. These are harmless internal warnings that polluted the "Agent output" panel in the UI.
+
 ### feat: Research workflow — Task Results + Report Generation
 
 **Scope**: Full stack — `prisma/schema.prisma`, `src/db/repositories/`, `src/main/services/`, `src/main/ipc/`, `src/shared/types/`, `src/renderer/components/project/`
@@ -266,12 +272,12 @@
   - `experiment-report.service.ts`: Streaming report generation using Vercel AI SDK with project context and task results.
 - **IPC Handlers**: `task-results.ipc.ts` and `experiment-report.ipc.ts` with streaming events (`report:generate:chunk`, `report:generate:done`, `report:generate:error`).
 - **UI Components**:
-  - `ResultsTab.tsx`: Display task results grouped by task, with scan-all and manual add capabilities.
   - `ReportsTab.tsx`: List reports with Markdown preview, generate new reports.
   - `ReportGeneratorModal.tsx`: Task/result selection modal with real-time streaming preview.
-- **Project Page**: Added "Results" and "Reports" tabs to project detail view.
+- **TodoCard**: Shows results count badge for each task.
+- **Project Page**: Added "Reports" tab to project detail view.
 
-**Design**: Research workflow: Idea → Task → Results → Report. Results are automatically scanned from task output directories or manually added. Reports are AI-generated summaries with streaming preview.
+**Design**: Research workflow: Idea → Task → Results → Report. Results are task attributes (displayed on TodoCard), scanned from task output directories or manually added. Reports are AI-generated summaries with streaming preview.
 
 ### feat: SSH Remote Agent Execution
 

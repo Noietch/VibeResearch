@@ -169,6 +169,7 @@ export interface AgentTodoItem {
   createdAt: string;
   updatedAt: string;
   projectId?: string | null;
+  resultsCount?: number;
 }
 
 export interface AgentTodoDetail extends AgentTodoItem {

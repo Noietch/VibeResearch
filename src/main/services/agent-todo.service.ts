@@ -142,6 +142,7 @@ export class AgentTodoService {
     return todos.map((t) => ({
       ...t,
       agent: { ...t.agent, acpArgs: JSON.parse(t.agent.acpArgs) as string[] },
+      resultsCount: t._count?.results ?? 0,
     }));
   }
 

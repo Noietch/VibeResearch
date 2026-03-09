@@ -96,6 +96,7 @@ export class AgentTodoRepository {
       include: {
         agent: true,
         runs: { orderBy: { createdAt: 'desc' }, take: 1 },
+        _count: { select: { results: true } },
       },
     });
   }

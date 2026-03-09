@@ -34,7 +34,6 @@ import {
   FileText,
   Code2,
   Server,
-  FileBox,
   FileSpreadsheet,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -44,7 +43,6 @@ import { TodoCard } from '../../components/agent-todo/TodoCard';
 import { AgentSelector } from '../../components/agent-todo/AgentSelector';
 import { SshServerSelector } from '../../components/projects/SshServerSelector';
 import { RemoteCwdPicker } from '../../components/projects/RemoteCwdPicker';
-import { ResultsTab } from '../../components/project/ResultsTab';
 import { ReportsTab } from '../../components/project/ReportsTab';
 
 // ── Helper component for remote workdir picker ────────────────────────────────
@@ -143,7 +141,7 @@ function timeAgo(dateStr: string) {
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'tasks' | 'code' | 'ideas' | 'results' | 'reports';
+type Tab = 'tasks' | 'code' | 'ideas' | 'reports';
 
 // ── TaskList ─────────────────────────────────────────────────────────────────
 
@@ -1279,7 +1277,6 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
     { id: 'tasks', label: 'Tasks', count: 0, icon: FolderKanban },
     { id: 'code', label: 'Code', count: project.repos.length, icon: GitBranch },
     { id: 'ideas', label: 'Ideas', count: project.ideas.length, icon: Lightbulb },
-    { id: 'results', label: 'Results', count: 0, icon: FileBox },
     { id: 'reports', label: 'Reports', count: 0, icon: FileSpreadsheet },
   ];
 
@@ -1493,7 +1490,6 @@ function ProjectDetail({ project, onRefresh }: { project: ProjectItem; onRefresh
           {tab === 'tasks' && <TaskList project={project} />}
           {tab === 'code' && <CodeTab project={project} onChange={onRefresh} />}
           {tab === 'ideas' && <IdeasTab project={project} onChange={onRefresh} />}
-          {tab === 'results' && <ResultsTab project={project} />}
           {tab === 'reports' && <ReportsTab project={project} />}
         </motion.div>
       </AnimatePresence>
