@@ -58,6 +58,9 @@ describe('AgentTodoService', () => {
           return repository;
         }
       },
+      ProjectsRepository: class {
+        getProject = vi.fn().mockResolvedValue(null);
+      },
     }));
     vi.doMock('../..//src/main/agent/agent-detector', () => ({
       detectAgents: vi.fn(),
@@ -104,6 +107,9 @@ describe('AgentTodoService', () => {
         constructor() {
           return repository;
         }
+      },
+      ProjectsRepository: class {
+        getProject = vi.fn().mockResolvedValue(null);
       },
     }));
     vi.doMock('../../src/main/agent/agent-detector', () => ({
@@ -179,6 +185,9 @@ describe('AgentTodoService', () => {
           return repository;
         }
       },
+      ProjectsRepository: class {
+        getProject = vi.fn().mockResolvedValue(null);
+      },
     }));
     vi.doMock('../../src/main/agent/agent-detector', () => ({
       detectAgents: vi.fn(),
@@ -226,6 +235,9 @@ describe('AgentTodoService', () => {
         constructor() {
           return repository;
         }
+      },
+      ProjectsRepository: class {
+        getProject = vi.fn().mockResolvedValue(null);
       },
     }));
     vi.doMock('../../src/main/agent/agent-detector', () => ({
@@ -280,6 +292,9 @@ describe('AgentTodoService', () => {
         constructor() {
           return repository;
         }
+      },
+      ProjectsRepository: class {
+        getProject = vi.fn().mockResolvedValue(null);
       },
     }));
     vi.doMock('../../src/main/agent/agent-detector', () => ({

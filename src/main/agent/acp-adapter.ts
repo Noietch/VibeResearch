@@ -18,7 +18,7 @@ export function transformAcpUpdate(
   currentMsgId: string,
 ): TodoMessage | null {
   if (update.sessionUpdate === 'agent_message_chunk') {
-    const text = update.content.type === 'text' ? (update.content.text ?? '') : '';
+    const text = update.content?.type === 'text' ? (update.content.text ?? '') : '';
     return {
       id: randomUUID(),
       msgId: currentMsgId,
@@ -30,7 +30,7 @@ export function transformAcpUpdate(
   }
 
   if (update.sessionUpdate === 'agent_thought_chunk') {
-    const text = update.content.type === 'text' ? (update.content.text ?? '') : '';
+    const text = update.content?.type === 'text' ? (update.content.text ?? '') : '';
     return {
       id: randomUUID(),
       msgId: `thought-${currentMsgId}`,
