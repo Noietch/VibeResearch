@@ -149,6 +149,7 @@ export interface RecommendationItem {
   qualityScore: number;
   reason: string;
   triggerPaperTitle?: string | null;
+  triggerPaperId?: string | null;
   status: RecommendationStatus;
   generatedAt: string;
   isInLibrary: boolean;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Loader2,
   RefreshCcw,
@@ -23,6 +24,7 @@ function formatDate(value?: string | null) {
 
 export function RecommendationsPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [items, setItems] = useState<RecommendationItem[]>([]);
   const [filter, setFilter] = useState<RecommendationFilter>('new');
   const [loading, setLoading] = useState(true);
@@ -229,7 +231,16 @@ export function RecommendationsPage() {
                   {item.triggerPaperTitle && (
                     <div className="mt-2 flex items-center gap-1.5 text-xs text-notion-text-secondary">
                       <span className="font-medium text-notion-text">Triggered by:</span>
-                      <span className="truncate">{item.triggerPaperTitle}</span>
+                      {item.triggerPaperId ? (
+                        <button
+                          onClick={() => navigate(`/papers/${item.triggerPaperId}`)}
+                          className="truncate text-left text-notion-accent hover:underline"
+                        >
+                          {item.triggerPaperTitle}
+                        </button>
+                      ) : (
+                        <span className="truncate">{item.triggerPaperTitle}</span>
+                      )}
                     </div>
                   )}
                 </div>

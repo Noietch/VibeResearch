@@ -26,6 +26,7 @@ export interface UpsertRecommendationResultInput {
   qualityScore: number;
   reason: string;
   triggerPaperTitle?: string | null;
+  triggerPaperId?: string | null;
   status?: string;
   generatedAt: Date;
 }
@@ -96,6 +97,7 @@ export class RecommendationsRepository {
         qualityScore: input.qualityScore,
         reason: input.reason,
         triggerPaperTitle: input.triggerPaperTitle ?? null,
+        triggerPaperId: input.triggerPaperId ?? null,
         status: input.status ?? 'new',
         generatedAt: input.generatedAt,
       },
@@ -107,6 +109,7 @@ export class RecommendationsRepository {
         qualityScore: input.qualityScore,
         reason: input.reason,
         triggerPaperTitle: input.triggerPaperTitle ?? null,
+        triggerPaperId: input.triggerPaperId ?? null,
         status: input.status,
         generatedAt: input.generatedAt,
       },

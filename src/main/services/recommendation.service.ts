@@ -16,7 +16,7 @@ interface WeightedSignal {
 
 interface InterestProfile {
   keywordQueries: string[];
-  seedTitles: string[];
+  seedPapers: Array<{ id: string; title: string }>;
   tagWeights: WeightedSignal[];
   authorWeights: WeightedSignal[];
   positiveFeedbackTags: WeightedSignal[];
@@ -34,6 +34,7 @@ interface ScoredCandidate {
   feedbackBoost: number;
   reason: string;
   triggerPaperTitle: string | null;
+  triggerPaperId: string | null;
 }
 
 export class RecommendationService {
@@ -50,7 +51,10 @@ export class RecommendationService {
 
     const [semanticKeywordCandidates, semanticSeedCandidates, arxivCandidates] = await Promise.all([
       this.semanticScholar.searchByKeywords(profile.keywordQueries, 8),
-      this.semanticScholar.searchBySeedTitles(profile.seedTitles, 4),
+      this.semanticScholar.searchBySeedTitles(
+        profile.seedPapers.map((paper) => paper.title),
+        4,
+      ),
       this.arxiv.searchByKeywords(profile.keywordQueries, 6),
     ]);
 
@@ -80,6 +84,7 @@ export class RecommendationService {
         qualityScore: item.qualityScore,
         reason: item.reason,
         triggerPaperTitle: item.triggerPaperTitle,
+        triggerPaperId: item.triggerPaperId,
         status: currentStatus === 'ignored' || currentStatus === 'saved' ? currentStatus : 'new',
         generatedAt,
       });
@@ -110,6 +115,7 @@ export class RecommendationService {
       qualityScore: row.qualityScore,
       reason: row.reason,
       triggerPaperTitle: row.triggerPaperTitle,
+      triggerPaperId: row.triggerPaperId,
       status: row.status as RecommendationItem['status'],
       generatedAt: row.generatedAt.toISOString(),
       isInLibrary: row.status === 'saved',
@@ -222,10 +228,10 @@ export class RecommendationService {
     const feedbackTags = this.topSignals(positiveFeedbackTags, 4);
     const feedbackAuthors = this.topSignals(positiveFeedbackAuthors, 3);
     const feedbackAvoidTags = this.topSignals(negativeFeedbackTags, 4);
-    const seedTitles = sortedBySignal
+    const seedPapers = sortedBySignal
       .slice(0, 5)
-      .map((paper) => paper.title)
-      .filter(Boolean);
+      .filter((paper) => !!paper.title)
+      .map((paper) => ({ id: paper.id, title: paper.title }));
 
     const keywordQueries = [
       [...topTags.slice(0, 2), ...feedbackTags.slice(0, 1)].map((item) => item.name).join(' '),
@@ -236,14 +242,14 @@ export class RecommendationService {
       feedbackAuthors[0]?.name
         ? `${feedbackAuthors[0].name} ${feedbackTags[0]?.name ?? ''}`.trim()
         : '',
-      seedTitles[0] ?? '',
+      seedPapers[0]?.title ?? '',
     ]
       .map((value) => value.trim())
       .filter(Boolean);
 
     return {
       keywordQueries: keywordQueries.length > 0 ? keywordQueries : ['machine learning'],
-      seedTitles,
+      seedPapers,
       tagWeights: topTags,
       authorWeights: topAuthors,
       positiveFeedbackTags: feedbackTags,
@@ -357,7 +363,7 @@ export class RecommendationService {
     const positiveFeedbackTagMatch = profile.positiveFeedbackTags.find((tag) =>
       haystack.includes(tag.name.toLowerCase()),
     );
-    const triggerPaperTitle = this.findTriggerPaperTitle(candidate, profile);
+    const triggerPaper = this.findTriggerPaper(candidate, profile);
     const negativeFeedbackTagMatch = profile.negativeFeedbackTags.find((tag) =>
       haystack.includes(tag.name.toLowerCase()),
     );
@@ -399,7 +405,8 @@ export class RecommendationService {
       qualityScore,
       feedbackBoost,
       reason,
-      triggerPaperTitle,
+      triggerPaperTitle: triggerPaper?.title ?? null,
+      triggerPaperId: triggerPaper?.id ?? null,
     };
   }
 
@@ -464,7 +471,7 @@ export class RecommendationService {
       return 'Well-cited paper that overlaps with your current research interests.';
     }
 
-    const seedTitle = profile.seedTitles[0];
+    const seedTitle = profile.seedPapers[0]?.title;
     if (seedTitle) {
       return `Related to papers you recently read, such as ${seedTitle}.`;
     }

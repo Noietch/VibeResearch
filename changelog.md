@@ -2376,3 +2376,14 @@
 - **Rationale**: Showing the local paper connection makes recommendations easier to trust and gives users a clearer mental model of why a candidate appeared
 - **Test Design**: Validate schema/client/build integration and confirm the renderer compiles with the new trigger field
 - **Validation**: `npx prisma generate`, `npm run build`
+
+### Improvement: Click Through to Triggering Local Paper
+
+- **Scope**: recommendation result schema/types/service, `src/renderer/pages/recommendations/page.tsx`
+- **Changes**:
+  - Added `triggerPaperId` alongside `triggerPaperTitle` in recommendation results
+  - Upgraded trigger selection to retain the originating local paper identity instead of only its title
+  - Made the `Triggered by` line on recommendation cards clickable so it navigates directly to the local paper overview page
+- **Rationale**: Once users can see which library paper caused a recommendation, the next natural step is letting them jump straight to that local context
+- **Test Design**: Validate schema generation, formatting, and app build after threading the trigger paper id through the stack
+- **Validation**: `npx prisma generate`, `npm run build`
