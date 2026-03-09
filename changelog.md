@@ -2447,3 +2447,13 @@
 - **Rationale**: Papers were being permanently marked as citation-processed after temporary Semantic Scholar failures, leaving `PaperCitation` empty and preventing automatic retries
 - **Test Design**: Mock Semantic Scholar responses and verify the extraction service surfaces retryable failures
 - **Validation**: `npx vitest run tests/integration/citations.test.ts tests/integration/citation-extraction.test.ts`
+
+### Fix: Drop Search-Unit Vec Tables Before Prisma Schema Push
+
+- **Scope**: `src/main/index.ts`
+- **Changes**:
+  - Extended the pre-`prisma db push` cleanup list to also drop the derived `vec_search_units*` sqlite-vec tables
+  - Kept the existing cleanup for `vec_chunks*` and `paper_search_units_fts*` tables intact
+- **Rationale**: Prisma schema introspection failed during startup because the search-unit vector virtual tables remained in the SQLite database and Prisma cannot describe `vec0` virtual tables
+- **Test Design**: Reproduce `prisma db push` against a database containing vec/FTS derived tables, then verify the push succeeds after removing both vector table families
+- **Validation**: `node_modules/.bin/prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss` (verified on a copied DB after dropping both vec table families)
