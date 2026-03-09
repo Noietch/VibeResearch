@@ -81,6 +81,7 @@ export interface ImportStatus {
   success: number;
   failed: number;
   skipped: number;
+  pdfFailed: number;
   phase: ImportPhase;
   message: string;
   lastImportAt: string | null;

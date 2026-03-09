@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-09 (session 46)
+
+### fix: Show PDF download failures after import instead of silently ignoring them
+
+- **Scope**: `src/main/services/ingest.service.ts`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/components/import-modal.tsx`
+- **Changes**:
+  - Added `pdfFailed` counter to `ImportStatus` interface (both main and renderer)
+  - Track PDF download failures separately from paper import failures in `runImport`
+  - Append `, N PDF failed` to completion message when downloads fail
+  - Show orange warning card in import modal when any PDFs failed to download, explaining the cause and suggesting retry
+
 ## 2026-03-09 (session 45)
 
 ### feat: Add Gemini, OpenCLAW, OpenCode agent logos and detection support

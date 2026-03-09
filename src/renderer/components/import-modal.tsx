@@ -822,6 +822,23 @@ export function ImportModal({
                           )}
                         </div>
                       </div>
+                      {importStatus.phase === 'completed' && importStatus.pdfFailed > 0 && (
+                        <div className="flex items-start gap-3 rounded-lg bg-orange-50 px-4 py-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100">
+                            <AlertCircle size={16} className="text-orange-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-notion-text">
+                              {importStatus.pdfFailed} PDF{importStatus.pdfFailed > 1 ? 's' : ''}{' '}
+                              failed to download
+                            </p>
+                            <p className="mt-0.5 text-xs text-notion-text-secondary">
+                              Papers were saved but PDFs could not be fetched. This may be due to
+                              network issues or a proxy. You can retry by re-importing.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

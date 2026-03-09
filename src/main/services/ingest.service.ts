@@ -29,6 +29,7 @@ export interface ImportStatus {
   success: number;
   failed: number;
   skipped: number;
+  pdfFailed: number;
   phase: ImportPhase;
   message: string;
   lastImportAt: string | null;
@@ -49,6 +50,7 @@ let currentStatus: ImportStatus = {
   success: 0,
   failed: 0,
   skipped: 0,
+  pdfFailed: 0,
   phase: 'idle',
   message: '',
   lastImportAt: null,
@@ -247,6 +249,7 @@ export async function importScannedPapers(
     success: 0,
     failed: 0,
     skipped: 0,
+    pdfFailed: 0,
     phase: 'upserting_papers',
     message: `Importing ${papers.length} papers…`,
     lastImportAt: null,
@@ -435,6 +438,7 @@ async function runImport(
   let success = 0;
   let failed = 0;
   let skipped = 0;
+  let pdfFailed = 0;
 
   const { cancelled } = await withConcurrencyCancellable(entries, async (entry) => {
     try {
@@ -534,6 +538,7 @@ async function runImport(
           console.error(
             `[import] PDF download failed after ${maxRetries} attempts for ${arxivId}: ${lastError}`,
           );
+          pdfFailed++;
         }
       }
 
@@ -546,6 +551,7 @@ async function runImport(
     currentStatus.success = success;
     currentStatus.failed = failed;
     currentStatus.skipped = skipped;
+    currentStatus.pdfFailed = pdfFailed;
     currentStatus.message = `Importing… ${currentStatus.completed}/${entries.length} (${success} new, ${skipped} skipped)`;
     broadcastStatus();
   });
@@ -556,15 +562,18 @@ async function runImport(
       active: false,
       phase: 'cancelled',
       message: `Cancelled: ${success} imported, ${skipped} skipped`,
+      pdfFailed,
     };
   } else {
+    const pdfFailedSuffix = pdfFailed > 0 ? `, ${pdfFailed} PDF failed` : '';
     currentStatus = {
       ...currentStatus,
       active: false,
       phase: 'completed',
-      message: `Done: ${success} new, ${skipped} skipped`,
+      message: `Done: ${success} new, ${skipped} skipped${pdfFailedSuffix}`,
       lastImportAt: new Date().toISOString(),
       lastImportCount: success,
+      pdfFailed,
     };
   }
   broadcastStatus();
@@ -586,6 +595,7 @@ export async function scanLocalPapersDir(dir: string) {
     success: 0,
     failed: 0,
     skipped: 0,
+    pdfFailed: 0,
     phase: 'parsing_history',
     message: 'Scanning local papers folder…',
     lastImportAt: null,
