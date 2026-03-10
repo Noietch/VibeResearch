@@ -63,6 +63,13 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
   const messageMetadataRef = useRef<Map<string, Message>>(new Map());
   const pendingFlushRef = useRef<boolean>(false);
 
+  // === Fix: Race condition recovery ===
+  // When navigating back to a page, we need to recover state from the backend.
+  // But IPC events may arrive during recovery, causing text scrambling.
+  // Solution: buffer events during recovery, process them after recovery completes.
+  const isRecoveringRef = useRef<boolean>(false);
+  const pendingEventsRef = useRef<Array<{ message: Message }>>([]);
+
   // Flush accumulated text to React state (batched via requestAnimationFrame)
   const flushToState = useCallback(() => {
     if (pendingFlushRef.current) return;
@@ -108,72 +115,9 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
     });
   }, []);
 
-  // Track previous todoId to reset state only when switching between valid IDs
-  const prevTodoIdRef = useRef('');
-  useEffect(() => {
-    const prev = prevTodoIdRef.current;
-    prevTodoIdRef.current = todoId;
-    // Only reset when switching between two valid todo IDs.
-    // Do NOT reset when todoId transitions from '' to a real id, because messages
-    // may have already arrived via externalTodoIdRef before React re-rendered.
-    if (prev && todoId && prev !== todoId) {
-      setMessages([]);
-      setStatus('idle');
-      setPermissionRequest(null);
-      setCanChat(false);
-      setStderrLines([]);
-      setAvailableCommands([]);
-      textAccumulatorRef.current = new Map();
-      messageMetadataRef.current = new Map();
-    }
-  }, [todoId]);
-
-  // Recovery: when mounting with a valid todoId, try to restore active state from backend
-  // This handles the case where user navigates away and back while a task is running
-  useEffect(() => {
-    if (!todoId) return;
-
-    let cancelled = false;
-    ipc.getActiveAgentTodoStatus(todoId).then((result) => {
-      if (cancelled) return;
-      if (!result) return; // No active runner for this todo
-
-      // Restore status
-      setStatus(result.status);
-
-      // Restore messages into accumulator refs AND state
-      if (result.messages && result.messages.length > 0) {
-        for (const msg of result.messages) {
-          const msgId = msg.msgId;
-          const content = msg.content as { text?: string };
-          if ((msg.type === 'text' || msg.type === 'thought') && content.text) {
-            // Populate accumulator ref with accumulated text
-            textAccumulatorRef.current.set(msgId, content.text);
-            messageMetadataRef.current.set(msgId, msg as Message);
-          }
-        }
-        // Set initial messages state
-        setMessages(result.messages as Message[]);
-      }
-
-      // If task is running, allow chat after recovery
-      if (result.status === 'completed') {
-        setCanChat(true);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [todoId]);
-
-  // Subscribe to IPC events once on mount. Use todoIdRef for filtering so the
-  // subscription never needs to be torn down and re-created when todoId changes.
-  useEffect(() => {
-    const offStream = onIpc('agent-todo:stream', (_event: unknown, data: unknown) => {
-      const { todoId: eventTodoId, message } = data as { todoId: string; message: Message };
-      if (eventTodoId !== todoIdRef.current) return;
-
+  // Process a stream event - handles text accumulation and other message types
+  const processStreamEvent = useCallback(
+    (message: Message) => {
       // Handle text/thought accumulation FULLY SYNCHRONOUSLY via refs
       if (message.type === 'text' || message.type === 'thought') {
         const newContent = message.content as { text: string };
@@ -217,6 +161,105 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
 
       // Other message types: append directly
       setMessages((prev) => [...prev, message]);
+    },
+    [flushToState],
+  );
+
+  // Track previous todoId to reset state only when switching between valid IDs
+  const prevTodoIdRef = useRef('');
+  useEffect(() => {
+    const prev = prevTodoIdRef.current;
+    prevTodoIdRef.current = todoId;
+    // Only reset when switching between two valid todo IDs.
+    // Do NOT reset when todoId transitions from '' to a real id, because messages
+    // may have already arrived via externalTodoIdRef before React re-rendered.
+    if (prev && todoId && prev !== todoId) {
+      setMessages([]);
+      setStatus('idle');
+      setPermissionRequest(null);
+      setCanChat(false);
+      setStderrLines([]);
+      setAvailableCommands([]);
+      textAccumulatorRef.current = new Map();
+      messageMetadataRef.current = new Map();
+    }
+  }, [todoId]);
+
+  // Recovery: when mounting with a valid todoId, try to restore active state from backend
+  // This handles the case where user navigates away and back while a task is running
+  useEffect(() => {
+    if (!todoId) return;
+
+    let cancelled = false;
+
+    // Start recovery - buffer IPC events until recovery completes
+    isRecoveringRef.current = true;
+    pendingEventsRef.current = [];
+
+    ipc.getActiveAgentTodoStatus(todoId).then((result) => {
+      if (cancelled) return;
+      if (!result) {
+        // No active runner - clear recovery state
+        isRecoveringRef.current = false;
+        return;
+      }
+
+      // Restore status
+      setStatus(result.status);
+
+      // Restore messages into accumulator refs AND state
+      if (result.messages && result.messages.length > 0) {
+        for (const msg of result.messages) {
+          const msgId = msg.msgId;
+          const content = msg.content as { text?: string };
+          if ((msg.type === 'text' || msg.type === 'thought') && content.text) {
+            // Populate accumulator ref with accumulated text
+            textAccumulatorRef.current.set(msgId, content.text);
+            messageMetadataRef.current.set(msgId, msg as Message);
+          }
+        }
+        // Set initial messages state
+        setMessages(result.messages as Message[]);
+      }
+
+      // If task is running, allow chat after recovery
+      if (result.status === 'completed') {
+        setCanChat(true);
+      }
+
+      // Recovery complete - process any buffered events
+      isRecoveringRef.current = false;
+      const pendingEvents = pendingEventsRef.current;
+      pendingEventsRef.current = [];
+
+      // Process buffered events AFTER recovery state is set
+      for (const event of pendingEvents) {
+        processStreamEvent(event.message);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      isRecoveringRef.current = false;
+      pendingEventsRef.current = [];
+    };
+  }, [todoId]);
+
+  // Subscribe to IPC events once on mount. Use todoIdRef for filtering so the
+  // subscription never needs to be torn down and re-created when todoId changes.
+  useEffect(() => {
+    const offStream = onIpc('agent-todo:stream', (_event: unknown, data: unknown) => {
+      const { todoId: eventTodoId, message } = data as { todoId: string; message: Message };
+      if (eventTodoId !== todoIdRef.current) return;
+
+      // === Fix: Buffer events during recovery ===
+      // If we're recovering state from the backend, buffer events to prevent race conditions
+      if (isRecoveringRef.current) {
+        pendingEventsRef.current.push({ message });
+        return;
+      }
+
+      processStreamEvent(message);
     });
 
     const offStatus = onIpc('agent-todo:status', (_event: unknown, data: unknown) => {
@@ -284,7 +327,7 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
       offStderr();
       offCommands();
     };
-  }, [flushToState]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [processStreamEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     messages,

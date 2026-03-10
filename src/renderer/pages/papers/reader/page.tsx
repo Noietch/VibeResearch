@@ -360,7 +360,27 @@ export function ReaderPage() {
         setAgentRunId(latestRun.id);
         agentRunIdRef.current = latestRun.id;
 
-        // Load persisted messages from the latest run
+        // First check if the task is still actively running in main process
+        const activeStatus = await ipc.getActiveAgentTodoStatus(match.id);
+        if (
+          activeStatus &&
+          (activeStatus.status === 'running' ||
+            activeStatus.status === 'initializing' ||
+            activeStatus.status === 'waiting_permission')
+        ) {
+          // Task is still running - use live messages from runner
+          // These messages are already accumulated correctly in the runner
+          setHistoricMessages(
+            activeStatus.messages.map((m) => ({
+              ...m,
+              content: typeof m.content === 'string' ? JSON.parse(m.content as string) : m.content,
+              status: m.status ?? null,
+            })),
+          );
+          return;
+        }
+
+        // Task completed/failed - load persisted messages from DB
         const msgs = await ipc.getAgentTodoRunMessages(latestRun.id);
         const parsed = msgs.map((m) => ({
           ...m,
@@ -442,12 +462,21 @@ export function ReaderPage() {
 
     if (!agentTodoId) {
       // First message: create a new todo and run it.
+      // Inject paper context with file paths so agent can directly access them
+      const paperContext = [
+        `当前文章: "${paper.title}"`,
+        ...(cwd ? [`工作目录: ${cwd}`] : []),
+        ...(cwd ? [`PDF路径: ${cwd}/paper.pdf`] : []),
+        ...(cwd ? [`文本路径: ${cwd}/text.txt`] : []),
+      ].join('\n');
+      const promptWithContext = `${paperContext}\n\n---\n\n用户问题: ${fullText}`;
+
       // Update agentTodoIdRef synchronously BEFORE runAgentTodo so that
       // IPC stream callbacks see the correct todoId immediately, without
       // waiting for React to re-render with the new agentTodoId state.
       const todo = await ipc.createAgentTodo({
         title: `Chat: ${paper.title.slice(0, 60)}`,
-        prompt: fullText,
+        prompt: promptWithContext,
         cwd: cwd ?? '',
         agentId,
       });

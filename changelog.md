@@ -2,14 +2,20 @@
 
 ## 2026-03-10
 
-### fix: Agent chat stream recovery on page navigation
+### fix: Text scrambling when navigating back during streaming (IPC race condition)
 
-- **Scope**: `src/renderer/hooks/use-agent-stream.ts`
+- **Scope**: `src/renderer/hooks/use-agent-stream.ts`, `tests/integration/message-accumulation.test.ts`
 - **Changes**:
-  - Added recovery logic in `useAgentStream` hook that calls `getActiveAgentTodoStatus` on mount
-  - When user navigates away and back while a chat is streaming, the hook now restores accumulated messages from main process
-  - Also restores task status and populates accumulator refs for continued streaming
-- **Rationale**: Previously the recovery IPC handler existed but the frontend hook wasn't calling it on remount, causing lost messages when navigating away during streaming.
+  - Added buffering mechanism to handle IPC events arriving during state recovery
+  - `isRecoveringRef` flag to track recovery state
+  - `pendingEventsRef` to buffer IPC events during recovery
+  - Extracted `processStreamEvent` function for unified event handling
+  - Events arriving during recovery are buffered and processed AFTER recovery completes
+- **Rationale**: When user navigates away and back during streaming, there's a race condition:
+  1. Recovery starts fetching state from main process
+  2. New IPC events arrive before recovery completes
+  3. These events would overwrite/interleave with recovered state causing text scrambling like "Hello World World"
+  - The fix buffers events during recovery, ensuring correct order: recovery state → new events
 
 ## 2026-03-10
 
