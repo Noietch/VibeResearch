@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { TextMessage } from './TextMessage';
 import { ToolCallCard } from './ToolCallCard';
@@ -98,6 +98,19 @@ function MessageGroupView({
   }
 
   // assistant group
+  // Sort messages: tool_calls first (by creation order), then text messages
+  const sortedMessages = [...group.messages].sort((a, b) => {
+    // tool_calls should come before text
+    const typeOrder = (t: string) => {
+      if (t === 'tool_call') return 0;
+      if (t === 'thought') return 1;
+      if (t === 'plan') return 2;
+      if (t === 'text') return 3;
+      return 4;
+    };
+    return typeOrder(a.type) - typeOrder(b.type);
+  });
+
   const mergedElements: React.ReactNode[] = [];
   let consecutiveToolCalls: {
     id: string;
@@ -128,7 +141,7 @@ function MessageGroupView({
     return null;
   }
 
-  for (const msg of group.messages) {
+  for (const msg of sortedMessages) {
     const content = msg.content as Record<string, unknown>;
 
     if (msg.type === 'thought') {
@@ -162,7 +175,7 @@ function MessageGroupView({
   if (remainingTools) mergedElements.push(remainingTools);
 
   // Show spinner after tool calls / thoughts only while streaming and no text yet
-  const hasText = group.messages.some((m) => m.type === 'text');
+  const hasText = sortedMessages.some((m) => m.type === 'text');
   const showSpinner = isStreaming && (hasThoughts || consecutiveToolCalls.length > 0) && !hasText;
 
   return (

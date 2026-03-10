@@ -1,5 +1,112 @@
 # Changelog
 
+## 2026-03-10 (session 79)
+
+### fix: Agent chat UI — tool call display and user message persistence
+
+- **Scope**: `src/renderer/components/agent-todo/ToolCallCard.tsx`, `src/renderer/components/agent-todo/MessageStream.tsx`, `src/renderer/pages/agent-todos/[id]/page.tsx`
+
+#### ToolCallCard improvements
+
+- Added icons for different tool types: `Read` (FileText), `Ran` (Terminal), `Glob` (FolderOpen), `Grep` (Search)
+- Now shows full path for Read/Edit operations instead of just filename
+- Long paths/commands are expandable with click-to-reveal full content
+- Added support for `glob` and `grep` tool kinds with pattern display
+
+#### MessageStream sorting fix
+
+- Tool calls now appear before text messages in assistant messages (matching expected output order)
+- Sorts by type: tool_call → thought → plan → text
+
+#### User message persistence fix
+
+- Fixed bug where local user messages would disappear when stream messages arrive
+- Now properly merges local messages by msgId, showing local messages that haven't appeared in stream yet
+- Previous logic incorrectly replaced all local messages once stream had any user messages
+
+## 2026-03-10 (session 78)
+
+### feat: Unify agent picker UI + add paper comparison to reader chat + remove old compare feature
+
+- **Scope**: `src/renderer/pages/agent-todos/[id]/page.tsx`, `src/renderer/pages/papers/reader/page.tsx`, `src/renderer/pages/papers/overview/page.tsx`
+
+#### Task detail page — agent picker unification
+
+- Placeholder text changed from `"No agent"` → `"Select agent…"` (matches reader)
+- Empty state now shows `"No agents configured. Go to Settings"` link (matches reader)
+- Send button replaced custom inline SVG with `<ArrowUp size={13} />` from lucide-react (matches reader)
+
+#### Reader chat — paper comparison via `+` button
+
+- Added `+` button in chat input bottom bar (between agent picker and send button)
+- Clicking opens an upward popover with a search input and paper list
+- Selected papers appear as dismissible chips above the textarea
+- On send, selected papers' titles + abstracts are appended to the prompt as `--- Attached Papers ---` context
+- Chips are cleared after send
+- Outside-click closes the picker; search is debounced 200ms
+
+#### Reader chat — persistent chat history
+
+- On paper load, the most recent `Chat: <title>` agent todo is found via `listAgentTodos`
+- Its latest run's messages are loaded via `getAgentTodoRunMessages` and stored as `historicMessages`
+- `displayMessages` falls back to `historicMessages` when no live stream messages exist
+- `handleNewChat` clears `historicMessages` to start fresh
+
+#### Overview page — remove old compare feature and Notes section
+
+- Removed "Compare with…" button, state, handlers, and modal from paper detail page
+- Removed "Reading Notes" section (button + card list) from paper detail page
+- Removed unused `GitCompareArrows`, `NotebookPen` imports and dead callbacks
+
+## 2026-03-10 (session 77)
+
+### refactor: Align task detail page chat UI with paper reader
+
+- **Scope**: `src/renderer/pages/agent-todos/[id]/page.tsx`
+- **Changes**:
+  - Removed top prompt banner; prompt now appears as a user message bubble in the stream (via `localUserMessages` injected on `handleRun`)
+  - Added unified input box (same style as paper reader): rounded-2xl border, textarea auto-resize, bottom bar with agent picker + send/stop button
+  - Agent picker in bottom-left of input box — clicking an agent updates `todo.agentId` via `ipc.updateAgentTodo`
+  - Follow-up messages via `ipc.sendAgentMessage` now work from the task detail page
+  - Removed `showStderr` toggle button — stderr panel shown automatically while running, positioned above input
+  - `localUserMessages` reset on run switch and on new run
+  - `displayMessages` deduplicates local messages against stream by `msgId`
+- **Preserved**: Left sidebar (RunTimeline + TaskInfoPanel), header with back/title/cwd/Edit/Run/Stop
+
+## 2026-03-10 (session 76)
+
+### fix: Reader chat — user messages not showing in chat window
+
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+- **Root cause**: The first user message (prompt) is passed to `createAgentTodo` and never broadcast back via the IPC stream. Follow-up messages via `sendAgentMessage` do broadcast, but the initial prompt was invisible.
+- **Fix**: Added `localUserMessages` state. On every `handleChatSend`, a local user message is immediately injected into the display list. A `displayMessages` computed value deduplicates against the agent stream (by `msgId`) so no double-display once the stream catches up.
+- **Also**: `handleNewChat` now clears `localUserMessages` on reset.
+
+## 2026-03-10 (session 75)
+
+### fix: Reader chat — move agent picker to input bar, fix default agent selection
+
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+- **Issues fixed**:
+  1. Agent selector was floating in the top-right of the chat header; moved it to the bottom-left of the input box (matches reference design)
+  2. Initial `chatModel` was loaded via `getActiveModel('agent')` which could return an AI SDK model, causing `createAgentTodo` to fail (wrong agentId). Now loads all enabled CLI agents and defaults to the first one.
+  3. Agent picker dropdown now opens **upward** (`bottom-full`) to avoid clipping at the bottom of the panel.
+- **Removed**: `getActiveModel('agent')` call — replaced with `listAgents()` only
+
+## 2026-03-10 (session 74)
+
+### fix: Paper chat agent stream race condition + complete reader page refactor
+
+- **Scope**: `src/renderer/hooks/use-agent-stream.ts`, `src/renderer/pages/papers/reader/page.tsx`
+- **Root cause**: In `useAgentStream`, IPC subscriptions were re-registered on every `todoId` change via `useEffect([todoId])`. When `handleChatSend` called `setAgentTodoId(todo.id)` (async state update) then immediately `runAgentTodo(todo.id)`, stream events arrived before React re-rendered with the new `todoId`, causing all messages to be dropped.
+- **Fix**: Refactored `useAgentStream` to:
+  1. Accept an optional `externalTodoIdRef` (a `MutableRefObject<string>`) for synchronous filtering
+  2. Subscribe to IPC events once on mount (`useEffect([], [])`) using `todoIdRef` for filtering — no re-subscribe on `todoId` change
+  3. Separate reset logic into a dedicated `useEffect([todoId])` that only resets when switching between two valid IDs (not on `'' → realId` transition)
+- **In reader page**: Added `agentTodoIdRef` updated synchronously in `handleChatSend` before `runAgentTodo`, passed as `externalTodoIdRef` to `useAgentStream`
+- **Reader page cleanup**: Completed the refactor to agent-only mode — removed all remaining dead code referencing old API chat variables (`chatNotes`, `messages`, `allChatModels`, `streamingContent`, `aiStatus`, `ChatBubble`, `AiStatusIndicator`, `handleSwitchSession`, etc.)
+- **Result**: Agent stream messages now render correctly in paper chat using `MessageStream` (same as task detail page)
+
 ## 2026-03-10 (session 73)
 
 ### refactor: Remove API chat from paper reader page, agent-only mode
