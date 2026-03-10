@@ -34,7 +34,17 @@ interface SemanticCandidateContext {
 }
 
 interface ScoredCandidate {
-  persistedCandidate: { id: string };
+  persistedCandidate: {
+    id: string;
+    title?: string;
+    authors?: string[];
+    abstract?: string | null;
+    sourceUrl?: string | null;
+    pdfUrl?: string | null;
+    arxivId?: string | null;
+    source?: string;
+    publishedAt?: Date | null;
+  };
   candidateEmbedding: number[] | null;
   score: number;
   relevanceScore: number;
@@ -640,7 +650,7 @@ export class RecommendationService {
 
     const groups = new Map<string, ScoredCandidate[]>();
     for (const item of scored) {
-      const key = item.triggerPaperId ?? `source:${item.source}`;
+      const key = item.triggerPaperId ?? `source:${item.persistedCandidate.source ?? 'unknown'}`;
       const bucket = groups.get(key) ?? [];
       bucket.push(item);
       groups.set(key, bucket);

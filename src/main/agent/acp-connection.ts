@@ -355,7 +355,7 @@ function sshChannelToReadableWeb(channel: ClientChannel): ReadableStream<Uint8Ar
       channel.on('end', () => {
         controller.close();
       });
-      channel.on('error', (err) => {
+      channel.on('error', (err: Error) => {
         controller.error(err);
       });
     },
@@ -383,8 +383,8 @@ function sshChannelToWritableWeb(channel: ClientChannel): WritableStream<Uint8Ar
         channel.end(resolve);
       });
     },
-    abort(reason) {
-      channel.destroy(reason instanceof Error ? reason : new Error(String(reason)));
+    abort() {
+      channel.destroy();
     },
   });
 }

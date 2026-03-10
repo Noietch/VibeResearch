@@ -374,7 +374,7 @@ export class ProjectsService {
   }): Promise<{
     paperContext: string;
     repoContext: string;
-    project: Awaited<ReturnType<ProjectsRepository['getProject']>>;
+    project: NonNullable<Awaited<ReturnType<ProjectsRepository['getProject']>>>;
   }> {
     const project = await this.repo.getProject(input.projectId);
     if (!project) throw new Error('Project not found');

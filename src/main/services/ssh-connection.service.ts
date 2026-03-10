@@ -289,7 +289,7 @@ export const SshConnectionService = {
               resolve(Buffer.concat(chunks).toString('utf-8'));
             });
 
-            stream.on('error', (err) => {
+            stream.on('error', (err: Error) => {
               client.end();
               reject(err);
             });
@@ -344,7 +344,7 @@ export const SshConnectionService = {
               resolve();
             });
 
-            stream.on('error', (err) => {
+            stream.on('error', (err: Error) => {
               client.end();
               reject(err);
             });

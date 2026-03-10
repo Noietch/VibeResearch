@@ -221,6 +221,6 @@ export async function detectAgents(): Promise<DetectedAgent[]> {
   );
 
   return results
-    .filter((r): r is PromiseFulfilledResult<DetectedAgent> => r.status === 'fulfilled')
-    .map((r) => r.value);
+    .filter((r) => r.status === 'fulfilled')
+    .map((r) => (r as PromiseFulfilledResult<DetectedAgent>).value);
 }

@@ -33,7 +33,25 @@ export interface UpsertRecommendationResultInput {
   generatedAt: Date;
 }
 
-function mapCandidate(candidate: { authorsJson: string; metadataJson: string }) {
+function mapCandidate(candidate: {
+  id: string;
+  source: string;
+  externalId: string;
+  arxivId: string | null;
+  doi: string | null;
+  title: string;
+  titleNormalized: string;
+  authorsJson: string;
+  abstract: string | null;
+  sourceUrl: string | null;
+  pdfUrl: string | null;
+  publishedAt: Date | null;
+  venue: string | null;
+  citationCount: number | null;
+  metadataJson: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
   return {
     ...candidate,
     authors: JSON.parse(candidate.authorsJson) as string[],

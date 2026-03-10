@@ -53,7 +53,7 @@ export class ExperimentReportService {
 
     // Fetch todos and their results
     const todos = await Promise.all(input.todoIds.map((id) => this.todosRepo.findTodoById(id)));
-    const validTodos = todos.filter(Boolean);
+    const validTodos = todos.filter((t): t is NonNullable<typeof t> => Boolean(t));
 
     // Fetch specified results
     const results = input.resultIds
@@ -117,7 +117,7 @@ export class ExperimentReportService {
       model,
       system: systemPrompt,
       prompt: userPrompt,
-      maxTokens: 8192,
+      maxOutputTokens: 8192,
       abortSignal: signal,
     });
 
@@ -285,9 +285,7 @@ export class ExperimentReportService {
     }
 
     const todo = await this.todosRepo.findTodoById(result.todoId);
-    const outputDir = todo?.outputDir
-      ? path.resolve(workdir, todo.outputDir)
-      : path.join(workdir, 'results', result.todoId);
+    const outputDir = path.join(workdir, 'results', result.todoId);
     const filePath = path.join(outputDir, result.relativePath);
 
     if (!fs.existsSync(filePath)) {
@@ -347,7 +345,6 @@ export class ExperimentReportService {
     summary: string | null;
     todoIdsJson: string;
     resultIdsJson: string;
-    generatedAt: Date;
     modelUsed: string | null;
     version: number;
     createdAt: Date;
@@ -361,7 +358,7 @@ export class ExperimentReportService {
       summary: r.summary ?? undefined,
       todoIds: JSON.parse(r.todoIdsJson) as string[],
       resultIds: JSON.parse(r.resultIdsJson) as string[],
-      generatedAt: r.generatedAt,
+      generatedAt: r.createdAt,
       modelUsed: r.modelUsed ?? undefined,
       version: r.version,
       createdAt: r.createdAt,

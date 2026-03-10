@@ -47,6 +47,7 @@ export class ComparisonService {
     const comparisonInputs: ComparisonPaperInput[] = [];
     for (let i = 0; i < papers.length; i++) {
       const paper = papers[i];
+      if (!paper) continue;
       onProgress?.(`Reading paper ${i + 1}/${papers.length}: ${paper.title.slice(0, 60)}…`);
       let paperDir: string | undefined;
       let pdfExcerpt: string | undefined;
@@ -92,7 +93,7 @@ export class ComparisonService {
       model,
       system: COMPARISON_SYSTEM_PROMPT,
       prompt: userPrompt,
-      maxTokens: 4096,
+      maxOutputTokens: 4096,
       abortSignal: signal,
     });
 
@@ -146,7 +147,7 @@ export class ComparisonService {
       model,
       system: systemPrompt,
       messages: messagesWithContext,
-      maxTokens: 4096,
+      maxOutputTokens: 4096,
       abortSignal: signal,
     });
 
@@ -183,7 +184,7 @@ export class ComparisonService {
       system:
         'Translate the following academic comparison into Chinese. Keep markdown formatting, headings, and structure. Translate naturally, not literally. Do not add any extra content or commentary.',
       prompt: contentMd,
-      maxTokens: 8192,
+      maxOutputTokens: 8192,
       abortSignal: signal,
     });
 

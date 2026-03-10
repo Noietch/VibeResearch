@@ -133,7 +133,9 @@ export function setupComparisonIpc() {
       let savedId: string | null = null;
       try {
         const papers = await Promise.all(input.paperIds.map((id) => papersRepo.findById(id)));
-        const titles = papers.map((p) => p.title);
+        const titles = papers
+          .filter((p): p is NonNullable<typeof p> => p !== null)
+          .map((p) => p.title);
         const row = await repo.create({
           paperIds: input.paperIds,
           titles,
