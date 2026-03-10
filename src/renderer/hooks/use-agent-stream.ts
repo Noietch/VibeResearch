@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, type MutableRefObject } from 'react';
-import { onIpc } from './use-ipc';
+import { useState, useEffect, useRef, useCallback, type MutableRefObject } from 'react';
+import { onIpc, ipc } from './use-ipc';
 
 interface Message {
   id: string;
@@ -44,7 +44,7 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<string>('idle');
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
-  const [canChat, setCanChat] = useState(false);
+  const [canChat, setCanChat] = useState<boolean>(false);
   const [stderrLines, setStderrLines] = useState<string[]>([]);
   const [availableCommands, setAvailableCommands] = useState<SlashCommand[]>([]);
 
@@ -54,6 +54,59 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
   const internalRef = useRef(todoId);
   internalRef.current = todoId;
   const todoIdRef = externalTodoIdRef ?? internalRef;
+
+  // === Fix: Fully synchronous message accumulation ===
+  // Use refs to track accumulated text synchronously without relying on React state updates.
+  // Key insight: We must NEVER call setMessages callback to read state, because callbacks
+  // are async and can execute out of order when multiple chunks arrive rapidly.
+  const textAccumulatorRef = useRef<Map<string, string>>(new Map());
+  const messageMetadataRef = useRef<Map<string, Message>>(new Map());
+  const pendingFlushRef = useRef<boolean>(false);
+
+  // Flush accumulated text to React state (batched via requestAnimationFrame)
+  const flushToState = useCallback(() => {
+    if (pendingFlushRef.current) return;
+    pendingFlushRef.current = true;
+
+    requestAnimationFrame(() => {
+      pendingFlushRef.current = false;
+
+      // Build updated messages from accumulators
+      const textAcc = textAccumulatorRef.current;
+      const metaAcc = messageMetadataRef.current;
+
+      if (textAcc.size === 0) return;
+
+      setMessages((prev) => {
+        const updated = [...prev];
+        let changed = false;
+
+        for (const [msgId, text] of textAcc) {
+          const idx = updated.findIndex((m) => m.msgId === msgId);
+          if (idx >= 0) {
+            // Update existing message
+            updated[idx] = {
+              ...updated[idx],
+              content: { text },
+            };
+            changed = true;
+          } else {
+            // Add new message
+            const meta = metaAcc.get(msgId);
+            if (meta) {
+              updated.push({
+                ...meta,
+                content: { text },
+              });
+              changed = true;
+            }
+          }
+        }
+
+        return changed ? updated : prev;
+      });
+    });
+  }, []);
 
   // Track previous todoId to reset state only when switching between valid IDs
   const prevTodoIdRef = useRef('');
@@ -70,7 +123,48 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
       setCanChat(false);
       setStderrLines([]);
       setAvailableCommands([]);
+      textAccumulatorRef.current = new Map();
+      messageMetadataRef.current = new Map();
     }
+  }, [todoId]);
+
+  // Recovery: when mounting with a valid todoId, try to restore active state from backend
+  // This handles the case where user navigates away and back while a task is running
+  useEffect(() => {
+    if (!todoId) return;
+
+    let cancelled = false;
+    ipc.getActiveAgentTodoStatus(todoId).then((result) => {
+      if (cancelled) return;
+      if (!result) return; // No active runner for this todo
+
+      // Restore status
+      setStatus(result.status);
+
+      // Restore messages into accumulator refs AND state
+      if (result.messages && result.messages.length > 0) {
+        for (const msg of result.messages) {
+          const msgId = msg.msgId;
+          const content = msg.content as { text?: string };
+          if ((msg.type === 'text' || msg.type === 'thought') && content.text) {
+            // Populate accumulator ref with accumulated text
+            textAccumulatorRef.current.set(msgId, content.text);
+            messageMetadataRef.current.set(msgId, msg as Message);
+          }
+        }
+        // Set initial messages state
+        setMessages(result.messages as Message[]);
+      }
+
+      // If task is running, allow chat after recovery
+      if (result.status === 'completed') {
+        setCanChat(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [todoId]);
 
   // Subscribe to IPC events once on mount. Use todoIdRef for filtering so the
@@ -80,35 +174,49 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
       const { todoId: eventTodoId, message } = data as { todoId: string; message: Message };
       if (eventTodoId !== todoIdRef.current) return;
 
-      setMessages((prev) => {
-        const idx = prev.findIndex((m) => m.msgId === message.msgId);
-        if (idx >= 0 && (message.type === 'text' || message.type === 'thought')) {
-          // Accumulate text for both 'text' and 'thought' message types
-          const updated = [...prev];
-          const existing = updated[idx];
-          const existingContent = existing.content as { text: string };
-          const newContent = message.content as { text: string };
-          updated[idx] = {
-            ...existing,
-            content: { text: existingContent.text + newContent.text },
-          };
-          return updated;
-        } else if (idx >= 0 && message.type === 'tool_call') {
-          const updated = [...prev];
-          const existing = updated[idx];
-          // Deep-merge content so that rawInput/locations from the initial tool_call
-          // are not overwritten by undefined values in tool_call_update
-          const existingContent = existing.content as Record<string, unknown>;
-          const newContent = message.content as Record<string, unknown>;
-          const mergedContent: Record<string, unknown> = { ...existingContent };
-          for (const [k, v] of Object.entries(newContent)) {
-            if (v !== undefined && v !== null && v !== '') mergedContent[k] = v;
-          }
-          updated[idx] = { ...existing, ...message, content: mergedContent };
-          return updated;
+      // Handle text/thought accumulation FULLY SYNCHRONOUSLY via refs
+      if (message.type === 'text' || message.type === 'thought') {
+        const newContent = message.content as { text: string };
+        const msgId = message.msgId;
+
+        // Synchronously append text to accumulator
+        const existingText = textAccumulatorRef.current.get(msgId);
+        if (existingText !== undefined) {
+          // Already have this msgId - append synchronously
+          textAccumulatorRef.current.set(msgId, existingText + newContent.text);
+        } else {
+          // First chunk for this msgId - store it
+          textAccumulatorRef.current.set(msgId, newContent.text);
+          messageMetadataRef.current.set(msgId, message);
         }
-        return [...prev, message];
-      });
+
+        flushToState();
+        return;
+      }
+
+      // Handle tool_call with deep merge
+      if (message.type === 'tool_call') {
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.msgId === message.msgId);
+          if (idx >= 0) {
+            const updated = [...prev];
+            const existing = updated[idx];
+            const existingContent = existing.content as Record<string, unknown>;
+            const newContent = message.content as Record<string, unknown>;
+            const mergedContent: Record<string, unknown> = { ...existingContent };
+            for (const [k, v] of Object.entries(newContent)) {
+              if (v !== undefined && v !== null && v !== '') mergedContent[k] = v;
+            }
+            updated[idx] = { ...existing, ...message, content: mergedContent };
+            return updated;
+          }
+          return [...prev, message];
+        });
+        return;
+      }
+
+      // Other message types: append directly
+      setMessages((prev) => [...prev, message]);
     });
 
     const offStatus = onIpc('agent-todo:status', (_event: unknown, data: unknown) => {
@@ -176,7 +284,7 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
       offStderr();
       offCommands();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flushToState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     messages,
