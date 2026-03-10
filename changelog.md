@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-11
+
+### feat: Add comprehensive production-grade test suite
+
+- **Scope**: `tests/unit/`, `tests/integration/`
+- **New test files** (7 files, 149 new tests):
+  - `tests/unit/tag-style.test.ts` — Unit tests for `getTagStyle()`: all 3 categories, unknown category fallback, return value structure
+  - `tests/unit/search-match.test.ts` — Unit tests for `tokenizeSearchQuery`, `matchesNormalSearchQuery`, `filterNormalSearchResults`: 30+ cases covering multi-token, cross-field, null/undefined, empty inputs
+  - `tests/integration/papers-repository.test.ts` — 43 tests covering PapersRepository CRUD, tag management (flat + categorized), metadata updates, rating, PDF path, delete/deleteMany, countByShortIdPrefix, listAll/listAllShortIds, processing state, semantic index summary, untagged paper queries
+  - `tests/integration/papers-workflow.test.ts` — 19 tests for PapersService: full lifecycle, Chrome history import simulation (5 papers), deduplication, paper→reading card workflow, filtering (text/tag/year), edge cases (special chars, many authors/tags, year-only date, local shortId), batch delete
+  - `tests/integration/reading-extended.test.ts` — 15 tests for ReadingService: create (structured/code/empty/multiple), listByPaper, update, getById, delete, saveChat (create/update), full reading lifecycle simulation
+  - `tests/integration/task-results.test.ts` — 22 tests for TaskResultRepository: create (data/figure/log/user-generated), findById/findMany (with filters), update, delete/deleteByTodoId/deleteByProjectId, count, tags serialization
+  - `tests/integration/source-events.test.ts` — 10 tests for SourceEventsRepository: create (manual/chrome/arxiv/minimal), findByPaperId (ordering, isolation), Chrome history import simulation
+- **Also**: Regenerated Prisma client (`npx prisma generate`) to include TaskResult model in generated types
+- **Test results**: 456 passing (up from 307), 3 pre-existing failures unaffected
+
 ## 2026-03-10
 
 ### fix: Text scrambling when navigating back during streaming (IPC race condition)
