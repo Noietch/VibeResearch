@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" width="160" alt="ResearchClaw Logo">
+  <img src="assets/icon.png" width="160" alt="ResearchClaw Logo">
 </p>
 
 <h1 align="center">ResearchClaw</h1>
