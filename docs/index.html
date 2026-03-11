@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -24,23 +24,25 @@
       }
 
       :root {
-        /* opencode.ai exact color system */
-        --color-background: hsl(0, 20%, 99%);
-        --color-background-weak: hsl(0, 8%, 97%);
-        --color-background-weak-hover: hsl(0, 8%, 94%);
-        --color-background-strong: hsl(0, 5%, 12%);
-        --color-background-strong-hover: hsl(0, 5%, 18%);
-        --color-background-interactive: hsl(0, 0%, 90%);
-        --color-background-interactive-weaker: hsl(0, 0%, 96%);
-        --color-text: hsl(0, 1%, 39%);
-        --color-text-weak: hsl(0, 1%, 60%);
-        --color-text-weaker: hsl(30, 2%, 81%);
-        --color-text-strong: hsl(0, 5%, 12%);
-        --color-border: hsl(30, 2%, 81%);
-        --color-border-weak: hsla(0, 100%, 3%, 0.12);
-
+        --bg: #fafafa;
+        --bg-white: #ffffff;
+        --bg-section: #f4f5f7;
+        --bg-hover: #f0f1f3;
+        --text-primary: #1a1a2e;
+        --text-secondary: #4a4a68;
+        --text-tertiary: #8a8aa3;
+        --accent: #0066ff;
+        --accent-hover: #0052cc;
+        --accent-light: rgba(0, 102, 255, 0.06);
+        --border: #e4e4ed;
+        --border-hover: #c8c8db;
+        --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+        --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
         --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+        --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+        --max-w: 1080px;
+        --radius: 10px;
+        --radius-sm: 6px;
       }
 
       html {
@@ -49,22 +51,22 @@
 
       body {
         font-family: var(--font);
-        background: var(--color-background);
-        color: var(--color-text);
+        background: var(--bg);
+        color: var(--text-secondary);
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
         overflow-x: hidden;
       }
 
-      /* ── SCROLLBAR ── */
       ::-webkit-scrollbar {
         width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: var(--color-background-weak);
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: var(--color-border);
+        background: var(--border);
         border-radius: 3px;
       }
 
@@ -75,19 +77,19 @@
         left: 0;
         right: 0;
         z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 2rem;
-        height: 64px;
-        background: var(--color-background);
-        border-bottom: 1px solid var(--color-border-weak);
+        height: 56px;
+        background: rgba(250, 250, 250, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
       }
 
       .nav-inner {
-        max-width: 67.5rem;
+        max-width: var(--max-w);
         width: 100%;
+        height: 100%;
         margin: 0 auto;
+        padding: 0 1.5rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -98,23 +100,22 @@
         align-items: center;
         gap: 10px;
         text-decoration: none;
-        color: var(--color-text-strong);
+        color: var(--text-primary);
       }
       .nav-logo img {
-        width: 32px;
-        height: 32px;
-        mix-blend-mode: multiply;
+        width: 28px;
+        height: 28px;
       }
       .nav-logo-text {
         font-size: 15px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
 
       .nav-links {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
       }
 
       .nav-link {
@@ -122,126 +123,153 @@
         align-items: center;
         gap: 6px;
         padding: 6px 12px;
-        border-radius: 4px;
-        font-size: 14px;
+        border-radius: var(--radius-sm);
+        font-size: 13.5px;
         font-weight: 500;
-        color: var(--color-text-weak);
+        color: var(--text-tertiary);
         text-decoration: none;
-        transition:
-          background 0.15s,
-          color 0.15s;
+        transition: all 0.15s ease;
       }
       .nav-link:hover {
-        background: var(--color-background-weak);
-        color: var(--color-text-strong);
+        color: var(--text-primary);
+        background: var(--bg-hover);
       }
       .nav-link svg {
-        width: 15px;
-        height: 15px;
+        width: 16px;
+        height: 16px;
         flex-shrink: 0;
       }
 
       .nav-cta {
         padding: 7px 16px;
-        border-radius: 4px;
-        font-size: 14px;
-        font-weight: 500;
-        background: var(--color-background-strong);
-        color: var(--color-background);
+        border-radius: var(--radius-sm);
+        font-size: 13.5px;
+        font-weight: 600;
+        background: var(--text-primary);
+        color: #fff;
         text-decoration: none;
-        transition: background 0.15s;
+        transition: all 0.15s ease;
         margin-left: 4px;
       }
       .nav-cta:hover {
-        background: var(--color-background-strong-hover);
+        background: #2a2a44;
       }
 
       /* ── HERO ── */
+      .hero-wrapper {
+        padding-top: 56px;
+        background: linear-gradient(
+          180deg,
+          #fff 0%,
+          #f8f9fc 60%,
+          var(--bg) 100%
+        );
+        position: relative;
+        overflow: hidden;
+      }
+      .hero-wrapper::before {
+        content: '';
+        position: absolute;
+        top: 56px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 800px;
+        height: 500px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(0, 102, 255, 0.04) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+
       .hero {
-        padding: 120px 2rem 80px;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        max-width: 67.5rem;
+        max-width: var(--max-w);
         margin: 0 auto;
+        padding: 72px 1.5rem 60px;
+        position: relative;
       }
 
       .hero-badge {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 4px 12px;
-        border-radius: 4px;
-        background: var(--color-background-interactive);
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--color-text-strong);
-        margin-bottom: 28px;
+        padding: 5px 14px;
+        border-radius: 100px;
+        background: var(--accent-light);
+        border: 1px solid rgba(0, 102, 255, 0.12);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--accent);
         text-decoration: none;
-        transition: opacity 0.15s;
+        margin-bottom: 28px;
+        transition: all 0.15s ease;
       }
       .hero-badge:hover {
-        opacity: 0.85;
+        background: rgba(0, 102, 255, 0.1);
+        border-color: rgba(0, 102, 255, 0.2);
       }
       .hero-badge-dot {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: var(--color-text-strong);
+        background: var(--accent);
         animation: pulse 2s infinite;
       }
       @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.3;
-        }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      .hero-badge-arrow {
+        font-size: 11px;
+        opacity: 0.7;
       }
 
       h1 {
-        font-size: 38px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        line-height: 1.15;
-        color: var(--color-text-strong);
-        margin-bottom: 16px;
-        max-width: 640px;
+        font-size: clamp(36px, 5vw, 52px);
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        line-height: 1.08;
+        color: var(--text-primary);
+        margin-bottom: 20px;
+        max-width: 620px;
       }
 
       .hero-sub {
-        font-size: 16px;
-        color: var(--color-text);
-        max-width: 520px;
-        line-height: 1.7;
+        font-size: 17px;
+        color: var(--text-secondary);
+        max-width: 500px;
+        line-height: 1.65;
         margin-bottom: 36px;
+        font-weight: 400;
       }
 
       .hero-actions {
         display: flex;
-        gap: 10px;
+        gap: 12px;
         flex-wrap: wrap;
-        margin-bottom: 56px;
+        margin-bottom: 48px;
       }
 
       .btn-primary {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 20px;
-        border-radius: 4px;
+        padding: 11px 22px;
+        border-radius: var(--radius-sm);
         font-size: 14px;
-        font-weight: 500;
-        background: var(--color-background-strong);
-        color: var(--color-background);
+        font-weight: 600;
+        background: var(--text-primary);
+        color: #fff;
         text-decoration: none;
-        transition: background 0.15s;
-        border: 1px solid var(--color-background-strong);
+        transition: all 0.15s ease;
+        border: 1px solid var(--text-primary);
       }
       .btn-primary:hover {
-        background: var(--color-background-strong-hover);
-        border-color: var(--color-background-strong-hover);
+        background: #2a2a44;
+        border-color: #2a2a44;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(26, 26, 46, 0.2);
       }
       .btn-primary svg {
         width: 15px;
@@ -252,18 +280,20 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 20px;
-        border-radius: 4px;
+        padding: 11px 22px;
+        border-radius: var(--radius-sm);
         font-size: 14px;
-        font-weight: 500;
-        background: transparent;
-        color: var(--color-text-strong);
+        font-weight: 600;
+        background: var(--bg-white);
+        color: var(--text-primary);
         text-decoration: none;
-        transition: background 0.15s;
-        border: 1px solid var(--color-border);
+        transition: all 0.15s ease;
+        border: 1px solid var(--border);
       }
       .btn-secondary:hover {
-        background: var(--color-background-weak);
+        border-color: var(--border-hover);
+        background: var(--bg-hover);
+        transform: translateY(-1px);
       }
       .btn-secondary svg {
         width: 15px;
@@ -277,70 +307,103 @@
         flex-wrap: wrap;
       }
       .platform-label {
-        font-size: 12px;
-        color: var(--color-text-weak);
-        font-weight: 500;
-        letter-spacing: 0.04em;
+        font-size: 11px;
+        color: var(--text-tertiary);
+        font-weight: 600;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
       }
       .platform-badge {
         font-size: 13px;
-        color: var(--color-text-weak);
+        color: var(--text-tertiary);
         font-weight: 400;
       }
       .platform-sep {
-        color: var(--color-border);
+        color: var(--border);
         font-size: 13px;
       }
 
-      /* ── SCREENSHOT ── */
+      /* ── SCREENSHOTS ── */
       .screenshot-section {
-        padding: 0 2rem 100px;
-        max-width: 67.5rem;
+        padding: 0 1.5rem 80px;
+        max-width: 1024px;
         margin: 0 auto;
       }
-      .screenshot-frame {
+      .screenshot-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .screenshot-carousel {
+        flex: 1;
         border-radius: 8px;
         overflow: hidden;
-        border: 1px solid var(--color-border);
-        box-shadow:
-          0 4px 24px hsla(0, 5%, 12%, 0.1),
-          0 1px 4px hsla(0, 5%, 12%, 0.06);
+        background: #1a1a2e;
       }
-      .screenshot-frame img {
+      .screenshot-track {
+        display: flex;
+        width: 100%;
+        transition: transform 0.4s ease;
+      }
+      .screenshot-slide {
+        width: 100%;
+        flex: 0 0 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .screenshot-slide img {
         display: block;
         width: 100%;
         height: auto;
       }
+      .carousel-nav {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--bg-white);
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+      .carousel-nav:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
 
       /* ── SECTION SHARED ── */
       .section-wrap {
-        max-width: 67.5rem;
+        max-width: var(--max-w);
         margin: 0 auto;
       }
 
       .section-eyebrow {
         font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
+        font-weight: 700;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: var(--color-text-weak);
+        color: var(--accent);
         margin-bottom: 12px;
       }
 
       h2 {
-        font-size: 28px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-        color: var(--color-text-strong);
+        font-size: clamp(24px, 3vw, 32px);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        color: var(--text-primary);
         margin-bottom: 12px;
       }
 
       .section-desc {
         font-size: 15px;
-        color: var(--color-text);
-        max-width: 480px;
+        color: var(--text-secondary);
+        max-width: 460px;
         line-height: 1.7;
       }
 
@@ -356,58 +419,62 @@
 
       /* ── FEATURES ── */
       .features-section {
-        background: var(--color-background-weak);
-        padding: 80px 2rem;
+        background: var(--bg-section);
+        padding: 88px 1.5rem;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
       }
 
       .features-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 1px;
-        background: var(--color-border);
-        border: 1px solid var(--color-border);
-        border-radius: 8px;
-        overflow: hidden;
+        gap: 16px;
       }
 
       .feature-card {
-        background: var(--color-background);
+        background: var(--bg-white);
         padding: 28px 24px;
-        transition: background 0.15s;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        transition: all 0.2s ease;
+        cursor: default;
       }
       .feature-card:hover {
-        background: var(--color-background-weak);
+        border-color: var(--border-hover);
+        box-shadow: var(--card-shadow-hover);
+        transform: translateY(-2px);
       }
 
       .feature-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 6px;
-        background: var(--color-background-interactive-weaker);
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: var(--bg-section);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 17px;
-        margin-bottom: 14px;
+        font-size: 18px;
+        margin-bottom: 16px;
       }
 
       .feature-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--color-text-strong);
+        font-size: 14.5px;
+        font-weight: 700;
+        color: var(--text-primary);
         margin-bottom: 6px;
+        letter-spacing: -0.01em;
       }
 
       .feature-desc {
-        font-size: 13px;
-        line-height: 1.65;
-        color: var(--color-text);
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--text-secondary);
       }
 
       /* ── QUICKSTART ── */
       .quickstart-section {
-        background: var(--color-background);
-        padding: 80px 2rem;
+        background: var(--bg-white);
+        padding: 88px 1.5rem;
       }
 
       .quickstart-grid {
@@ -420,7 +487,7 @@
       .steps-list {
         display: flex;
         flex-direction: column;
-        gap: 24px;
+        gap: 28px;
       }
 
       .step {
@@ -433,111 +500,102 @@
         width: 28px;
         height: 28px;
         flex-shrink: 0;
-        border-radius: 4px;
-        background: var(--color-background-interactive);
+        border-radius: var(--radius-sm);
+        background: var(--accent-light);
+        border: 1px solid rgba(0, 102, 255, 0.1);
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 12px;
-        font-weight: 700;
-        color: var(--color-text-strong);
+        font-weight: 800;
+        color: var(--accent);
       }
 
       .step-title {
         font-size: 14px;
-        font-weight: 600;
-        color: var(--color-text-strong);
-        margin-bottom: 3px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        letter-spacing: -0.01em;
       }
       .step-desc {
-        font-size: 13px;
-        color: var(--color-text);
+        font-size: 13.5px;
+        color: var(--text-secondary);
         line-height: 1.6;
       }
       .step-code {
         font-family: var(--mono);
         font-size: 12px;
-        color: var(--color-text-strong);
-        background: var(--color-background-interactive-weaker);
-        padding: 1px 6px;
-        border-radius: 3px;
-        border: 1px solid var(--color-border);
+        color: var(--accent);
+        background: var(--accent-light);
+        padding: 1px 7px;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 102, 255, 0.1);
       }
 
       /* ── CODE PANEL ── */
       .code-panel {
-        background: #1e1e2e;
-        border: 1px solid rgba(0, 0, 0, 0.2);
-        border-radius: 8px;
+        background: #1c1c2e;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: var(--radius);
         overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
       }
       .code-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 14px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-        background: #181825;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: #16162a;
       }
       .code-dots {
         display: flex;
-        gap: 6px;
+        gap: 7px;
       }
       .code-dot {
-        width: 10px;
-        height: 10px;
+        width: 11px;
+        height: 11px;
         border-radius: 50%;
       }
-      .code-dot.red {
-        background: #ff5f56;
-      }
-      .code-dot.yellow {
-        background: #ffbd2e;
-      }
-      .code-dot.green {
-        background: #27c93f;
-      }
+      .code-dot.red { background: #ff5f56; }
+      .code-dot.yellow { background: #ffbd2e; }
+      .code-dot.green { background: #27c93f; }
       .code-filename {
         font-size: 11px;
-        color: #6c7086;
+        color: rgba(255, 255, 255, 0.35);
         font-family: var(--mono);
       }
       .code-body {
         padding: 20px;
         font-family: var(--mono);
         font-size: 13px;
-        line-height: 1.8;
+        line-height: 1.85;
         overflow-x: auto;
-        color: #cdd6f4;
+        color: #d4d4e8;
       }
       .code-line {
         display: flex;
-        gap: 14px;
+        gap: 16px;
       }
       .code-ln {
-        color: #45475a;
+        color: rgba(255, 255, 255, 0.18);
         user-select: none;
-        min-width: 18px;
+        min-width: 20px;
         text-align: right;
         font-size: 11px;
       }
-      .c-comment {
-        color: #6c7086;
-      }
-      .c-cmd {
-        color: #cdd6f4;
-      }
-      .c-blue {
-        color: #89b4fa;
-      }
-      .c-green {
-        color: #a6e3a1;
-      }
+      .c-comment { color: rgba(255, 255, 255, 0.3); }
+      .c-cmd { color: #d4d4e8; }
+      .c-blue { color: #7aa2f7; }
+      .c-green { color: #9ece6a; }
 
       /* ── PROVIDERS ── */
       .providers-section {
-        background: var(--color-background-weak);
-        padding: 72px 2rem;
+        background: var(--bg-section);
+        padding: 80px 1.5rem;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
       }
 
       .providers-grid {
@@ -545,7 +603,7 @@
         flex-wrap: wrap;
         gap: 10px;
         justify-content: center;
-        max-width: 640px;
+        max-width: 680px;
         margin: 0 auto;
       }
 
@@ -553,83 +611,100 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 8px 16px;
-        border-radius: 4px;
-        background: var(--color-background);
-        border: 1px solid var(--color-border);
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--color-text);
-        transition:
-          border-color 0.15s,
-          background 0.15s;
+        padding: 10px 18px;
+        border-radius: 100px;
+        background: var(--bg-white);
+        border: 1px solid var(--border);
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        transition: all 0.15s ease;
       }
       .provider-chip:hover {
-        border-color: var(--color-text-strong);
-        background: var(--color-background-weak-hover);
+        border-color: var(--border-hover);
+        background: var(--bg-hover);
+        transform: translateY(-1px);
+        box-shadow: var(--card-shadow);
       }
 
       /* ── CTA ── */
       .cta-section {
-        background: var(--color-background);
-        padding: 80px 2rem;
+        background: var(--bg-white);
+        padding: 88px 1.5rem;
         text-align: center;
       }
-
       .cta-card {
-        max-width: 560px;
+        max-width: 540px;
         margin: 0 auto;
         padding: 56px 48px;
-        border: 1px solid var(--color-border);
-        border-radius: 8px;
-        background: var(--color-background-weak);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg-section);
+        position: relative;
+        overflow: hidden;
+      }
+      .cta-card::before {
+        content: '';
+        position: absolute;
+        top: -60px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 300px;
+        height: 120px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(0, 102, 255, 0.06) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
       }
 
       .license-badge {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 3px 10px;
-        border-radius: 4px;
-        background: var(--color-background-interactive);
+        padding: 4px 12px;
+        border-radius: 100px;
+        background: var(--accent-light);
+        border: 1px solid rgba(0, 102, 255, 0.1);
         font-size: 12px;
-        font-weight: 600;
-        color: var(--color-text-strong);
+        font-weight: 700;
+        color: var(--accent);
         margin-bottom: 20px;
       }
 
       .cta-title {
         font-size: 26px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        color: var(--color-text-strong);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: var(--text-primary);
         margin-bottom: 12px;
-        line-height: 1.2;
+        line-height: 1.15;
       }
 
       .cta-desc {
-        font-size: 14px;
-        color: var(--color-text);
+        font-size: 14.5px;
+        color: var(--text-secondary);
         line-height: 1.7;
         margin-bottom: 28px;
       }
 
       .cta-actions {
         display: flex;
-        gap: 10px;
+        gap: 12px;
         justify-content: center;
         flex-wrap: wrap;
       }
 
       /* ── FOOTER ── */
       footer {
-        border-top: 1px solid var(--color-border-weak);
-        padding: 32px 2rem;
-        background: var(--color-background);
+        border-top: 1px solid var(--border);
+        padding: 28px 1.5rem;
+        background: var(--bg);
       }
 
       .footer-inner {
-        max-width: 67.5rem;
+        max-width: var(--max-w);
         margin: 0 auto;
         display: flex;
         align-items: center;
@@ -648,23 +723,22 @@
         align-items: center;
         gap: 8px;
         text-decoration: none;
-        color: var(--color-text);
+        color: var(--text-secondary);
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 700;
       }
       .footer-logo img {
-        width: 22px;
-        height: 22px;
-        mix-blend-mode: multiply;
+        width: 20px;
+        height: 20px;
       }
       .footer-sep {
         width: 1px;
         height: 14px;
-        background: var(--color-border);
+        background: var(--border);
       }
       .footer-tagline {
         font-size: 12px;
-        color: var(--color-text-weak);
+        color: var(--text-tertiary);
       }
 
       .footer-links {
@@ -675,48 +749,66 @@
       }
       .footer-link {
         font-size: 13px;
-        color: var(--color-text-weak);
+        color: var(--text-tertiary);
         text-decoration: none;
         padding: 4px 10px;
-        border-radius: 4px;
-        transition:
-          color 0.15s,
-          background 0.15s;
+        border-radius: var(--radius-sm);
+        transition: all 0.15s ease;
+        font-weight: 500;
       }
       .footer-link:hover {
-        color: var(--color-text-strong);
-        background: var(--color-background-weak);
+        color: var(--text-primary);
+        background: var(--bg-hover);
       }
 
       /* ── FADE ANIMATIONS ── */
       .fade-in {
         opacity: 0;
-        transform: translateY(16px);
+        transform: translateY(20px);
         transition:
-          opacity 0.5s ease,
-          transform 0.5s ease;
+          opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .fade-in.visible {
         opacity: 1;
         transform: translateY(0);
       }
-      .fd1 {
-        transition-delay: 0.08s;
+      .fd1 { transition-delay: 0.06s; }
+      .fd2 { transition-delay: 0.12s; }
+      .fd3 { transition-delay: 0.18s; }
+      .fd4 { transition-delay: 0.24s; }
+      .fd5 { transition-delay: 0.30s; }
+      .fd6 { transition-delay: 0.36s; }
+
+      /* ── PREREQS ── */
+      .prereq-box {
+        margin-top: 14px;
+        padding: 16px 18px;
+        background: var(--bg-section);
+        border: 1px solid var(--border);
+        border-radius: 8px;
       }
-      .fd2 {
-        transition-delay: 0.16s;
+      .prereq-label {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-bottom: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }
-      .fd3 {
-        transition-delay: 0.24s;
+      .prereq-tags {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
       }
-      .fd4 {
-        transition-delay: 0.32s;
-      }
-      .fd5 {
-        transition-delay: 0.4s;
-      }
-      .fd6 {
-        transition-delay: 0.48s;
+      .prereq-tag {
+        font-size: 12px;
+        padding: 3px 12px;
+        border-radius: 100px;
+        background: var(--bg-white);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        font-weight: 500;
       }
 
       /* ── RESPONSIVE ── */
@@ -730,33 +822,22 @@
         }
       }
       @media (max-width: 600px) {
-        nav {
-          padding: 0 1rem;
-        }
-        .nav-logo-text {
-          display: none;
-        }
-        .hero {
-          padding: 96px 1.25rem 64px;
-        }
-        h1 {
-          font-size: 28px;
-        }
-        .features-grid {
-          grid-template-columns: 1fr;
-        }
+        nav { height: 48px; }
+        .nav-logo-text { display: none; }
+        .hero { padding: 56px 1.25rem 48px; }
+        h1 { font-size: 32px; }
+        .features-grid { grid-template-columns: 1fr; }
         .features-section,
         .quickstart-section,
         .providers-section,
         .cta-section {
-          padding: 56px 1.25rem;
+          padding: 64px 1.25rem;
         }
-        .screenshot-section {
-          padding: 0 1.25rem 72px;
-        }
-        .cta-card {
-          padding: 36px 24px;
-        }
+        .screenshot-section { padding: 0 1.25rem 56px; }
+        .carousel-nav { width: 32px; height: 32px; }
+        .carousel-nav.prev { left: 8px; }
+        .carousel-nav.next { right: 8px; }
+        .cta-card { padding: 36px 24px; }
         .footer-inner {
           flex-direction: column;
           align-items: flex-start;
@@ -799,13 +880,24 @@
     </nav>
 
     <!-- HERO -->
-    <div style="padding-top: 64px">
+    <div class="hero-wrapper">
       <div class="hero">
+        <a
+          href="https://github.com/Noietch/ResearchClaw/releases"
+          target="_blank"
+          rel="noopener"
+          class="hero-badge fade-in"
+        >
+          <span class="hero-badge-dot"></span>
+          v0.0.2 — Now available
+          <span class="hero-badge-arrow">→</span>
+        </a>
+
         <h1 class="fade-in fd1">AI-powered research,<br />all in one desktop app</h1>
 
         <p class="hero-sub fade-in fd2">
-          ResearchClaw brings paper management, interactive PDF reading, and autonomous AI agents
-          into a single native app — no browser, no server, no plugin required.
+          ResearchClaw brings paper management, interactive PDF reading, and autonomous AI
+          agents into a single native app — no browser, no server, no plugin required.
         </p>
 
         <div class="hero-actions fade-in fd3">
@@ -836,32 +928,44 @@
             View on GitHub
           </a>
         </div>
+
+        <div class="platforms fade-in fd4">
+          <span class="platform-label">Available for</span>
+          <span class="platform-badge">macOS</span>
+          <span class="platform-sep">·</span>
+          <span class="platform-badge" style="opacity: 0.5">Windows</span>
+          <span class="platform-sep" style="opacity: 0.5">·</span>
+          <span class="platform-badge" style="opacity: 0.5">Linux</span>
+          <span class="platform-label" style="margin-left: 8px; opacity: 0.6">(Coming soon)</span>
+        </div>
       </div>
 
       <!-- SCREENSHOTS -->
       <div class="screenshot-section fade-in fd2">
-        <!-- Screenshot 1: Dashboard -->
-        <div class="screenshot-frame" style="margin-bottom: 24px;">
-          <img
-            src="https://raw.githubusercontent.com/Noietch/ResearchClaw/main/assets/screenshot_01.png"
-            alt="ResearchClaw dashboard showing arXiv papers with AI-categorized tags"
-          />
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-          <!-- Screenshot 2: Reading Cards -->
-          <div class="screenshot-frame">
-            <img
-              src="https://raw.githubusercontent.com/Noietch/ResearchClaw/main/assets/screenshot_02.png"
-              alt="AI-powered reading interface with structured note-taking cards"
-            />
+        <div class="screenshot-wrapper">
+          <button class="carousel-nav prev" onclick="prevSlide()" aria-label="Previous">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          <div class="screenshot-carousel" id="screenshotCarousel">
+            <div class="screenshot-track" id="screenshotTrack">
+              <div class="screenshot-slide">
+                <img src="screenshot_01.png" alt="ResearchClaw dashboard showing arXiv papers with AI-categorized tags" />
+              </div>
+              <div class="screenshot-slide">
+                <img src="screenshot_02.png" alt="AI-powered reading interface with structured note-taking cards" />
+              </div>
+              <div class="screenshot-slide">
+                <img src="screenshot_v3.png" alt="Organize papers into projects and generate AI-powered research ideas" />
+              </div>
+            </div>
           </div>
-          <!-- Screenshot 3: Projects -->
-          <div class="screenshot-frame">
-            <img
-              src="https://raw.githubusercontent.com/Noietch/ResearchClaw/main/assets/screenshot_v3.png"
-              alt="Organize papers into projects and generate AI-powered research ideas"
-            />
-          </div>
+          <button class="carousel-nav next" onclick="nextSlide()" aria-label="Next">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -873,8 +977,8 @@
           <p class="section-eyebrow fade-in">Features</p>
           <h2 class="fade-in fd1">Everything a researcher needs</h2>
           <p class="section-desc fade-in fd2">
-            From paper discovery to idea generation, ResearchClaw covers the full research workflow
-            — all in one native desktop app.
+            From paper discovery to idea generation, ResearchClaw covers the full research
+            workflow — all in one native desktop app.
           </p>
         </div>
 
@@ -883,8 +987,8 @@
             <div class="feature-icon">📊</div>
             <div class="feature-title">Dashboard</div>
             <div class="feature-desc">
-              Browse today's arXiv papers with AI-generated tags at a glance. Stay current without
-              leaving the app.
+              Browse today's arXiv papers with AI-generated tags at a glance. Stay current
+              without leaving the app.
             </div>
           </div>
           <div class="feature-card fade-in fd1">
@@ -899,8 +1003,8 @@
             <div class="feature-icon">📖</div>
             <div class="feature-title">AI Reading</div>
             <div class="feature-desc">
-              Open PDFs with a side-by-side AI chat panel. Ask questions and let AI fill structured
-              reading cards automatically.
+              Open PDFs with a side-by-side AI chat panel. Ask questions and let AI fill
+              structured reading cards automatically.
             </div>
           </div>
           <div class="feature-card fade-in fd3">
@@ -915,16 +1019,16 @@
             <div class="feature-icon">🏷️</div>
             <div class="feature-title">Multi-Layer Tags</div>
             <div class="feature-desc">
-              Papers auto-tagged by domain, method, and topic. A hierarchical taxonomy that makes
-              filtering effortless.
+              Papers auto-tagged by domain, method, and topic. A hierarchical taxonomy that
+              makes filtering effortless.
             </div>
           </div>
           <div class="feature-card fade-in fd5">
             <div class="feature-icon">📁</div>
             <div class="feature-title">Projects</div>
             <div class="feature-desc">
-              Organize papers and code repos into research projects. Generate AI-powered ideas from
-              your collection.
+              Organize papers and code repos into research projects. Generate AI-powered ideas
+              from your collection.
             </div>
           </div>
           <div class="feature-card fade-in">
@@ -939,16 +1043,16 @@
             <div class="feature-icon">⚡</div>
             <div class="feature-title">CLI Tools</div>
             <div class="feature-desc">
-              Run Claude Code, Codex, or Gemini CLI directly inside the app. No context switching
-              required.
+              Run Claude Code, Codex, or Gemini CLI directly inside the app. No context
+              switching required.
             </div>
           </div>
           <div class="feature-card fade-in fd2">
             <div class="feature-icon">🌐</div>
             <div class="feature-title">SSH Remote Agents</div>
             <div class="feature-desc">
-              Connect to remote servers via SSH and run AI agents on your compute cluster. Research
-              at scale, from your laptop.
+              Connect to remote servers via SSH and run AI agents on your compute cluster.
+              Research at scale, from your laptop.
             </div>
           </div>
         </div>
@@ -983,8 +1087,8 @@
                 <div>
                   <div class="step-title">Install dependencies</div>
                   <div class="step-desc">
-                    A single <span class="step-code">npm install</span> pulls everything — Electron,
-                    Prisma, Vite, and all AI SDKs.
+                    A single <span class="step-code">npm install</span> pulls everything —
+                    Electron, Prisma, Vite, and all AI SDKs.
                   </div>
                 </div>
               </div>
@@ -1024,111 +1128,45 @@
               </div>
               <div class="code-body">
                 <div class="code-line">
-                  <span class="code-ln">1</span
-                  ><span class="c-comment"># Clone the repository</span>
+                  <span class="code-ln">1</span><span class="c-comment"># Clone the repository</span>
                 </div>
                 <div class="code-line">
-                  <span class="code-ln">2</span
-                  ><span class="c-cmd"
-                    ><span class="c-blue">git</span> clone
-                    https://github.com/Noietch/ResearchClaw.git</span
-                  >
+                  <span class="code-ln">2</span><span class="c-cmd"><span class="c-blue">git</span> clone https://github.com/Noietch/ResearchClaw.git</span>
                 </div>
                 <div class="code-line"><span class="code-ln">3</span></div>
                 <div class="code-line">
-                  <span class="code-ln">4</span
-                  ><span class="c-cmd"><span class="c-blue">cd</span> ResearchClaw</span>
+                  <span class="code-ln">4</span><span class="c-cmd"><span class="c-blue">cd</span> ResearchClaw</span>
                 </div>
                 <div class="code-line"><span class="code-ln">5</span></div>
                 <div class="code-line">
-                  <span class="code-ln">6</span
-                  ><span class="c-comment"># Install dependencies</span>
+                  <span class="code-ln">6</span><span class="c-comment"># Install dependencies</span>
                 </div>
                 <div class="code-line">
-                  <span class="code-ln">7</span
-                  ><span class="c-cmd"><span class="c-blue">npm</span> install</span>
+                  <span class="code-ln">7</span><span class="c-cmd"><span class="c-blue">npm</span> install</span>
                 </div>
                 <div class="code-line"><span class="code-ln">8</span></div>
                 <div class="code-line">
-                  <span class="code-ln">9</span
-                  ><span class="c-comment"># Start in development mode</span>
+                  <span class="code-ln">9</span><span class="c-comment"># Start in development mode</span>
                 </div>
                 <div class="code-line">
-                  <span class="code-ln">10</span
-                  ><span class="c-cmd"
-                    ><span class="c-blue">npm</span> run <span class="c-green">dev</span></span
-                  >
+                  <span class="code-ln">10</span><span class="c-cmd"><span class="c-blue">npm</span> run <span class="c-green">dev</span></span>
                 </div>
                 <div class="code-line"><span class="code-ln">11</span></div>
                 <div class="code-line">
-                  <span class="code-ln">12</span
-                  ><span class="c-comment"># Build release (macOS)</span>
+                  <span class="code-ln">12</span><span class="c-comment"># Build release (macOS)</span>
                 </div>
                 <div class="code-line">
-                  <span class="code-ln">13</span
-                  ><span class="c-cmd"
-                    ><span class="c-blue">npm</span> run
-                    <span class="c-green">release:mac</span></span
-                  >
+                  <span class="code-ln">13</span><span class="c-cmd"><span class="c-blue">npm</span> run <span class="c-green">release:mac</span></span>
                 </div>
               </div>
             </div>
 
-            <div
-              style="
-                margin-top: 12px;
-                padding: 14px 18px;
-                background: var(--color-background-weak);
-                border: 1px solid var(--color-border);
-                border-radius: 6px;
-              "
-            >
-              <div
-                style="
-                  font-size: 11px;
-                  color: var(--color-text-weak);
-                  margin-bottom: 8px;
-                  font-weight: 600;
-                  letter-spacing: 0.06em;
-                  text-transform: uppercase;
-                "
-              >
-                Prerequisites
-              </div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                <span
-                  style="
-                    font-size: 12px;
-                    padding: 2px 10px;
-                    border-radius: 4px;
-                    background: var(--color-background);
-                    color: var(--color-text);
-                    border: 1px solid var(--color-border);
-                  "
-                  >Node.js 18+</span
-                >
-                <span
-                  style="
-                    font-size: 12px;
-                    padding: 2px 10px;
-                    border-radius: 4px;
-                    background: var(--color-background);
-                    color: var(--color-text);
-                    border: 1px solid var(--color-border);
-                  "
-                  >npm 9+</span
-                >
-                <span
-                  style="
-                    font-size: 12px;
-                    padding: 2px 10px;
-                    border-radius: 4px;
-                    background: var(--color-background);
-                    color: var(--color-text);
-                    border: 1px solid var(--color-border);
-                  "
-                  >AI API key</span
-                >
+            <div class="prereq-box">
+              <div class="prereq-label">Prerequisites</div>
+              <div class="prereq-tags">
+                <span class="prereq-tag">Node.js 18+</span>
+                <span class="prereq-tag">npm 9+</span>
+                <span class="prereq-tag">AI API key</span>
               </div>
             </div>
           </div>
@@ -1142,124 +1180,94 @@
         <p class="section-eyebrow fade-in" style="margin-bottom: 10px">Multi-Provider AI</p>
         <h2 class="fade-in fd1" style="margin-bottom: 10px">Bring your own AI</h2>
         <p class="section-desc fade-in fd2" style="margin: 0 auto 36px; max-width: 440px">
-          Connect any major AI provider or your own OpenAI-compatible endpoint. Your API keys stay
-          local, encrypted with the system keychain.
+          Connect any major AI provider or your own OpenAI-compatible endpoint. Your API keys
+          stay local, encrypted with the system keychain.
         </p>
         <div class="providers-grid fade-in fd3">
           <div class="provider-chip">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              width="18"
-              height="18"
-            >
-              <path
-                d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm3.63 5.36L7.526 14.58h5.346l-2.673-5.7z"
-              />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <path d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm3.63 5.36L7.526 14.58h5.346l-2.673-5.7z" />
             </svg>
             Anthropic Claude
           </div>
           <div class="provider-chip">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              width="18"
-              height="18"
-            >
-              <path
-                d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6099-1.4997Z"
-              />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6099-1.4997Z" />
             </svg>
             OpenAI GPT
           </div>
           <div class="provider-chip">
             <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <linearGradient
-                  gradientUnits="userSpaceOnUse"
-                  id="g0"
-                  x1="7"
-                  x2="11"
-                  y1="15.5"
-                  y2="12"
-                >
+                <linearGradient gradientUnits="userSpaceOnUse" id="g0" x1="7" x2="11" y1="15.5" y2="12">
                   <stop stop-color="#08B962" />
                   <stop offset="1" stop-color="#08B962" stop-opacity="0" />
                 </linearGradient>
-                <linearGradient
-                  gradientUnits="userSpaceOnUse"
-                  id="g1"
-                  x1="8"
-                  x2="11.5"
-                  y1="5.5"
-                  y2="11"
-                >
+                <linearGradient gradientUnits="userSpaceOnUse" id="g1" x1="8" x2="11.5" y1="5.5" y2="11">
                   <stop stop-color="#F94543" />
                   <stop offset="1" stop-color="#F94543" stop-opacity="0" />
                 </linearGradient>
-                <linearGradient
-                  gradientUnits="userSpaceOnUse"
-                  id="g2"
-                  x1="3.5"
-                  x2="17.5"
-                  y1="13.5"
-                  y2="12"
-                >
+                <linearGradient gradientUnits="userSpaceOnUse" id="g2" x1="3.5" x2="17.5" y1="13.5" y2="12">
                   <stop stop-color="#FABC12" />
                   <stop offset=".46" stop-color="#FABC12" stop-opacity="0" />
                 </linearGradient>
               </defs>
-              <path
-                d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-                fill="#3186FF"
-              />
-              <path
-                d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-                fill="url(#g0)"
-              />
-              <path
-                d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-                fill="url(#g1)"
-              />
-              <path
-                d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-                fill="url(#g2)"
-              />
+              <path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="#3186FF" />
+              <path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#g0)" />
+              <path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#g1)" />
+              <path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#g2)" />
             </svg>
             Google Gemini
           </div>
           <div class="provider-chip">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              width="18"
-              height="18"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18">
               <circle cx="12" cy="12" r="3" />
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-              />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
             Custom API
           </div>
           <div class="provider-chip">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              width="18"
-              height="18"
-            >
-              <path
-                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"
-              />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
             </svg>
             Local Ollama
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+      <div class="section-wrap">
+        <div class="cta-card fade-in">
+          <div class="license-badge">MIT Licensed</div>
+          <div class="cta-title">Start researching smarter</div>
+          <div class="cta-desc">
+            Open-source, privacy-first, and built for the research community. Download
+            ResearchClaw and supercharge your workflow today.
+          </div>
+          <div class="cta-actions">
+            <a
+              href="https://github.com/Noietch/ResearchClaw/releases"
+              target="_blank"
+              rel="noopener"
+              class="btn-primary"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <path
+                  d="M7.47 10.78a.75.75 0 001.06 0l3.75-3.75a.75.75 0 00-1.06-1.06L8.75 8.44V1.75a.75.75 0 00-1.5 0v6.69L4.78 5.97a.75.75 0 00-1.06 1.06l3.75 3.75zM3.75 13a.75.75 0 000 1.5h8.5a.75.75 0 000-1.5h-8.5z"
+                />
+              </svg>
+              Download
+            </a>
+            <a
+              href="https://github.com/Noietch/ResearchClaw"
+              target="_blank"
+              rel="noopener"
+              class="btn-secondary"
+            >
+              View Source
+            </a>
           </div>
         </div>
       </div>
@@ -1315,11 +1323,67 @@
           { threshold: 0.1, rootMargin: '0px 0px -32px 0px' },
         );
         document.querySelectorAll('.fade-in').forEach((el) => io.observe(el));
-        // Trigger hero immediately
         document.querySelectorAll('.hero .fade-in, .screenshot-section .fade-in').forEach((el) => {
           setTimeout(() => el.classList.add('visible'), 30);
         });
       })();
+
+      // Carousel
+      let currentSlide = 0;
+      const totalSlides = 3;
+      const track = document.getElementById('screenshotTrack');
+      const carousel = document.getElementById('screenshotCarousel');
+      let autoplayTimer = null;
+
+      function updateCarousel() {
+        track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      }
+
+      function nextSlide() {
+        currentSlide = (currentSlide + 1) % totalSlides;
+        updateCarousel();
+        resetAutoplay();
+      }
+
+      function prevSlide() {
+        currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+        updateCarousel();
+        resetAutoplay();
+      }
+
+      function startAutoplay() {
+        autoplayTimer = setInterval(() => {
+          currentSlide = (currentSlide + 1) % totalSlides;
+          updateCarousel();
+        }, 4000);
+      }
+
+      function resetAutoplay() {
+        clearInterval(autoplayTimer);
+        startAutoplay();
+      }
+
+      startAutoplay();
+
+      // Touch/swipe support
+      let touchStartX = 0;
+      let touchEndX = 0;
+
+      carousel.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      });
+
+      carousel.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        if (touchStartX - touchEndX > 50) nextSlide();
+        if (touchEndX - touchStartX > 50) prevSlide();
+      });
+
+      // Keyboard navigation
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') prevSlide();
+        if (e.key === 'ArrowRight') nextSlide();
+      });
     </script>
   </body>
 </html>
