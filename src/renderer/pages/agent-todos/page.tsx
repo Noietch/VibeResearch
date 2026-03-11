@@ -70,8 +70,10 @@ export function AgentTodosPage() {
     { id: 'idle', label: 'Idle' },
   ];
 
-  // Apply status filter
-  const filteredTodos = filter === 'all' ? todos : todos.filter((t) => t.status === filter);
+  // Apply status filter and exclude chat sessions (titles starting with "Chat: ")
+  const filteredTodos = (
+    filter === 'all' ? todos : todos.filter((t) => t.status === filter)
+  ).filter((t) => !t.title.startsWith('Chat: '));
 
   // Build project groups
   const projectMap = new Map<string, ProjectItem>(projects.map((p) => [p.id, p]));

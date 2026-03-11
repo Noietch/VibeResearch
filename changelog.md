@@ -1,5 +1,82 @@
 # Changelog
 
+## 2026-03-11 (16)
+
+### fix: hide chat sessions from Tasks page
+
+- **Problem**: Chat sessions created from paper reader were appearing in "Unassigned" group on Tasks page
+- **Solution**: Added filter in AgentTodosPage to exclude todos with titles starting with "Chat: "
+- **Scope**:
+  - `src/renderer/pages/agent-todos/page.tsx` - added filter to exclude chat sessions
+
+## 2026-03-11 (15)
+
+### feat: add developer mode setting
+
+- **Changes**:
+  - Added new "Developer Mode" section in settings page
+  - Toggle switch to enable/disable developer mode
+  - When enabled, welcome modal shows on every startup (for development/testing)
+  - Added IPC handlers: `settings:getDevMode`, `settings:setDevMode`
+  - Added store functions: `getDevMode()`, `setDevMode()` in app-settings-store
+- **Scope**:
+  - `src/main/store/app-settings-store.ts` - added devMode field and getters/setters
+  - `src/main/services/providers.service.ts` - added devMode service methods
+  - `src/main/ipc/providers.ipc.ts` - added IPC handlers for dev mode
+  - `src/renderer/hooks/use-ipc.ts` - added IPC client methods
+  - `src/renderer/pages/settings/settings-nav.ts` - added 'general.dev' section
+  - `src/renderer/pages/settings/page.tsx` - added DeveloperSettings component
+  - `src/renderer/components/setup-wizard-modal.tsx` - added clearSetupDismissed()
+  - `src/renderer/components/app-shell.tsx` - check dev mode on startup to show welcome
+
+## 2026-03-11 (14)
+
+### feat: add embedding model download to welcome wizard
+
+- **Changes**:
+  - Added new step 'download-model' to the setup wizard flow
+  - Users can now download the embedding model (all-MiniLM-L6-v2) during initial setup
+  - Shows download progress with file-by-file status
+  - Allows skipping download and doing it later in settings
+  - Model info card displays model details (~90MB, 384 dimensions)
+- **Scope**:
+  - `src/renderer/components/setup-wizard-modal.tsx` - added download-model step with progress UI
+
+## 2026-03-11 (13)
+
+### feat: replace better-sqlite3 with pure JS vector search
+
+- **Problem**: better-sqlite3 requires native compilation which causes build issues on different platforms
+- **Solution**: Implemented pure JavaScript vector store using cosine similarity search
+  - Created `src/db/vec-store.ts` - pure JS vector storage with JSON persistence
+  - Replaced sqlite-vec KNN search with in-memory cosine similarity calculation
+  - Data persists to `~/.researchclaw/storage/vec-store.json`
+  - Performance is acceptable for typical research use (<10k vectors)
+- **Dependencies removed**:
+  - `better-sqlite3` (27MB + compilation issues)
+  - `sqlite-vec` and `sqlite-vec-*` native packages
+  - `@types/better-sqlite3`
+- **Scope**:
+  - `src/db/vec-store.ts` - new pure JS vector store implementation
+  - `src/db/vec-client.ts` - simplified to re-export from vec-store
+  - `src/main/services/vec-index.service.ts` - updated to use new VecStore
+  - `package.json` - removed better-sqlite3 and sqlite-vec dependencies
+  - `electron-builder.yml` - removed better-sqlite3 and sqlite-vec from files/asarUnpack
+  - `scripts/build-main.mjs` - removed better-sqlite3 and sqlite-vec from external list
+
+## 2026-03-11 (12)
+
+### fix: reduce release package size by cleaning old build artifacts
+
+- **Problem**: Release DMG was ~136MB, but dist/main/ had accumulated 1,433 historical chunk files (44GB total) from previous builds
+- **Solution**:
+  - Updated `scripts/build-release.sh` to clean old chunked JS files before building
+  - Enhanced `electron-builder.yml` to exclude more development files (tests, docs, configs, source maps)
+- **Expected result**: Significantly smaller release package (from ~44GB of stale files down to ~2.4MB actual build)
+- **Scope**:
+  - `scripts/build-release.sh` — added cleanup of `dist/main/*.js` and `*.map` files
+  - `electron-builder.yml` — added exclusions for test files, docs, configs, and dev files
+
 ## 2026-03-11 (11)
 
 ### fix: skip better-sqlite3 rebuild in dev and make welcome modal show only once
