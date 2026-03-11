@@ -5,11 +5,6 @@
  * Services that use BrowserWindow, ipcMain, etc. will use these mocks.
  */
 
-vi.mock('better-sqlite3', async () => {
-  const actual = await vi.importActual('better-sqlite3');
-  return actual;
-});
-
 // Mock BrowserWindow
 const mockWebContents = {
   send: vi.fn(),

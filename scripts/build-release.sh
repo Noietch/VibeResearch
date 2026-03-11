@@ -9,6 +9,8 @@ echo "==> Step 1: Build JS bundles"
 cd "$ROOT_DIR"
 # Clean leftover electron-builder artifacts and staged files from dist/
 rm -rf "$ROOT_DIR/dist/mac-arm64" "$ROOT_DIR/dist/mac" "$ROOT_DIR/dist/builder-debug.yml" "$ROOT_DIR/dist/node_modules"
+# Clean old chunked builds to prevent accumulation (esbuild generates hashed chunks)
+rm -f "$ROOT_DIR/dist/main"/*.js "$ROOT_DIR/dist/main"/*.map 2>/dev/null || true
 npm run build
 
 echo "==> Step 2: Copy Prisma native engine to dist/native/"
@@ -32,10 +34,7 @@ if [ -n "$PRISMA_ENGINE_X64" ]; then
   echo "  Copied: $(basename "$PRISMA_ENGINE_X64") → dist/native/"
 fi
 
-echo "==> Step 2.5: Rebuild native modules for Electron"
-npx electron-rebuild -f -w better-sqlite3
-
-echo "==> Step 2.6: Prepare .prisma/client for packaging"
+echo "==> Step 3: Prepare .prisma/client for packaging"
 # electron-builder ignores hidden dirs (starting with .) in files config.
 # Copy .prisma/client to _prisma/client (non-hidden) so it gets included in asar.
 # @prisma/client's default.js does require('.prisma/client/default'), which will
@@ -47,7 +46,7 @@ if [ -d "$ROOT_DIR/node_modules/.prisma/client" ]; then
   echo "  Copied: node_modules/.prisma/client → node_modules/_prisma/client"
 fi
 
-echo "==> Step 3: Package Mac DMG (arm64)"
+echo "==> Step 4: Package Mac DMG (arm64)"
 # Use official GitHub releases for electron-builder binaries (dmg-builder, etc.)
 export ELECTRON_BUILDER_BINARIES_MIRROR="https://github.com/electron-userland/electron-builder-binaries/releases/download"
 npx electron-builder --mac --publish never

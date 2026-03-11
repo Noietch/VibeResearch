@@ -30,17 +30,14 @@ if [ -n "$PRISMA_ENGINE_ARM64" ]; then
   echo "  Copied: $(basename "$PRISMA_ENGINE_ARM64") → dist/native/"
 fi
 
-echo "==> Step 2.5: Rebuild native modules for Electron"
-npx electron-rebuild -f -w better-sqlite3
-
-echo "==> Step 2.6: Prepare .prisma/client for packaging"
+echo "==> Step 3: Prepare .prisma/client for packaging"
 if [ -d "$ROOT_DIR/node_modules/.prisma/client" ]; then
   mkdir -p "$ROOT_DIR/node_modules/_prisma"
   cp -R "$ROOT_DIR/node_modules/.prisma/client" "$ROOT_DIR/node_modules/_prisma/"
   echo "  Copied: node_modules/.prisma/client → node_modules/_prisma/client"
 fi
 
-echo "==> Step 3: Package Windows NSIS installer (x64)"
+echo "==> Step 4: Package Windows NSIS installer (x64)"
 ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" \
   npx electron-builder --win --x64 --publish never
 

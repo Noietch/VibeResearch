@@ -181,8 +181,8 @@ export function searchLexical(
 export async function rebuildFromPrisma(): Promise<number> {
   ensureFtsTable();
 
-  // Use better-sqlite3 (already open) instead of Prisma to avoid loading large
-  // embeddingJson rows through Prisma's tokio runtime (triggers Electron malloc guard).
+  // Use VecStore's underlying DB to avoid loading large embeddingJson rows
+  // through Prisma's tokio runtime (triggers Electron malloc guard).
   const db = getVecDb();
   const units = db
     .prepare(

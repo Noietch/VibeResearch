@@ -38,13 +38,8 @@ if ($engineX64) {
   Write-Host "  WARNING: Prisma Windows engine not found in $prismaClientDir"
 }
 
-# Step 2.5: Rebuild native modules for Electron
-Write-Host "==> Step 2.5: Rebuild native modules for Electron"
-npx electron-rebuild -f -w better-sqlite3
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Step 2.6: Prepare .prisma/client for packaging
-Write-Host "==> Step 2.6: Prepare .prisma/client for packaging"
+# Step 3: Prepare .prisma/client for packaging
+Write-Host "==> Step 3: Prepare .prisma/client for packaging"
 if (Test-Path $prismaClientDir) {
   $prismaBackup = Join-Path $ROOT_DIR "node_modules\_prisma\client"
   New-Item -ItemType Directory -Force -Path $prismaBackup | Out-Null
@@ -52,8 +47,8 @@ if (Test-Path $prismaClientDir) {
   Write-Host "  Copied: node_modules\.prisma\client -> node_modules\_prisma\client"
 }
 
-# Step 3: Package Windows NSIS installer (x64)
-Write-Host "==> Step 3: Package Windows NSIS installer (x64)"
+# Step 4: Package Windows NSIS installer (x64)
+Write-Host "==> Step 4: Package Windows NSIS installer (x64)"
 $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
 npx electron-builder --win --x64 --publish never
 $exitCode = $LASTEXITCODE

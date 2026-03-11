@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-03-11 (17)
+
+### cleanup: remove remaining better-sqlite3 references and scripts
+
+- **Changes**:
+  - Removed `better-sqlite3` related npm scripts: `rebuild:native`, `rebuild:native:node`, `ensure:native`, `predev`, `pretest`
+  - Simplified `postinstall` to just `prisma generate` (removed native module check)
+  - Deleted scripts: `ensure-native-modules.mjs`, `rebuild-native-node.mjs`
+  - Deleted legacy database maintenance scripts: `migrate-db-to-clean-schema.cjs`, `drop-derived-indexes.cjs`, `list-derived-indexes.cjs`, `remove-orphan-vec-table.cjs`
+  - Updated build release scripts to remove electron-rebuild step for better-sqlite3
+  - Removed better-sqlite3 mock from `tests/support/electron-mock.ts`
+  - Deleted old better-sqlite3 based integration tests: `semantic-search.test.ts`, `semantic-repository.test.ts`, `vec-index.test.ts`
+  - Updated comments in `vec-store.ts` and `search-unit-index.service.ts` to remove better-sqlite3 references
+- **Scope**:
+  - `package.json` - removed better-sqlite3 related scripts
+  - `scripts/` - deleted 6 files related to better-sqlite3 management
+  - `scripts/build-release*.sh` and `build-release-win.ps1` - removed rebuild steps
+  - `tests/support/electron-mock.ts` - removed better-sqlite3 mock
+  - `tests/integration/*.test.ts` - deleted 3 obsolete integration tests
+  - `src/db/vec-store.ts` - updated comments
+  - `src/main/services/search-unit-index.service.ts` - updated comments
+
 ## 2026-03-11 (16)
 
 ### fix: hide chat sessions from Tasks page
