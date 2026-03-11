@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-11 (31)
+
+### feat: remove AI Analyze button and analysis display from Paper detail page
+
+- **Changes**:
+  - Removed "Analyze" button from Paper overview page
+  - Removed AnalysisCard component and all related UI elements
+  - Removed analysis-related state variables and handlers
+  - Backend analysis functionality preserved (IPC handlers, service methods)
+- **Scope**:
+  - `src/renderer/pages/papers/overview/page.tsx` - removed UI components and handlers
+
 ## 2026-03-11 (30)
 
 ### fix: eliminate flickering during batch index and layout shift issues

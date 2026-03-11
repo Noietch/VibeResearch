@@ -4,7 +4,6 @@ import { useTabs } from '../../../hooks/use-tabs';
 import {
   ipc,
   type PaperItem,
-  type PaperAnalysis,
   type ReadingNote,
   type TagInfo,
   type ModelConfig,
@@ -12,7 +11,6 @@ import {
   type ProjectItem,
 } from '../../../hooks/use-ipc';
 import type { AgentConfigItem } from '@shared';
-import { useAnalysis } from '../../../hooks/use-analysis';
 import { useToast } from '../../../components/toast';
 import { WysiwygEditor } from '../../../components/wysiwyg-editor';
 import { PdfViewer } from '../../../components/pdf-viewer';
@@ -116,398 +114,6 @@ function markdownToSections(md: string): Record<string, string> {
     if (heading) sections[heading] = body;
   }
   return sections;
-}
-
-function isPaperAnalysis(value: unknown): value is PaperAnalysis {
-  if (!value || typeof value !== 'object') return false;
-  const source = value as Record<string, unknown>;
-  return [
-    'summary',
-    'problem',
-    'method',
-    'contributions',
-    'evidence',
-    'limitations',
-    'applications',
-    'questions',
-    'tags',
-  ].some((key) => key in source);
-}
-
-function normalizeAnalysis(value: unknown): PaperAnalysis {
-  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const toText = (input: unknown) => (typeof input === 'string' ? input : '');
-  const toList = (input: unknown) => {
-    if (Array.isArray(input)) {
-      return input.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
-    }
-    if (typeof input === 'string') {
-      return input
-        .split(/\n|,/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-    }
-    return [];
-  };
-
-  return {
-    summary: toText(source.summary),
-    problem: toText(source.problem),
-    method: toText(source.method),
-    contributions: toList(source.contributions),
-    evidence: toText(source.evidence),
-    limitations: toList(source.limitations),
-    applications: toList(source.applications),
-    questions: toList(source.questions),
-    tags: toList(source.tags),
-  };
-}
-
-function AnalysisList({ title, items }: { title: string; items: string[] }) {
-  if (items.length === 0) return null;
-  return (
-    <div>
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-notion-text-secondary">
-        {title}
-      </div>
-      <ul className="space-y-1.5 text-sm text-notion-text">
-        {items.map((item) => (
-          <li key={item} className="flex gap-2">
-            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-notion-text-secondary" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function AnalysisSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="rounded-xl border border-blue-100 bg-white/90 p-4 shadow-sm">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700/80">
-        {title}
-      </div>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function AnalysisStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-blue-100 bg-white/80 px-3 py-2 shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-500/80">
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-semibold text-notion-text">{value}</div>
-    </div>
-  );
-}
-
-function AnalysisTagPill({ tag }: { tag: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-      {tag}
-    </span>
-  );
-}
-
-function analysisToDraft(analysis: PaperAnalysis) {
-  return {
-    summary: analysis.summary ?? '',
-    problem: analysis.problem ?? '',
-    method: analysis.method ?? '',
-    evidence: analysis.evidence ?? '',
-    contributions: (analysis.contributions ?? []).join('\n'),
-    limitations: (analysis.limitations ?? []).join('\n'),
-    applications: (analysis.applications ?? []).join('\n'),
-    questions: (analysis.questions ?? []).join('\n'),
-    tags: (analysis.tags ?? []).join(', '),
-  };
-}
-
-function draftToAnalysis(draft: ReturnType<typeof analysisToDraft>): PaperAnalysis {
-  const splitLines = (value: string) =>
-    value
-      .split('\n')
-      .map((item) => item.trim())
-      .filter(Boolean);
-  const splitTags = (value: string) =>
-    value
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-  return {
-    summary: draft.summary.trim(),
-    problem: draft.problem.trim(),
-    method: draft.method.trim(),
-    evidence: draft.evidence.trim(),
-    contributions: splitLines(draft.contributions),
-    limitations: splitLines(draft.limitations),
-    applications: splitLines(draft.applications),
-    questions: splitLines(draft.questions),
-    tags: splitTags(draft.tags),
-  };
-}
-
-function AnalysisCard({
-  note,
-  onSaved,
-}: {
-  note: ReadingNote;
-  onSaved: (note: ReadingNote) => void;
-}) {
-  const analysis = normalizeAnalysis(note.content);
-  const contributions = analysis.contributions ?? [];
-  const limitations = analysis.limitations ?? [];
-  const applications = analysis.applications ?? [];
-  const questions = analysis.questions ?? [];
-  const tags = analysis.tags ?? [];
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState(() => analysisToDraft(analysis));
-  const summary = analysis.summary.trim();
-  const evidence = analysis.evidence.trim();
-  const insightCount =
-    contributions.length + limitations.length + applications.length + questions.length;
-  const coverageLabel =
-    insightCount >= 9
-      ? 'Deep read'
-      : insightCount >= 5
-        ? 'Solid pass'
-        : insightCount >= 2
-          ? 'Quick skim'
-          : 'Sparse';
-
-  useEffect(() => {
-    setDraft(analysisToDraft(analysis));
-  }, [note.id, note.updatedAt]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const next = draftToAnalysis(draft);
-      const updated = await ipc.updateReading(note.id, next as unknown as Record<string, unknown>);
-      onSaved(updated);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-50/40 shadow-sm">
-      <div className="flex items-start justify-between gap-3 border-b border-blue-100/80 px-4 py-4">
-        <div>
-          <div className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700">
-            <Sparkles size={14} />
-            AI Analysis
-          </div>
-          <div className="mt-1 text-xs text-notion-text-secondary">
-            Structured reading notes for this paper
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden rounded-full border border-blue-200 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-blue-700 sm:block">
-            {coverageLabel}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setDraft(analysisToDraft(analysis));
-                setEditing((prev) => !prev);
-              }}
-              className="rounded-lg border border-blue-200 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
-            >
-              {editing ? 'Cancel' : 'Edit'}
-            </button>
-            {editing && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            )}
-            <div className="text-xs text-blue-600/80">Updated {formatDate(note.updatedAt)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-4 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
-          <div className="rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-sm">
-            <div className="mb-2 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600/90">
-              <Sparkles size={13} />
-              TL;DR
-            </div>
-            {editing ? (
-              <textarea
-                value={draft.summary}
-                onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))}
-                className="min-h-[120px] w-full rounded-xl border border-blue-100 bg-white/90 p-3 text-sm leading-relaxed text-notion-text shadow-sm outline-none"
-              />
-            ) : summary ? (
-              <div className="text-sm leading-7 text-notion-text">
-                <MarkdownContent content={summary} />
-              </div>
-            ) : (
-              <div className="text-sm text-notion-text-tertiary">No summary yet.</div>
-            )}
-
-            {!editing && tags.length > 0 && (
-              <div className="mt-4 border-t border-blue-100 pt-3">
-                <div className="mb-2 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600/90">
-                  <Tags size={13} />
-                  Tags
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <AnalysisTagPill key={tag} tag={tag} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-            <AnalysisStat label="Coverage" value={coverageLabel} />
-            <AnalysisStat label="Contributions" value={`${contributions.length} points`} />
-            <AnalysisStat label="Risks" value={`${limitations.length} caveats`} />
-            <AnalysisStat label="Next Steps" value={`${questions.length} questions`} />
-          </div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          {(analysis.problem || editing) && (
-            <AnalysisSection title="Problem">
-              {editing ? (
-                <textarea
-                  value={draft.problem}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, problem: e.target.value }))}
-                  className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
-                />
-              ) : (
-                <MarkdownContent
-                  content={analysis.problem}
-                  proseClassName="prose prose-sm max-w-none break-words prose-p:my-1 prose-headings:my-2"
-                />
-              )}
-            </AnalysisSection>
-          )}
-          {(analysis.method || editing) && (
-            <AnalysisSection title="Method">
-              {editing ? (
-                <textarea
-                  value={draft.method}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, method: e.target.value }))}
-                  className="min-h-[96px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
-                />
-              ) : (
-                <MarkdownContent
-                  content={analysis.method}
-                  proseClassName="prose prose-sm max-w-none break-words prose-p:my-1 prose-headings:my-2"
-                />
-              )}
-            </AnalysisSection>
-          )}
-
-          {evidence && !editing && (
-            <AnalysisSection title="Evidence">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                <CheckCircle2 size={12} />
-                Supporting signals from the paper
-              </div>
-              <MarkdownContent
-                content={analysis.evidence}
-                proseClassName="prose prose-sm max-w-none break-words prose-p:my-1 prose-headings:my-2"
-              />
-            </AnalysisSection>
-          )}
-
-          {(contributions.length > 0 || editing) && (
-            <AnalysisSection title="Contributions">
-              {!editing && (
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
-                  <Target size={12} />
-                  What this paper adds
-                </div>
-              )}
-              {editing ? (
-                <textarea
-                  value={draft.contributions}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, contributions: e.target.value }))}
-                  className="min-h-[120px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
-                />
-              ) : (
-                <AnalysisList title="" items={contributions} />
-              )}
-            </AnalysisSection>
-          )}
-
-          {applications.length > 0 && !editing && (
-            <AnalysisSection title="Applications">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
-                <Lightbulb size={12} />
-                Where this may be useful
-              </div>
-              <AnalysisList title="" items={applications} />
-            </AnalysisSection>
-          )}
-
-          {(limitations.length > 0 || editing) && (
-            <AnalysisSection title="Limitations">
-              {!editing && (
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700">
-                  <AlertTriangle size={12} />
-                  What to be careful about
-                </div>
-              )}
-              {editing ? (
-                <textarea
-                  value={draft.limitations}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, limitations: e.target.value }))}
-                  className="min-h-[120px] w-full rounded-lg border border-notion-border px-3 py-2 text-sm outline-none"
-                />
-              ) : (
-                <AnalysisList title="" items={limitations} />
-              )}
-            </AnalysisSection>
-          )}
-        </div>
-
-        {!editing && (questions.length > 0 || tags.length > 0) && (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {questions.length > 0 && (
-              <AnalysisSection title="Open Questions">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700">
-                  <Search size={12} />
-                  Good follow-up directions
-                </div>
-                <AnalysisList title="" items={questions} />
-              </AnalysisSection>
-            )}
-
-            {tags.length > 0 && (
-              <AnalysisSection title="Research Signals">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
-                  <FlaskConical size={12} />
-                  Themes extracted from the paper
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <AnalysisTagPill key={tag} tag={tag} />
-                  ))}
-                </div>
-              </AnalysisSection>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 // ─── StarRating ───────────────────────────────────────────────────────────────
@@ -986,7 +592,6 @@ export function OverviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { updateTabLabel, openTab } = useTabs();
-  const { jobs: analysisJobs, startAnalysis, cancelAnalysis } = useAnalysis();
 
   const [paper, setPaper] = useState<PaperItem | null>(null);
   const [notes, setNotes] = useState<ReadingNote[]>([]);
@@ -1051,30 +656,7 @@ export function OverviewPage() {
   }, [paper?.id]);
 
   // Separate notes by type
-  const analysisNote = notes.find(
-    (n) => n.title.startsWith('Analysis:') && isPaperAnalysis(n.content),
-  );
-  const paperAnalysisJobs = useMemo(() => {
-    if (!paper) return [];
-    return analysisJobs.filter((job) => job.paperId === paper.id);
-  }, [analysisJobs, paper]);
-  const activeAnalysisJob = paperAnalysisJobs.find((job) => job.active) ?? null;
-  const latestAnalysisJob = paperAnalysisJobs[0] ?? null;
-  const analysisError =
-    latestAnalysisJob && !latestAnalysisJob.active && latestAnalysisJob.stage !== 'done'
-      ? latestAnalysisJob.message
-      : null;
   const chatNotes = notes.filter((n) => n.title.startsWith('Chat:'));
-
-  useEffect(() => {
-    if (!paper) return;
-    if (latestAnalysisJob?.stage !== 'done') return;
-
-    ipc
-      .listReading(paper.id)
-      .then(setNotes)
-      .catch(() => undefined);
-  }, [latestAnalysisJob?.jobId, latestAnalysisJob?.stage, paper]);
 
   const handleRatingChange = useCallback(
     async (newRating: number) => {
@@ -1167,18 +749,6 @@ export function OverviewPage() {
       setCloning(false);
     }
   }, [repoUrl, detectedRepo, paperDir, activeAgent, paper]);
-
-  const handleAnalyzePaper = useCallback(async () => {
-    if (!paper) return;
-    try {
-      await startAnalysis({
-        paperId: paper.id,
-        pdfUrl: inferPdfUrl(paper) ?? undefined,
-      });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Analysis failed');
-    }
-  }, [paper, startAnalysis]);
 
   const toast = useToast();
   const [copyingBibtex, setCopyingBibtex] = useState(false);
@@ -1320,18 +890,6 @@ export function OverviewPage() {
               </button>
             )}
             <button
-              onClick={handleAnalyzePaper}
-              disabled={!!activeAnalysisJob}
-              className="inline-flex items-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2.5 text-sm font-medium text-notion-text shadow-sm transition-all hover:bg-notion-sidebar disabled:opacity-40"
-            >
-              {activeAnalysisJob ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Sparkles size={16} />
-              )}
-              {activeAnalysisJob ? 'Analyzing…' : 'Analyze'}
-            </button>
-            <button
               onClick={() => {
                 setShowCloneModal(true);
                 setRepoUrl('');
@@ -1402,48 +960,6 @@ export function OverviewPage() {
               <p className="text-sm text-notion-text leading-relaxed whitespace-pre-wrap">
                 {paper.abstract}
               </p>
-            </div>
-          )}
-
-          {(analysisNote || activeAnalysisJob || analysisError) && (
-            <div className="space-y-3">
-              {analysisNote && isPaperAnalysis(analysisNote.content) && (
-                <AnalysisCard
-                  note={analysisNote}
-                  onSaved={(updated) =>
-                    setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)))
-                  }
-                />
-              )}
-              {activeAnalysisJob && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-700">
-                    <Loader2 size={14} className="animate-spin" />
-                    {activeAnalysisJob.message || 'Analyzing paper...'}
-                    <button
-                      onClick={() => void cancelAnalysis(activeAnalysisJob.jobId)}
-                      className="ml-auto text-xs font-medium text-blue-700 hover:text-blue-900"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div className="max-h-64 overflow-auto rounded-lg border border-blue-100 bg-white/80 p-3 text-slate-700">
-                    {activeAnalysisJob.partialText ? (
-                      <MarkdownContent
-                        content={activeAnalysisJob.partialText}
-                        proseClassName="prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-3 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
-                      />
-                    ) : (
-                      <div className="text-xs text-slate-500">Waiting for model output...</div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {analysisError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                  {analysisError}
-                </div>
-              )}
             </div>
           )}
 
