@@ -169,6 +169,31 @@ export function setupProvidersIpc() {
     },
   );
 
+  ipcMain.handle('settings:getProxyEnabled', async (): Promise<IpcResult<unknown>> => {
+    try {
+      const result = providersService.getProxyEnabledState();
+      return ok({ enabled: result });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[settings:getProxyEnabled] Error:', msg);
+      return err(msg);
+    }
+  });
+
+  ipcMain.handle(
+    'settings:setProxyEnabled',
+    async (_, enabled: boolean): Promise<IpcResult<unknown>> => {
+      try {
+        const result = providersService.setProxyEnabledState(enabled);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[settings:setProxyEnabled] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
   ipcMain.handle(
     'settings:testProxy',
     async (_, proxyUrl?: string): Promise<IpcResult<unknown>> => {
@@ -426,6 +451,31 @@ export function setupProvidersIpc() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error('[settings:saveBibtexFile] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle('settings:getDevMode', async (): Promise<IpcResult<unknown>> => {
+    try {
+      const result = providersService.getDevMode();
+      return ok({ enabled: result });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[settings:getDevMode] Error:', msg);
+      return err(msg);
+    }
+  });
+
+  ipcMain.handle(
+    'settings:setDevMode',
+    async (_, enabled: boolean): Promise<IpcResult<unknown>> => {
+      try {
+        const result = providersService.setDevMode(enabled);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[settings:setDevMode] Error:', msg);
         return err(msg);
       }
     },

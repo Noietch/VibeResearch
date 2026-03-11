@@ -712,6 +712,7 @@ export const ipc = {
 
   // Reading
   listReading: (paperId: string) => invoke<ReadingNote[]>('reading:listByPaper', paperId),
+  listChatSessions: (paperId: string) => invoke<ReadingNote[]>('reading:listChatSessions', paperId),
   createReading: (input: Record<string, unknown>) => invoke<ReadingNote>('reading:create', input),
   updateReading: (id: string, content: Record<string, unknown>) =>
     invoke<ReadingNote>('reading:update', id, content),
@@ -928,6 +929,9 @@ export const ipc = {
   setPapersDir: (dir: string) => invoke<{ success: boolean }>('settings:setPapersDir', dir),
   setEditor: (cmd: string) => invoke<{ success: boolean }>('settings:setEditor', cmd),
   setProxy: (proxy: string | undefined) => invoke<{ success: boolean }>('settings:setProxy', proxy),
+  getProxyEnabled: () => invoke<{ enabled: boolean }>('settings:getProxyEnabled'),
+  setProxyEnabled: (enabled: boolean) =>
+    invoke<{ success: boolean }>('settings:setProxyEnabled', enabled),
   setProxyScope: (scope: ProxyScope) =>
     invoke<{ success: boolean }>('settings:setProxyScope', scope),
   testProxy: (proxyUrl?: string) =>
@@ -958,6 +962,8 @@ export const ipc = {
     invoke<{ downloading: boolean; progress: BuiltinModelDownloadProgress | null }>(
       'settings:getBuiltinModelDownloadStatus',
     ),
+  getDevMode: () => invoke<{ enabled: boolean }>('settings:getDevMode'),
+  setDevMode: (enabled: boolean) => invoke<{ success: boolean }>('settings:setDevMode', enabled),
 
   // Embedding configs (multi-card UI)
   listEmbeddingConfigs: () =>

@@ -505,6 +505,65 @@ function CliToolCard({
   );
 }
 
+// ─── Developer Settings ─────────────────────────────────────────────────────────
+
+function DeveloperSettings() {
+  const [devMode, setDevMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    ipc
+      .getDevMode()
+      .then((result) => setDevMode(result.enabled))
+      .catch(() => {});
+  }, []);
+
+  const handleToggle = async () => {
+    setLoading(true);
+    try {
+      const newValue = !devMode;
+      await ipc.setDevMode(newValue);
+      setDevMode(newValue);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <p className="mb-5 text-sm text-notion-text-secondary">
+        Enable developer mode to show welcome modal on every startup.
+      </p>
+
+      <div className="rounded-lg border border-notion-border bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-notion-text">Developer Mode</h3>
+            <p className="mt-0.5 text-xs text-notion-text-tertiary">
+              Show welcome modal on every startup
+            </p>
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={loading}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              devMode ? 'bg-notion-accent' : 'bg-notion-border'
+            } disabled:opacity-50`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                devMode ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Editor Settings ─────────────────────────────────────────────────────────
 
 function EditorSettings() {
@@ -2447,16 +2506,16 @@ function ProxySettings() {
   const [testResults, setTestResults] = useState<ProxyTestResult[] | null>(null);
 
   useEffect(() => {
-    ipc
-      .getSettings()
-      .then((s) => {
+    Promise.all([ipc.getSettings(), ipc.getProxyEnabled()])
+      .then(([s, proxyEnabledResult]) => {
         if (s.proxy) {
           const parsed = parseProxyUrl(s.proxy);
           setScheme(parsed.scheme);
           setHost(parsed.host);
           setPort(parsed.port);
-          setProxyEnabled(true);
         }
+        // Use saved enabled state (backward compatible: if no saved state but proxy exists, default to enabled)
+        setProxyEnabled(proxyEnabledResult.enabled);
         if (s.proxyScope) {
           setProxyScope(s.proxyScope as ProxyScope);
         }
@@ -2478,7 +2537,8 @@ function ProxySettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await ipc.setProxy(proxyEnabled && proxy ? proxy : undefined);
+      await ipc.setProxy(proxy ? proxy : undefined);
+      await ipc.setProxyEnabled(proxyEnabled);
       await ipc.setProxyScope(proxyScope);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -2504,8 +2564,15 @@ function ProxySettings() {
     }
   };
 
-  const toggleScope = (key: keyof ProxyScope) => {
-    setProxyScope((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleScope = async (key: keyof ProxyScope) => {
+    const newScope = { ...proxyScope, [key]: !proxyScope[key] };
+    setProxyScope(newScope);
+    // Auto-save when toggling scope
+    try {
+      await ipc.setProxyScope(newScope);
+    } catch {
+      // silent
+    }
   };
 
   return (
@@ -2521,7 +2588,16 @@ function ProxySettings() {
           {/* Pill toggle */}
           <button
             type="button"
-            onClick={() => setProxyEnabled((v) => !v)}
+            onClick={async () => {
+              const newValue = !proxyEnabled;
+              setProxyEnabled(newValue);
+              // Auto-save when toggling
+              try {
+                await ipc.setProxyEnabled(newValue);
+              } catch {
+                // silent
+              }
+            }}
             className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${proxyEnabled ? 'bg-blue-500' : 'bg-notion-border'}`}
           >
             <span
@@ -3619,6 +3695,8 @@ function renderSection(id: SectionId) {
       return <EditorSettings />;
     case 'general.semantic':
       return <SemanticSection />;
+    case 'general.dev':
+      return <DeveloperSettings />;
     case 'models':
       return <ModelsSettings />;
     case 'agents':

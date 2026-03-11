@@ -14,6 +14,8 @@ import {
   getEditorCommand,
   getProxy,
   setProxy,
+  getProxyEnabled,
+  setProxyEnabled,
   getProxyScope,
   setProxyScope,
   getSemanticSearchSettings,
@@ -26,6 +28,8 @@ import {
   setActiveEmbeddingConfigId,
   getBuiltinModelPath,
   setBuiltinModelPath,
+  getDevMode,
+  setDevMode,
   type ProxyScope,
   type SemanticSearchSettings,
   type EmbeddingConfig,
@@ -184,6 +188,15 @@ export class ProvidersService {
 
   getProxyUrl(): string | undefined {
     return getProxy();
+  }
+
+  getProxyEnabledState(): boolean {
+    return getProxyEnabled();
+  }
+
+  setProxyEnabledState(enabled: boolean): { success: boolean } {
+    setProxyEnabled(enabled);
+    return { success: true };
   }
 
   getProxyScopeSettings(): ProxyScope {
@@ -392,6 +405,15 @@ export class ProvidersService {
       const error = err instanceof Error ? err.message : String(err);
       broadcast({ phase: 'error', error });
     });
+  }
+
+  getDevMode(): boolean {
+    return getDevMode();
+  }
+
+  setDevMode(enabled: boolean): { success: boolean } {
+    setDevMode(enabled);
+    return { success: true };
   }
 
   async getSemanticDebugInfo(

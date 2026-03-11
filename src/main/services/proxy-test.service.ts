@@ -1,7 +1,7 @@
 import * as https from 'node:https';
 import * as http from 'node:http';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { getProxy } from '../store/app-settings-store';
+import { getProxy, getProxyEnabled } from '../store/app-settings-store';
 
 export interface ProxyTestResult {
   url: string;
@@ -72,11 +72,17 @@ function testEndpoint(
 /**
  * Test proxy connectivity to common endpoints.
  * proxyUrl: the proxy URL to use. Pass null to test direct connection (no proxy).
- * Pass undefined to fall back to the saved store value.
+ * Pass undefined to fall back to the saved store value (respecting proxyEnabled).
  */
 export async function testProxyConnectivity(proxyUrl?: string | null): Promise<ProxyTestResult[]> {
-  // undefined → fall back to store; null → explicit direct connection; string → use as-is
-  const url = proxyUrl === undefined ? getProxy() : proxyUrl || undefined;
+  // undefined → fall back to store (respecting proxyEnabled); null → explicit direct connection; string → use as-is
+  let url: string | undefined;
+  if (proxyUrl === undefined) {
+    // Use saved settings, but only if proxy is enabled
+    url = getProxyEnabled() ? getProxy() : undefined;
+  } else {
+    url = proxyUrl || undefined;
+  }
   const agent = makeProxyAgent(url);
   const results: ProxyTestResult[] = [];
 
@@ -91,14 +97,20 @@ export async function testProxyConnectivity(proxyUrl?: string | null): Promise<P
 /**
  * Test if proxy is configured and working.
  * proxyUrl: the proxy URL to test. Pass null/'' to test direct connection (no proxy).
- * Pass undefined to fall back to the saved store value.
+ * Pass undefined to fall back to the saved store value (respecting proxyEnabled).
  */
 export async function testProxy(proxyUrl?: string | null): Promise<{
   hasProxy: boolean;
   results: ProxyTestResult[];
 }> {
-  // undefined → fall back to store; null/'' → explicit direct connection; string → use as-is
-  const url = proxyUrl === undefined ? getProxy() : proxyUrl || undefined;
+  // undefined → fall back to store (respecting proxyEnabled); null/'' → explicit direct connection; string → use as-is
+  let url: string | undefined;
+  if (proxyUrl === undefined) {
+    // Use saved settings, but only if proxy is enabled
+    url = getProxyEnabled() ? getProxy() : undefined;
+  } else {
+    url = proxyUrl || undefined;
+  }
   // Pass null explicitly so testProxyConnectivity does NOT fall back to store again
   const results = await testProxyConnectivity(url ?? null);
   return { hasProxy: !!url, results };

@@ -1,6 +1,6 @@
 import type { Agent } from 'node:http';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { getProxy, getProxyScope } from '../../store/app-settings-store';
+import { getProxy, getProxyEnabled, getProxyScope } from '../../store/app-settings-store';
 
 export interface ExternalRecommendationCandidate {
   source: 'semantic_scholar' | 'arxiv';
@@ -28,7 +28,8 @@ export function normalizeTitle(value: string): string {
 
 export function getRecommendationProxyAgent(): Agent | undefined {
   const proxy = getProxy();
+  const proxyEnabled = getProxyEnabled();
   const scope = getProxyScope();
-  if (!proxy || (!scope.aiApi && !scope.pdfDownload)) return undefined;
+  if (!proxyEnabled || !proxy || (!scope.aiApi && !scope.pdfDownload)) return undefined;
   return new HttpsProxyAgent(proxy);
 }

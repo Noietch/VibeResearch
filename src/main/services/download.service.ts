@@ -2,7 +2,12 @@ import path from 'path';
 import fs from 'fs/promises';
 import { PapersRepository } from '@db';
 import { extractArxivId, arxivPdfUrl } from '@shared';
-import { getPapersDir, getProxy, getProxyScope } from '../store/app-settings-store';
+import {
+  getPapersDir,
+  getProxy,
+  getProxyEnabled,
+  getProxyScope,
+} from '../store/app-settings-store';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { Agent } from 'node:http';
 import { proxyFetch } from './proxy-fetch';
@@ -21,8 +26,9 @@ function isValidPdf(buffer: Buffer): boolean {
 
 function getProxyAgent(): Agent | undefined {
   const proxy = getProxy();
+  const proxyEnabled = getProxyEnabled();
   const scope = getProxyScope();
-  if (!proxy || !scope.pdfDownload) return undefined;
+  if (!proxyEnabled || !proxy || !scope.pdfDownload) return undefined;
   return new HttpsProxyAgent(proxy);
 }
 

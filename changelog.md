@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-03-11 (21)
+
+### fix: proxy toggle switch not persisting state
+
+- **Problem**: Proxy toggle switch in settings did not save its on/off state - it would always show as enabled on reload if a proxy URL was saved
+- **Root cause**: Only the proxy URL was saved, not the enabled/disabled state. The UI inferred enabled state from URL presence
+- **Solution**:
+  - Added `proxyEnabled` field to AppSettings interface
+  - Added `getProxyEnabled()` and `setProxyEnabled()` functions
+  - Updated `getProxyFetch()` and all proxy-aware services to check `proxyEnabled` flag
+  - Updated settings UI to load and save the enabled state separately from URL
+  - Maintained backward compatibility: if URL exists but no enabled flag, defaults to enabled
+- **Scope**:
+  - `src/main/store/app-settings-store.ts` - added proxyEnabled storage
+  - `src/main/services/providers.service.ts` - added proxy enabled methods
+  - `src/main/ipc/providers.ipc.ts` - added IPC handlers for proxy enabled
+  - `src/renderer/hooks/use-ipc.ts` - added IPC client methods
+  - `src/renderer/pages/settings/page.tsx` - updated to load/save enabled state, added auto-save on toggle
+  - `src/main/services/ai-provider.service.ts` - check proxyEnabled before using proxy
+  - `src/main/services/download.service.ts` - check proxyEnabled before using proxy
+  - `src/main/services/cli-runner.service.ts` - check proxyEnabled before using proxy
+  - `src/main/services/builtin-embedding-provider.ts` - check proxyEnabled before using proxy
+  - `src/main/services/recommendation-sources/shared.ts` - check proxyEnabled before using proxy
+  - `src/main/services/proxy-test.service.ts` - respect proxyEnabled when testing
+- **Fix 2**: Proxy toggle required clicking "Save" button to persist
+  - Root cause: Toggle only updated React state, didn't call save function
+  - Fix: Added auto-save on toggle click for both main switch and scope toggles
+
 ## 2026-03-11 (20)
 
 ### fix: agent chat message ordering and error handling

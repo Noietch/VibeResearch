@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 // Mock app-settings-store before importing proxy-test.service
 vi.mock('../../src/main/store/app-settings-store', () => ({
   getProxy: vi.fn(() => undefined),
+  getProxyEnabled: vi.fn(() => false),
 }));
 
 function makeFakeHttps(statusCode = 200) {
@@ -47,9 +48,10 @@ describe('proxy-test service', () => {
     expect(hfResult?.success).toBe(true);
   });
 
-  it('testProxy returns hasProxy=true when proxy is configured', async () => {
-    const { getProxy } = await import('../../src/main/store/app-settings-store');
+  it('testProxy returns hasProxy=true when proxy is configured and enabled', async () => {
+    const { getProxy, getProxyEnabled } = await import('../../src/main/store/app-settings-store');
     vi.mocked(getProxy).mockReturnValue('http://127.0.0.1:7890');
+    vi.mocked(getProxyEnabled).mockReturnValue(true);
 
     vi.doMock('node:https', () => makeFakeHttps(200));
 
@@ -58,9 +60,10 @@ describe('proxy-test service', () => {
     expect(result.hasProxy).toBe(true);
   });
 
-  it('passes agent to https.request when proxy is set', async () => {
-    const { getProxy } = await import('../../src/main/store/app-settings-store');
+  it('passes agent to https.request when proxy is set and enabled', async () => {
+    const { getProxy, getProxyEnabled } = await import('../../src/main/store/app-settings-store');
     vi.mocked(getProxy).mockReturnValue('http://127.0.0.1:7890');
+    vi.mocked(getProxyEnabled).mockReturnValue(true);
 
     const fakeHttps = makeFakeHttps(200);
     vi.doMock('node:https', () => fakeHttps);

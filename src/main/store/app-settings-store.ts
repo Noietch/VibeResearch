@@ -40,6 +40,7 @@ interface AppSettings {
   papersDir?: string; // legacy field — ignored, papers are always at {storageRoot}/papers
   editorCommand: string; // e.g. "code" or "cursor"
   proxy?: string; // HTTP/SOCKS proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
+  proxyEnabled?: boolean; // Whether proxy is enabled (separate from URL to allow toggling)
   proxyScope?: ProxyScope; // Where to use the proxy
   semanticSearch?: SemanticSearchSettings;
   embeddingConfigs?: EmbeddingConfig[]; // saved embedding configs
@@ -47,6 +48,7 @@ interface AppSettings {
   tagMigrationV1Done?: boolean;
   userProfile?: UserProfile;
   builtinModelPath?: string; // user-specified path to extracted builtin model directory
+  devMode?: boolean; // Developer mode: show welcome modal on every startup
 }
 
 const DEFAULT_PROXY_SCOPE: ProxyScope = {
@@ -163,6 +165,21 @@ export function setProxy(proxy: string | undefined) {
   save(settings);
 }
 
+export function getProxyEnabled(): boolean {
+  const settings = load();
+  // Default to true if proxy URL exists but enabled flag is not set (backward compatibility)
+  if (settings.proxyEnabled === undefined && settings.proxy) {
+    return true;
+  }
+  return settings.proxyEnabled ?? false;
+}
+
+export function setProxyEnabled(enabled: boolean) {
+  const settings = load();
+  settings.proxyEnabled = enabled;
+  save(settings);
+}
+
 export function getProxyScope(): ProxyScope {
   const settings = load();
   return { ...DEFAULT_PROXY_SCOPE, ...settings.proxyScope };
@@ -269,5 +286,15 @@ export function getBuiltinModelPath(): string | undefined {
 export function setBuiltinModelPath(dirPath: string | undefined): void {
   const settings = load();
   settings.builtinModelPath = dirPath;
+  save(settings);
+}
+
+export function getDevMode(): boolean {
+  return load().devMode ?? false;
+}
+
+export function setDevMode(enabled: boolean): void {
+  const settings = load();
+  settings.devMode = enabled;
   save(settings);
 }

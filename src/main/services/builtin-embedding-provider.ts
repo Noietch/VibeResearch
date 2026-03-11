@@ -4,7 +4,7 @@ import * as https from 'node:https';
 import * as http from 'node:http';
 import { app } from 'electron';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { getProxy, getBuiltinModelPath } from '../store/app-settings-store';
+import { getProxy, getProxyEnabled, getBuiltinModelPath } from '../store/app-settings-store';
 import type {
   EmbeddingProvider,
   EmbeddingProviderInfo,
@@ -190,7 +190,8 @@ export class BuiltinEmbeddingProvider implements EmbeddingProvider {
     fs.mkdirSync(path.join(destDir, 'onnx'), { recursive: true });
 
     const proxyUrl = getProxy();
-    const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+    const proxyEnabled = getProxyEnabled();
+    const agent = proxyEnabled && proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
     const totalFiles = MODEL_FILES.length;
     for (let i = 0; i < totalFiles; i++) {

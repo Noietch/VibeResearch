@@ -11,7 +11,7 @@ import {
 } from 'ai';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { spawnSync } from 'child_process';
-import { getProxy, getProxyScope } from '../store/app-settings-store';
+import { getProxy, getProxyEnabled, getProxyScope } from '../store/app-settings-store';
 import { proxyFetch } from './proxy-fetch';
 
 function isOfficialOpenAIBaseUrl(baseURL?: string): boolean {
@@ -88,7 +88,8 @@ function formatModelRequestError(
 function getProxyFetch(): typeof fetch | undefined {
   const scope = getProxyScope();
   const proxyUrl = getProxy();
-  if (!proxyUrl || !scope.aiApi) return undefined;
+  const proxyEnabled = getProxyEnabled();
+  if (!proxyEnabled || !proxyUrl || !scope.aiApi) return undefined;
 
   const agent = new HttpsProxyAgent(proxyUrl);
 
