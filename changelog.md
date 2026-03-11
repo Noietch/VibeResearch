@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-03-11 (5)
+
+### refactor: unify agent run message state into useRunMessages hook
+
+- **Scope**: `src/renderer/hooks/use-run-messages.ts` (new), `src/renderer/pages/agent-todos/[id]/page.tsx`
+- **Changes**:
+  - New `useRunMessages` hook: single source of truth for a run's messages — loads history from DB on mount (with immediate clear to prevent stale flash), merges live stream messages, and handles optimistic user messages (deduped by text content once stream confirms)
+  - `page.tsx`: removed `historicMessages` state + its load effect, removed `localUserMessages` state + reset effect, removed `streamBased`/`displayMessages` merge logic; now uses `useRunMessages` for `displayMessages` and `addOptimisticMessage` in `handleSend`
+  - Added `key={selectedRunId ?? 'none'}` on `<MessageStream>` so switching runs forces a fresh mount and automatic scroll/state reset
+  - Fixed history-loading race: no longer skips DB load when the latest run is `running`; history always loads for any `selectedRunId`
+  - Fixed message deduplication: optimistic user messages are removed when the stream delivers the confirmed user message with matching text
+- **Result**: Switching between historical runs now correctly loads and displays their messages; no duplicate user messages; no stale content flash on run switch
+
+## 2026-03-11 (4)
+
+### feat: AionUi-style agent message stream refactor
+
+- **Scope**: `src/renderer/components/agent-todo/MessageStream.tsx`, `src/renderer/components/agent-todo/ToolCallGroup.tsx` (new), `src/renderer/components/agent-todo/PlanCard.tsx`
+- **Changes**:
+  - `MessageStream.tsx`: removed forced sort (tool_call → thought → plan → text); messages now render in original arrival order, enabling `text → tool_call → text` interleaving; consecutive tool_calls are flushed into `ToolCallGroup` (≥2) or a single `ToolCallCard` (1)
+  - `ToolCallGroup.tsx` (new): collapsible group card for ≥2 consecutive tool_calls; defaults to expanded when any tool is pending/running, collapsed when all complete; summary text counts by kind (read/edit/execute/search/mcp)
+  - `PlanCard.tsx`: added `done/total` counter in header, `h-0.5` progress bar with blue fill and transition, `in_progress`/`active` entries highlighted with left accent border + light blue bg, `completed`/`done` entries shown with strikethrough in tertiary color
+- **Result**: Agent output now faithfully reflects real execution order; tool call groups are cleanly collapsible; plan cards show live progress
+
 ## 2026-03-11 (3)
 
 ### feat: Replace app icon with new ResearchClaw bird logo

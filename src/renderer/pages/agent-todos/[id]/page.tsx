@@ -10,9 +10,11 @@ import {
   Settings2,
   ChevronDown,
   ArrowUp,
+  Zap,
 } from 'lucide-react';
 import { ipc } from '../../../hooks/use-ipc';
 import { useAgentStream } from '../../../hooks/use-agent-stream';
+import { useRunMessages } from '../../../hooks/use-run-messages';
 import { MessageStream } from '../../../components/agent-todo/MessageStream';
 import { RunTimeline } from '../../../components/agent-todo/RunTimeline';
 import { StatusDot } from '../../../components/agent-todo/StatusDot';
@@ -70,7 +72,6 @@ export function AgentTodoDetailPage() {
   const [todo, setTodo] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [historicMessages, setHistoricMessages] = useState<any[]>([]);
 
   const [showEditForm, setShowEditForm] = useState(false);
 
@@ -81,9 +82,6 @@ export function AgentTodoDetailPage() {
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const agentPickerRef = useRef<HTMLDivElement>(null);
 
-  // Local user messages injected before stream arrives (for first message / follow-ups)
-  const [localUserMessages, setLocalUserMessages] = useState<any[]>([]);
-
   const {
     messages: streamMessages,
     status: streamStatus,
@@ -91,6 +89,14 @@ export function AgentTodoDetailPage() {
     setPermissionRequest,
     stderrLines,
   } = useAgentStream(id!);
+
+  const isViewingCurrentRun = selectedRunId === runs[0]?.id;
+
+  const { messages: displayMessages, addOptimisticMessage } = useRunMessages(
+    selectedRunId,
+    streamMessages,
+    isViewingCurrentRun,
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -132,73 +138,6 @@ export function AgentTodoDetailPage() {
     }
   }
 
-  useEffect(() => {
-    if (!selectedRunId) return;
-    const currentRun = runs[0];
-    if (
-      currentRun &&
-      selectedRunId === currentRun.id &&
-      (currentRun.status === 'running' || streamMessages.length > 0)
-    ) {
-      setHistoricMessages([]);
-      return;
-    }
-    ipc
-      .getAgentTodoRunMessages(selectedRunId)
-      .then((msgs) => {
-        const parsed = msgs.map((m) => ({
-          ...m,
-          content: typeof m.content === 'string' ? JSON.parse(m.content) : m.content,
-        }));
-        const merged: typeof parsed = [];
-        const seen = new Map<string, number>();
-        for (const m of parsed) {
-          const existing = seen.get(m.msgId);
-          if (existing !== undefined && m.type === 'text') {
-            const prev = merged[existing];
-            const prevText = (prev.content as { text: string }).text;
-            const newText = (m.content as { text: string }).text;
-            merged[existing] = { ...prev, content: { text: prevText + newText } };
-          } else if (existing !== undefined && m.type === 'tool_call') {
-            const prev = merged[existing];
-            const prevContent = prev.content as Record<string, unknown>;
-            const newContent = m.content as Record<string, unknown>;
-            const mergedContent: Record<string, unknown> = { ...prevContent };
-            for (const [k, v] of Object.entries(newContent)) {
-              if (v !== undefined && v !== null && v !== '') mergedContent[k] = v;
-            }
-            merged[existing] = {
-              ...prev,
-              status: m.status || prev.status,
-              content: mergedContent,
-            };
-          } else if (existing !== undefined && m.type === 'plan') {
-            merged[existing] = m;
-          } else {
-            seen.set(m.msgId, merged.length);
-            merged.push(m);
-          }
-        }
-        setHistoricMessages(merged);
-      })
-      .catch(console.error);
-  }, [selectedRunId, runs]);
-
-  // Reset local user messages when switching runs
-  useEffect(() => {
-    setLocalUserMessages([]);
-  }, [selectedRunId]);
-
-  const streamBased =
-    selectedRunId === runs[0]?.id && streamMessages.length > 0 ? streamMessages : historicMessages;
-
-  // Merge local user messages with stream messages
-  // Local messages are shown until they appear in the stream (by msgId)
-  const localMsgIds = new Set(localUserMessages.map((m) => m.msgId));
-  const streamMsgIds = new Set(streamBased.map((m) => m.msgId));
-  const localOnlyMessages = localUserMessages.filter((m) => !streamMsgIds.has(m.msgId));
-  const displayMessages = [...localOnlyMessages, ...streamBased];
-
   const latestRunStatus = runs[0]?.status ?? 'idle';
   const currentStatus =
     selectedRunId === runs[0]?.id
@@ -208,7 +147,6 @@ export function AgentTodoDetailPage() {
       : (runs.find((r) => r.id === selectedRunId)?.status ?? 'idle');
 
   const isRunning = currentStatus === 'running' || currentStatus === 'initializing';
-  const isViewingCurrentRun = selectedRunId === runs[0]?.id;
 
   // Derive the agent for the current todo
   const currentAgent = allAgents.find((a) => a.id === todo?.agentId) ?? allAgents[0] ?? null;
@@ -224,23 +162,6 @@ export function AgentTodoDetailPage() {
       setRuns(runsData);
       if (runsData.length > 0) {
         setSelectedRunId(runsData[0].id);
-      }
-      // Show the prompt as the first user message
-      const promptText = todoData?.prompt ?? todo?.prompt ?? '';
-      if (promptText) {
-        const msgId = `local-prompt-${Date.now()}`;
-        setLocalUserMessages([
-          {
-            id: msgId,
-            msgId,
-            type: 'text',
-            role: 'user',
-            content: { text: promptText },
-            status: null,
-          },
-        ]);
-      } else {
-        setLocalUserMessages([]);
       }
     } catch (err) {
       console.error(err);
@@ -262,8 +183,6 @@ export function AgentTodoDetailPage() {
       const runsData = await ipc.listAgentTodoRuns(id!);
       setRuns(runsData);
       if (selectedRunId === runId) {
-        setHistoricMessages([]);
-        setLocalUserMessages([]);
         if (runsData.length > 0) {
           setSelectedRunId(runsData[0].id);
         } else {
@@ -282,11 +201,7 @@ export function AgentTodoDetailPage() {
     setChatInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    const msgId = `local-user-${Date.now()}`;
-    setLocalUserMessages((prev) => [
-      ...prev,
-      { id: msgId, msgId, type: 'text', role: 'user', content: { text }, status: null },
-    ]);
+    addOptimisticMessage(text);
 
     const runId = runs[0]?.id;
     if (runId) {
@@ -393,6 +308,7 @@ export function AgentTodoDetailPage() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto">
             <MessageStream
+              key={selectedRunId ?? 'none'}
               messages={displayMessages}
               todoId={id!}
               status={currentStatus}
@@ -407,7 +323,7 @@ export function AgentTodoDetailPage() {
           {/* Input — same style as paper reader */}
           <div className="flex-shrink-0 px-4 py-4 border-t border-notion-border">
             <div className="mx-auto w-full max-w-2xl">
-              <div className="rounded-2xl border border-notion-border bg-white shadow-sm transition-all focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100">
+              <div className="rounded-2xl border border-notion-border bg-white shadow-sm transition-all">
                 <div className="flex items-end gap-2 px-4 pt-3.5">
                   <textarea
                     ref={textareaRef}
@@ -437,7 +353,7 @@ export function AgentTodoDetailPage() {
                     style={{ minHeight: '52px', maxHeight: '160px' }}
                   />
                 </div>
-                {/* Bottom bar: agent indicator + send button */}
+                {/* Bottom bar: agent indicator + yolo + send button */}
                 <div className="flex items-center justify-between px-3 pb-3 pt-2">
                   {/* Agent indicator / picker */}
                   <div ref={agentPickerRef} className="relative">
@@ -507,25 +423,53 @@ export function AgentTodoDetailPage() {
                     </AnimatePresence>
                   </div>
 
-                  {/* Send / Stop */}
-                  {isRunning ? (
+                  {/* Right side: YOLO pill + send/stop */}
+                  <div className="flex items-center gap-2">
+                    {/* YOLO toggle */}
                     <button
-                      onClick={handleStop}
-                      className="flex-shrink-0 rounded-full bg-gray-400 p-1.5 text-white hover:bg-gray-500"
-                      title="Stop"
+                      onClick={async () => {
+                        const next = !todo?.yoloMode;
+                        await ipc.updateAgentTodo(id!, { yoloMode: next });
+                        await loadData();
+                      }}
+                      title={
+                        todo?.yoloMode
+                          ? 'YOLO mode on — click to disable'
+                          : 'Enable YOLO mode (auto-approve all permissions)'
+                      }
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                        todo?.yoloMode
+                          ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
+                          : 'bg-notion-sidebar text-notion-text-tertiary hover:bg-notion-sidebar-hover hover:text-notion-text-secondary'
+                      }`}
                     >
-                      <Square size={13} />
+                      <Zap
+                        size={11}
+                        className={todo?.yoloMode ? 'fill-amber-500 text-amber-500' : ''}
+                      />
+                      YOLO
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => void handleSend()}
-                      disabled={!chatInput.trim() || !isViewingCurrentRun || isRunning}
-                      className="flex-shrink-0 rounded-full bg-notion-text p-1.5 text-white transition-opacity hover:opacity-80 disabled:opacity-30"
-                      title="Send"
-                    >
-                      <ArrowUp size={13} />
-                    </button>
-                  )}
+
+                    {/* Send / Stop */}
+                    {isRunning ? (
+                      <button
+                        onClick={handleStop}
+                        className="flex-shrink-0 rounded-full bg-gray-400 p-1.5 text-white hover:bg-gray-500"
+                        title="Stop"
+                      >
+                        <Square size={13} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => void handleSend()}
+                        disabled={!chatInput.trim() || !isViewingCurrentRun || isRunning}
+                        className="flex-shrink-0 rounded-full bg-notion-text p-1.5 text-white transition-opacity hover:opacity-80 disabled:opacity-30"
+                        title="Send"
+                      >
+                        <ArrowUp size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
