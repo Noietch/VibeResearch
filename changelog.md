@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-03-12 (41)
+
+### feat: ACP chat integration — Phase 4 unified chat UI
+
+- **Goal**: Create unified chat UI with backend selector and session management.
+- **Component**: `UnifiedChatModal.tsx` - replaces IdeaChatModal with ACP infrastructure
+- **Features**:
+  - Backend selector (💬 Lightweight / 🤖 Claude Agent)
+  - Session history sidebar with create/load/delete
+  - Real-time message streaming via useAcpChatStream hook
+  - Permission request UI with inline approval buttons
+  - Auto-title generation for new sessions
+  - Session persistence with paper context
+- **UI Design**:
+  - Notion-inspired styling (clean whites, soft grays, light blue accents)
+  - Collapsible sidebar with session list
+  - Backend indicator (⚡ icon for agent mode)
+  - Inline permission cards with option buttons
+  - Streaming indicator with spinner
+  - Error message display
+- **State Management**:
+  - Uses useAcpChatStream hook for message streaming
+  - Ref-based jobId tracking for event filtering
+  - Permission state with user response handling
+  - Session list with optimistic updates
+- **Integration**:
+  - Works with both lightweight (direct LLM) and ACP agent modes
+  - Seamless backend switching mid-conversation
+  - Paper context injection for all modes
+  - Working directory support for agent mode
+- **Next**: Replace IdeaChatModal usage with UnifiedChatModal across the app.
+
 ## 2026-03-12 (40)
 
 ### feat: ACP chat integration — Phase 3 full ACP agent support
