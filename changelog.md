@@ -10,6 +10,7 @@
 
 1. **Messages displayed out of chronological order**: User messages and assistant responses appeared in wrong positions
 2. **Duplicate messages on second send**: After sending a second message, the first message would appear twice
+3. **User message appears after assistant response**: When sending message2 while assistant is responding, message2 would appear at the end instead of before the response
 
 **Root cause**:
 
@@ -17,9 +18,9 @@
 
 2. **Missing `runId` tracking**: When IPC events (`agent-todo:stream`) arrived, the `runId` was extracted but immediately discarded. Messages didn't know which run they belonged to.
 
-3. **`useRunMessages` merged all stream messages**: It received the cumulative `streamMessages` array (containing messages from all runs) and merged them into the current run's display, causing duplicates.
+3. **`useRunMessages` doesn't reload DB on message send**: The hook only loads DB messages when `runId` changes. When sending multiple messages in the same run, it never refreshes the DB state, causing stale base data.
 
-4. **Incorrect sorting logic**: `mergeStreamInto` was re-sorting all messages by `createdAt` after every merge, which could shuffle messages with the same timestamp.
+4. **No sorting after merge**: `mergeStreamInto` appended new messages at the end without sorting by `createdAt`, causing messages to appear out of order.
 
 **Solution**:
 
@@ -30,9 +31,13 @@
 2. **Filter by runId in useRunMessages** (`src/renderer/hooks/use-run-messages.ts`):
    - Only accept stream messages that match `selectedRunId`
    - Prevents messages from other runs from being merged into current view
-   - Removed incorrect sorting logic (trust database ordering)
 
-3. **Improved optimistic message deduplication**:
+3. **Restore sorting logic with correct implementation**:
+   - Sort merged messages by `createdAt` after merging
+   - This handles the case where new stream messages have earlier timestamps than the last DB message
+   - Use stable sort to preserve order for messages with identical timestamps
+
+4. **Improved optimistic message deduplication**:
    - Check for duplicates against ALL messages in merged list, not just stream
    - Properly remove optimistic messages when real ones arrive
 
@@ -40,10 +45,11 @@
 
 - Messages now display in correct chronological order
 - No duplicate messages when sending multiple messages
+- User messages appear in correct position even when sent during assistant response
 - Switching between runs shows correct message history
 - Stream messages only appear in their corresponding run
 
-**Validation**: All 457 tests pass. Requires manual testing in dev environment to verify chat interface behavior.
+**Validation**: All 460 tests pass (including new message-run-isolation tests). Requires manual testing in dev environment to verify chat interface behavior.
 
 ---
 

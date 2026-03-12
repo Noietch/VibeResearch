@@ -73,9 +73,11 @@ function mergeFromDb(rawMsgs: any[]): Message[] {
  * - text: replace content (stream already accumulates upstream)
  * - tool_call: deep-merge
  * - others: replace
- * - IMPORTANT: Base list is already sorted by createdAt from DB. We preserve this order
- *   by only updating in-place for existing messages. New messages are appended at the end
- *   with proper timestamps, maintaining chronological order.
+ * - CRITICAL: Must sort by createdAt after merging because:
+ *   1. Base list is from DB (sorted by createdAt ASC)
+ *   2. New stream messages are appended at the end
+ *   3. But new messages might have earlier timestamps than the last DB message
+ *   4. Example: [user1, assistant1] + [user2] → must sort to get correct order
  */
 function mergeStreamInto(base: Message[], incoming: Message[]): Message[] {
   const result = [...base];
@@ -101,8 +103,7 @@ function mergeStreamInto(base: Message[], incoming: Message[]): Message[] {
         };
       }
     } else {
-      // New message from stream - append at the end
-      // The stream should provide proper timestamps, but if not, use current time
+      // New message from stream - will be sorted into correct position
       result.push({
         ...msg,
         createdAt: msg.createdAt || new Date().toISOString(),
@@ -111,9 +112,20 @@ function mergeStreamInto(base: Message[], incoming: Message[]): Message[] {
     }
   }
 
-  // DO NOT SORT - trust the database ordering and append order
-  // Database messages are already sorted by createdAt ASC
-  // Stream messages are appended in the order they arrive
+  // CRITICAL: Sort by createdAt to ensure chronological order
+  // This is necessary because:
+  // 1. Frontend doesn't reload DB on every message send
+  // 2. New stream messages are appended at the end
+  // 3. But they might belong earlier in the timeline
+  // Use stable sort to preserve order for messages with identical timestamps
+  result.sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (aTime !== bTime) return aTime - bTime;
+    // Stable sort: preserve original order for same timestamp
+    return 0;
+  });
+
   return result;
 }
 
