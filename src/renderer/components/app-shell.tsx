@@ -345,9 +345,10 @@ export function AppShell({
         className="flex flex-shrink-0 items-stretch border-b border-notion-border bg-notion-sidebar"
         style={{ WebkitAppRegion: 'drag', height: '52px' } as React.CSSProperties}
       >
-        {/* Sidebar-aligned spacer (matches sidebar width so tabs start at content area) */}
+        {/* Sidebar-aligned spacer (matches sidebar width so tabs start at content area) - keep draggable for macOS traffic lights */}
         <div
           className={`flex-shrink-0 transition-[width] duration-150 ease-out ${isCollapsed ? 'w-[72px]' : 'w-60'}`}
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
 
         {/* Tabs */}

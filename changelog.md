@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-12 (36)
+
+### fix: macOS traffic lights (red/green/yellow buttons) always visible
+
+- **Problem**: On macOS, the window control buttons (red/green/yellow) would sometimes disappear when the window lost focus or in certain UI states.
+- **Root cause**: The left sidebar spacer in the title bar did not have `-webkit-app-region: drag` style, which is required for macOS to keep the traffic lights visible when using `titleBarStyle: 'hidden'`.
+- **Fix**: Added `WebkitAppRegion: 'drag'` style to the sidebar-aligned spacer div in `app-shell.tsx:349-351`. This ensures the traffic lights area has proper drag region coverage.
+- **Validation**: Lint passes.
+
 ## 2026-03-12 (35)
 
 ### feat: multi-backend agent session resume
