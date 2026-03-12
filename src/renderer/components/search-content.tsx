@@ -17,6 +17,7 @@ import {
   getTagStyle,
   tokenizeSearchQuery,
 } from '@shared';
+import { useTranslation } from 'react-i18next';
 
 const EXCLUDED_TAGS = [
   'arxiv',
@@ -199,6 +200,7 @@ function markPaperQueuedStatus<T extends { id: string; processingStatus?: string
 }
 
 export function SearchContent() {
+  const { t } = useTranslation();
   const [allPapers, setAllPapers] = useState<PaperItem[]>([]);
   const [papers, setPapers] = useState<PaperItem[]>([]);
   const [agenticPapers, setAgenticPapers] = useState<AgenticSearchPaper[]>([]);
@@ -834,7 +836,9 @@ export function SearchContent() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col items-center justify-center py-16 text-center"
                   >
-                    <p className="text-base text-notion-text-secondary">No matching papers found</p>
+                    <p className="text-base text-notion-text-secondary">
+                      {t('searchContent.noMatch')}
+                    </p>
                     <p className="mt-1 text-sm text-notion-text-tertiary">
                       {searchMode === 'agentic'
                         ? 'Try a different description'

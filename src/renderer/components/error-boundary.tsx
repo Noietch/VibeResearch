@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { withTranslation, WithTranslation } from 'react-i18next';
 
-interface Props {
+interface Props extends WithTranslation {
   children: ReactNode;
   fallback?: ReactNode;
 }
@@ -15,7 +16,7 @@ interface State {
  * Error Boundary component to catch React rendering errors
  * Displays a friendly error page instead of crashing the app
  */
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryComponent extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -67,14 +68,14 @@ export class ErrorBoundary extends Component<Props, State> {
                 />
               </svg>
             </div>
-            <h1 className="mb-2 text-xl font-semibold text-gray-900">Something went wrong</h1>
-            <p className="mb-4 text-gray-600">
-              An unexpected error occurred. Please try reloading the application.
-            </p>
+            <h1 className="mb-2 text-xl font-semibold text-gray-900">
+              {this.props.t('errorBoundary.title')}
+            </h1>
+            <p className="mb-4 text-gray-600">{this.props.t('errorBoundary.description')}</p>
             {this.state.error && (
               <details className="mb-4 rounded-lg bg-gray-100 p-3">
                 <summary className="cursor-pointer text-sm font-medium text-gray-700">
-                  Error details
+                  {this.props.t('errorBoundary.errorDetails')}
                 </summary>
                 <pre className="mt-2 overflow-auto text-xs text-gray-600">
                   {this.state.error.message}
@@ -92,13 +93,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleGoHome}
                 className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                Go Home
+                {this.props.t('errorBoundary.goHome')}
               </button>
               <button
                 onClick={this.handleReload}
                 className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
               >
-                Reload App
+                {this.props.t('errorBoundary.reloadApp')}
               </button>
             </div>
           </div>
@@ -109,3 +110,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+export const ErrorBoundary = withTranslation()(ErrorBoundaryComponent);

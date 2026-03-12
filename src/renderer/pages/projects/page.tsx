@@ -15,6 +15,7 @@ import {
 import type { AgentConfigItem, AgentTodoItem, TagCategory } from '@shared';
 import { CATEGORY_COLORS, cleanArxivTitle } from '@shared';
 import { useTabs } from '../../hooks/use-tabs';
+import { useTranslation } from 'react-i18next';
 import {
   FolderKanban,
   Plus,
@@ -60,6 +61,7 @@ function RemoteWorkdirField({
   value: string;
   onChange: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const [agentConfig, setAgentConfig] = useState<RemoteSshConfig | null>(null);
 
   useEffect(() => {
@@ -83,7 +85,7 @@ function RemoteWorkdirField({
     return (
       <div className="flex items-center gap-2 text-xs text-notion-text-tertiary">
         <Loader2 size={12} className="animate-spin" />
-        Loading agent…
+        {t('projectsPage.loadingAgent')}
       </div>
     );
   }
@@ -91,7 +93,7 @@ function RemoteWorkdirField({
   return (
     <div>
       <label className="mb-1 block text-xs text-notion-text-tertiary">
-        Remote Working Directory
+        {t('projectsPage.remoteWorkingDir')}
       </label>
       <RemoteCwdPicker server={agentConfig} value={value} onChange={onChange} />
     </div>
@@ -610,6 +612,7 @@ interface ChatMessage {
 }
 
 function IdeasTab({ project, onChange }: { project: ProjectItem; onChange: () => void }) {
+  const { t } = useTranslation();
   const [papers, setPapers] = useState<{ id: string; shortId: string; title: string }[]>([]);
   const [selectedPaperIds, setSelectedPaperIds] = useState<string[]>([]);
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
@@ -797,7 +800,9 @@ function IdeasTab({ project, onChange }: { project: ProjectItem; onChange: () =>
                 <ul className="notion-scrollbar max-h-56 overflow-y-auto py-1">
                   {filteredPapers.length === 0 ? (
                     <li className="px-3 py-4 text-center text-sm text-notion-text-tertiary">
-                      {papers.length === 0 ? 'No papers in library' : 'No matching papers'}
+                      {papers.length === 0
+                        ? t('projectsPage.noPapersInLibrary')
+                        : t('projectsPage.noMatchingPapers')}
                     </li>
                   ) : (
                     filteredPapers.map((p) => (
@@ -1067,6 +1072,7 @@ function IdeasTab({ project, onChange }: { project: ProjectItem; onChange: () =>
 // ── RelatedWorksTab ───────────────────────────────────────────────────────────
 
 function RelatedWorksTab({ project }: { project: ProjectItem }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [papers, setPapers] = useState<ProjectPaperItem[]>([]);
   const [allPapers, setAllPapers] = useState<PaperItem[]>([]);
@@ -1304,7 +1310,9 @@ function RelatedWorksTab({ project }: { project: ProjectItem }) {
               <div className="notion-scrollbar max-h-80 overflow-y-auto px-5 pb-5">
                 {filteredPapers.length === 0 ? (
                   <p className="py-6 text-center text-sm text-notion-text-tertiary">
-                    {searchQuery ? 'No papers match your search' : 'All papers already added'}
+                    {searchQuery
+                      ? t('projectsPage.noSearchMatch')
+                      : t('projectsPage.allPapersAdded')}
                   </p>
                 ) : (
                   <div className="space-y-1">

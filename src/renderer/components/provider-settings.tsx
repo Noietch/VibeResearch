@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ipc, type ProviderConfig } from '../hooks/use-ipc';
 import { Check, Loader2, Eye, EyeOff, ChevronDown } from 'lucide-react';
 
@@ -23,10 +24,12 @@ function ModelSelect({
   value,
   options,
   onChange,
+  placeholder,
 }: {
   value: string;
   options: string[];
   onChange: (v: string) => void;
+  placeholder: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -46,7 +49,7 @@ function ModelSelect({
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2.5 text-sm text-notion-text transition-colors hover:border-blue-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
       >
-        <span className="font-mono text-sm">{value || 'Select model…'}</span>
+        <span className="font-mono text-sm">{value || placeholder}</span>
         <ChevronDown
           size={14}
           className={`text-notion-text-tertiary transition-transform ${open ? 'rotate-180' : ''}`}
@@ -77,6 +80,7 @@ function ModelSelect({
 }
 
 export function ProviderSettings() {
+  const { t } = useTranslation();
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -177,13 +181,13 @@ export function ProviderSettings() {
                   <h3 className="text-sm font-semibold text-notion-text">{provider.name}</h3>
                   {isActive && (
                     <span className="rounded-full bg-blue-100 px-2 py-0.5 text-2xs font-medium text-blue-700">
-                      Active
+                      {t('common.active')}
                     </span>
                   )}
                 </div>
                 {provider.hasApiKey && (
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-green-600">
-                    <Check size={11} /> API key configured
+                    <Check size={11} /> {t('provider.apiKeyConfigured')}
                   </p>
                 )}
               </div>
@@ -205,7 +209,7 @@ export function ProviderSettings() {
                   onClick={() => handleSetActive(provider.id)}
                   className="rounded-lg border border-notion-border px-3 py-1.5 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar hover:text-notion-text"
                 >
-                  Set Active
+                  {t('common.setActive')}
                 </button>
               )}
             </div>
@@ -214,13 +218,14 @@ export function ProviderSettings() {
               {/* Model */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                  Model
+                  {t('provider.model')}
                 </label>
                 {models.length > 0 ? (
                   <ModelSelect
                     value={form.model}
                     options={models}
                     onChange={(v) => updateForm(provider.id, 'model', v)}
+                    placeholder={t('provider.selectModel')}
                   />
                 ) : (
                   <input
@@ -235,9 +240,9 @@ export function ProviderSettings() {
               {/* Base URL */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                  Base URL{' '}
+                  {t('provider.baseUrl')}{' '}
                   <span className="font-normal text-notion-text-tertiary">
-                    (optional, for proxy)
+                    {t('provider.baseUrlOptional')}
                   </span>
                 </label>
                 <input
@@ -251,7 +256,7 @@ export function ProviderSettings() {
               {/* API Key */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-                  API Key
+                  {t('provider.apiKey')}
                 </label>
                 <div className="relative flex items-center">
                   <input
@@ -259,7 +264,7 @@ export function ProviderSettings() {
                     value={form.apiKey}
                     onChange={(e) => updateForm(provider.id, 'apiKey', e.target.value)}
                     placeholder={
-                      provider.hasApiKey ? '••••••••••••• (leave blank to keep)' : 'Enter API key…'
+                      provider.hasApiKey ? t('provider.apiKeyPlaceholder') : 'Enter API key…'
                     }
                     className="w-full rounded-lg border border-notion-border bg-white px-3 py-2.5 pr-10 font-mono text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   />
@@ -279,7 +284,7 @@ export function ProviderSettings() {
             <div className="mt-4 flex items-center justify-end gap-3">
               {saved === provider.id && (
                 <span className="flex items-center gap-1 text-xs text-green-600">
-                  <Check size={12} /> Saved
+                  <Check size={12} /> {t('common.saved')}
                 </span>
               )}
               <button
@@ -288,7 +293,7 @@ export function ProviderSettings() {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
               >
                 {saving === provider.id && <Loader2 size={13} className="animate-spin" />}
-                Save
+                {t('common.save')}
               </button>
             </div>
           </div>

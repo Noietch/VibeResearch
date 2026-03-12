@@ -25,6 +25,7 @@ import {
   type RemoteAgentInfo,
   type SshConfigEntry,
 } from '../../hooks/use-ipc';
+import { useTranslation } from 'react-i18next';
 
 // ─── Add/Edit SSH Server Modal ────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ function SshServerModal({
   onUpdate: (id: string, data: SshServerFormData) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState<SshServerFormData>(
     server
       ? {
@@ -158,7 +160,7 @@ function SshServerModal({
       return;
     }
     if (form.authMethod === 'password' && !form.password && !server) {
-      setError('Password is required for new servers');
+      setError(t('sshServer.passwordRequired'));
       return;
     }
     if (form.authMethod === 'privateKey' && !form.privateKeyPath) {
@@ -175,7 +177,7 @@ function SshServerModal({
       }
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save');
+      setError(e instanceof Error ? e.message : t('sshServer.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -380,7 +382,7 @@ function SshServerModal({
           {/* Auth Method */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-notion-text">
-              Authentication Method
+              {t('sshServer.authMethod')}
             </label>
             <div className="flex gap-2">
               {(['password', 'privateKey'] as const).map((method) => (
@@ -407,12 +409,12 @@ function SshServerModal({
                   {method === 'password' ? (
                     <>
                       <Key size={14} />
-                      Password
+                      {t('sshServer.password')}
                     </>
                   ) : (
                     <>
                       <FolderOpen size={14} />
-                      Private Key
+                      {t('sshServer.privateKey')}
                     </>
                   )}
                 </button>
@@ -525,7 +527,7 @@ function SshServerModal({
             className="flex items-center gap-1.5 rounded-lg border border-notion-border px-3 py-2 text-sm text-notion-text-secondary hover:bg-notion-sidebar disabled:opacity-50"
           >
             {testing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-            {testing ? 'Testing…' : 'Test Connection'}
+            {testing ? t('common.testing') : t('sshServer.testConnection')}
           </button>
           <div className="flex gap-2">
             <button
@@ -533,7 +535,7 @@ function SshServerModal({
               onClick={onClose}
               className="rounded-lg px-4 py-2 text-sm text-notion-text-secondary hover:bg-notion-sidebar"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -562,6 +564,7 @@ function RemoteDirModal({
   onSelect: (path: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [currentPath, setCurrentPath] = useState(server.defaultCwd ?? `/home/${server.username}`);
   const [entries, setEntries] = useState<RemoteDirEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -716,13 +719,13 @@ function RemoteDirModal({
             onClick={onClose}
             className="rounded-lg px-4 py-2 text-sm text-notion-text-secondary hover:bg-notion-sidebar"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={() => onSelect(currentPath)}
             className="rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:opacity-80"
           >
-            Select This Directory
+            {t('sshServer.selectDirectory')}
           </button>
         </div>
       </motion.div>
@@ -747,10 +750,11 @@ function SshServerCard({
   onBrowseDir: () => void;
   detecting: boolean;
 }) {
+  const { t } = useTranslation();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${server.label}"?`)) return;
+    if (!confirm(t('sshServer.deleteConfirm', { server: server.label }))) return;
     setDeleting(true);
     try {
       await onDelete();

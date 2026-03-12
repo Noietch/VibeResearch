@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Edit2, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ipc, type TagInfo } from '../hooks/use-ipc';
 import type { TagCategory } from '@shared';
 import { CATEGORY_COLORS, CATEGORY_LABELS, TAG_CATEGORIES } from '@shared';
@@ -12,6 +13,7 @@ interface TagManagementModalProps {
 }
 
 export function TagManagementModal({ isOpen, onClose, onRefresh }: TagManagementModalProps) {
+  const { t } = useTranslation();
   const [allTags, setAllTags] = useState<TagInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingTag, setEditingTag] = useState<string | null>(null);
@@ -109,7 +111,7 @@ export function TagManagementModal({ isOpen, onClose, onRefresh }: TagManagement
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-notion-border px-6 py-4">
-              <h2 className="text-lg font-semibold text-notion-text">Manage Tags</h2>
+              <h2 className="text-lg font-semibold text-notion-text">{t('tagManagement.title')}</h2>
               <button
                 onClick={onClose}
                 className="rounded-lg p-1.5 text-notion-text-tertiary hover:bg-notion-sidebar hover:text-notion-text"
@@ -134,7 +136,8 @@ export function TagManagementModal({ isOpen, onClose, onRefresh }: TagManagement
                     return (
                       <div key={category}>
                         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-notion-text-tertiary">
-                          {CATEGORY_LABELS[category]} ({tags.length} tags)
+                          {CATEGORY_LABELS[category]} (
+                          {t('tagManagement.tagCount', { count: tags.length })})
                         </h3>
                         <div className="space-y-1">
                           {tags.map((tag) => {
@@ -190,7 +193,7 @@ export function TagManagementModal({ isOpen, onClose, onRefresh }: TagManagement
 
                                 {/* Count */}
                                 <span className="text-xs text-notion-text-tertiary min-w-[3rem] text-right">
-                                  {tag.count} papers
+                                  {t('tagManagement.paperCount', { count: tag.count })}
                                 </span>
 
                                 {/* Actions */}
@@ -224,14 +227,14 @@ export function TagManagementModal({ isOpen, onClose, onRefresh }: TagManagement
                                         {saving ? (
                                           <Loader2 size={12} className="animate-spin" />
                                         ) : (
-                                          'Confirm'
+                                          t('tagManagement.confirm')
                                         )}
                                       </button>
                                       <button
                                         onClick={() => setDeleteConfirm(null)}
                                         className="rounded px-2 py-0.5 text-xs font-medium text-notion-text-secondary hover:bg-notion-sidebar"
                                       >
-                                        Cancel
+                                        {t('common.cancel')}
                                       </button>
                                     </div>
                                   ) : (

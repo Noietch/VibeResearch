@@ -35,6 +35,8 @@ import type { TagCategory } from '@shared';
 import { CATEGORY_COLORS, CATEGORY_LABELS, TAG_CATEGORIES, cleanArxivTitle } from '@shared';
 import { TagManagementModal } from './tag-management-modal';
 import { useToast } from './toast';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 const EXCLUDED_TAGS = ['arxiv', 'chrome', 'manual', 'pdf'];
 const MAX_VISIBLE_CHIPS = 8;
@@ -42,21 +44,9 @@ const MAX_VISIBLE_CHIPS = 8;
 type ImportTimeFilter = 'all' | 'today' | 'week' | 'month';
 type CategoryFilter = 'all' | TagCategory;
 
-const TIME_FILTER_OPTIONS: { value: ImportTimeFilter; label: string }[] = [
-  { value: 'all', label: 'All time' },
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-];
+// Filter options will be generated inside the component with i18n
 
-const CATEGORY_FILTER_OPTIONS: { value: CategoryFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'domain', label: 'Domain' },
-  { value: 'method', label: 'Method' },
-  { value: 'topic', label: 'Topic' },
-];
-
-function ProcessingBadge({ status }: { status?: string }) {
+function ProcessingBadge({ status, t }: { status?: string; t: TFunction }) {
   if (!status || status === 'idle' || status === 'queued' || status === 'completed') return null;
 
   const styles: Record<string, string> = {
@@ -68,11 +58,11 @@ function ProcessingBadge({ status }: { status?: string }) {
   };
 
   const labels: Record<string, string> = {
-    extracting_text: 'Extracting',
-    extracting_metadata: 'Metadata',
-    chunking: 'Chunking',
-    embedding: 'Indexing',
-    failed: 'Needs retry',
+    extracting_text: t('papersByTag.status.extracting'),
+    extracting_metadata: t('papersByTag.status.metadata'),
+    chunking: t('papersByTag.status.chunking'),
+    embedding: t('papersByTag.status.indexing'),
+    failed: t('papersByTag.status.needsRetry'),
   };
 
   return (
@@ -243,6 +233,7 @@ export function PapersByTag({
   importStatus?: ImportStatus | null;
   onOpenImport?: () => void;
 }) {
+  const { t } = useTranslation();
   const [papers, setPapers] = useState<PaperItem[]>([]);
   const [allTags, setAllTags] = useState<TagInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -257,6 +248,21 @@ export function PapersByTag({
   const [showTagModal, setShowTagModal] = useState(false);
   const [taggingStatus, setTaggingStatus] = useState<TaggingStatus | null>(null);
   const [showTagManagement, setShowTagManagement] = useState(false);
+
+  // Filter options with i18n
+  const TIME_FILTER_OPTIONS: { value: ImportTimeFilter; label: string }[] = [
+    { value: 'all', label: t('papersByTag.timeFilter.all') },
+    { value: 'today', label: t('papersByTag.timeFilter.today') },
+    { value: 'week', label: t('papersByTag.timeFilter.week') },
+    { value: 'month', label: t('papersByTag.timeFilter.month') },
+  ];
+
+  const CATEGORY_FILTER_OPTIONS: { value: CategoryFilter; label: string }[] = [
+    { value: 'all', label: t('papersByTag.categoryFilter.all') },
+    { value: 'domain', label: t('papersByTag.categoryFilter.domain') },
+    { value: 'method', label: t('papersByTag.categoryFilter.method') },
+    { value: 'topic', label: t('papersByTag.categoryFilter.topic') },
+  ];
 
   // Single paper auto-tag, index and analyze state
   const [autoTaggingPaperId, setAutoTaggingPaperId] = useState<string | null>(null);
@@ -825,7 +831,7 @@ export function PapersByTag({
         </div>
         <div className="flex flex-col items-center justify-center py-20">
           <FileText size={36} strokeWidth={1.2} className="mb-3 text-notion-border" />
-          <p className="text-sm text-notion-text-tertiary">No papers yet</p>
+          <p className="text-sm text-notion-text-tertiary">{t('papersByTag.noPapers')}</p>
           <p className="text-xs text-notion-text-tertiary">
             Import from Chrome history or add manually
           </p>
@@ -1109,7 +1115,7 @@ export function PapersByTag({
             className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
           >
             <Settings size={13} />
-            Manage Tags
+            {t('papersByTag.manageTags')}
           </button>
         </div>
       </div>
@@ -1286,7 +1292,7 @@ export function PapersByTag({
         {visiblePapers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Tag size={32} strokeWidth={1.2} className="mb-3 text-notion-border" />
-            <p className="text-sm text-notion-text-tertiary">No papers match the current filters</p>
+            <p className="text-sm text-notion-text-tertiary">{t('papersByTag.noMatch')}</p>
           </div>
         ) : (
           <div className="rounded-xl border border-notion-border bg-white overflow-hidden">
@@ -1312,6 +1318,7 @@ export function PapersByTag({
                 isSelectMode={isSelectMode}
                 isSelected={selectedIds.has(paper.id)}
                 onToggleSelect={toggleSelect}
+                t={t}
               />
             ))}
           </div>
@@ -1409,6 +1416,7 @@ function PaperCard({
   isSelectMode,
   isSelected,
   onToggleSelect,
+  t,
 }: {
   paper: PaperItem;
   deleting: string | null;
@@ -1429,6 +1437,7 @@ function PaperCard({
   isSelectMode: boolean;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
+  t: TFunction;
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -1508,7 +1517,7 @@ function PaperCard({
                 {hasMoreAuthors ? ' et al.' : ''}
               </span>
             )}
-            <ProcessingBadge status={paper.processingStatus} />
+            <ProcessingBadge status={paper.processingStatus} t={t} />
           </div>
           {paper.processingStatus === 'failed' && paper.processingError && (
             <p className="mt-1 line-clamp-2 break-all text-xs text-red-700/90">

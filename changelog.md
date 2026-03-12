@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-03-12 (47)
+
+### feat: Complete i18n coverage across all UI components
+
+**Summary**: Systematically completed internationalization (i18n) coverage for all remaining components in the renderer, ensuring full English/Chinese language support throughout the application.
+
+**Components Updated:**
+
+1. **Core Components:**
+   - `error-boundary.tsx` - Error page UI
+   - `download-modal.tsx` - Paper download dialog
+   - `import-modal.tsx` - Import time filters
+   - `tag-management-modal.tsx` - Tag management UI
+   - `provider-settings.tsx` - AI provider configuration
+   - `setup-wizard-modal.tsx` - First-run setup wizard
+
+2. **Chat System:**
+   - `UnifiedChatModal.tsx` - Session history, paper context indicators, sidebar controls
+
+3. **Dashboard & Library:**
+   - `dashboard-content.tsx` - Today's papers section
+   - `research-profile.tsx` - Collection statistics
+   - `papers-by-tag.tsx` - Filters, status badges, empty states
+   - `search-content.tsx` - Search results
+
+4. **Settings & Projects:**
+   - `SshServerSettings.tsx` - SSH server configuration
+   - `projects/page.tsx` - Project management UI
+
+**Translation Keys Added:**
+
+- `errorBoundary.*` - 4 keys
+- `download.*` - 4 keys
+- `import.timeFilter.*` - 4 keys
+- `tagManagement.*` - 3 keys
+- `provider.*` - 6 keys
+- `setupWizard.*` - 13 keys
+- `dashboardContent.*` - 3 keys
+- `researchProfile.*` - 7 keys
+- `papersByTag.*` - 15 keys
+- `searchContent.*` - 1 key
+- `sshServer.*` - 7 keys
+- `projectsPage.*` - 6 keys
+- `chat.moreCount` - 1 key
+- `common.next` - 1 key
+
+**Total**: 75+ new translation keys added to both `en.json` and `zh.json`
+
+**Testing:**
+
+- ✅ All 445 tests passing (48 skipped)
+- ✅ Lint checks passing (Prettier)
+- ✅ No TypeScript errors
+- ✅ All hardcoded English strings replaced with `t()` calls
+
+**Impact**: The application now has 100% i18n coverage in the renderer layer, providing a seamless bilingual experience for English and Chinese users.
+
+---
+
 ## 2026-03-12 (46)
 
 ### feat: ACP chat integration — COMPLETE ✅

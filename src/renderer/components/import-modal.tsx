@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { ipc, type ScanResult, type ImportStatus, type SearchResultItem } from '../hooks/use-ipc';
 import { onIpc } from '../hooks/use-ipc';
 import { cleanArxivTitle } from '@shared';
@@ -63,13 +64,6 @@ interface BatchProgress {
   message: string;
 }
 
-const DATE_OPTIONS = [
-  { label: 'Today', value: 1 },
-  { label: 'Last 7 days', value: 7 },
-  { label: 'Last 30 days', value: 30 },
-  { label: 'All time', value: null },
-];
-
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() ?? filePath;
 }
@@ -81,6 +75,15 @@ export function ImportModal({
   onClose: () => void;
   onImported: () => void;
 }) {
+  const { t } = useTranslation();
+
+  const DATE_OPTIONS = [
+    { label: t('import.timeFilter.today'), value: 1 },
+    { label: t('import.timeFilter.week'), value: 7 },
+    { label: t('import.timeFilter.month'), value: 30 },
+    { label: t('import.timeFilter.all'), value: null },
+  ];
+
   const [tab, setTab] = useState<Tab>('search');
   const [step, setStep] = useState<Step>('initial');
   const [days, setDays] = useState<number | null>(1);

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ipc, type ProviderConfig } from '../hooks/use-ipc';
 import appIcon from '../../../assets/icon.png';
 
@@ -78,6 +79,7 @@ const PROVIDER_INFO: Record<
 };
 
 export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardModalProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>('welcome');
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -206,11 +208,10 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
               <div className="mb-6 text-center">
                 <img src={appIcon} alt="ResearchClaw" className="mx-auto mb-4 h-14 w-14" />
                 <h2 className="text-xl font-bold tracking-tight text-notion-text">
-                  Welcome to ResearchClaw
+                  {t('setupWizard.welcome')}
                 </h2>
                 <p className="mt-2 text-sm text-notion-text-secondary leading-relaxed">
-                  To enable AI-powered features like paper analysis, smart tagging, and research
-                  recommendations, please configure your AI provider.
+                  {t('setupWizard.description')}
                 </p>
               </div>
 
@@ -219,14 +220,14 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                   onClick={() => setStep('select-provider')}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-notion-text px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-80"
                 >
-                  Configure AI Provider
+                  {t('setupWizard.configureProvider')}
                   <ChevronRight size={16} />
                 </button>
                 <button
                   onClick={handleSkip}
                   className="w-full rounded-lg px-4 py-2.5 text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar-hover hover:text-notion-text"
                 >
-                  Skip for now
+                  {t('setupWizard.skip')}
                 </button>
               </div>
             </motion.div>
@@ -241,10 +242,10 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
               transition={{ duration: 0.15 }}
             >
               <h2 className="mb-1 text-lg font-bold tracking-tight text-notion-text">
-                Choose a Provider
+                {t('setupWizard.chooseProvider')}
               </h2>
               <p className="mb-4 text-sm text-notion-text-secondary">
-                Select the AI provider you want to use.
+                {t('setupWizard.chooseProviderDesc')}
               </p>
 
               <div className="flex flex-col gap-2">
@@ -286,14 +287,14 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                   className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar-hover hover:text-notion-text"
                 >
                   <ChevronLeft size={16} />
-                  Back
+                  {t('common.back')}
                 </button>
                 <button
                   onClick={() => setStep('api-key')}
                   disabled={!selectedProviderId}
                   className="flex items-center gap-1 rounded-lg bg-notion-text px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
                 >
-                  Next
+                  {t('common.next')}
                   <ChevronRight size={16} />
                 </button>
               </div>
@@ -309,16 +310,16 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
               transition={{ duration: 0.15 }}
             >
               <h2 className="mb-1 text-lg font-bold tracking-tight text-notion-text">
-                Enter API Key
+                {t('setupWizard.enterApiKey')}
               </h2>
               <p className="mb-4 text-sm text-notion-text-secondary">
-                Enter your {providerInfo.name} API key. It will be stored securely on your device.
+                {t('setupWizard.enterApiKeyDesc', { provider: providerInfo.name })}
               </p>
 
               <div className="mb-4 flex flex-col gap-3">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-notion-text">
-                    API Key
+                    {t('provider.apiKey')}
                   </label>
                   <div className="relative">
                     <Key
@@ -344,7 +345,9 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-notion-text">Model</label>
+                  <label className="mb-1.5 block text-xs font-medium text-notion-text">
+                    {t('provider.model')}
+                  </label>
                   <input
                     type="text"
                     value={modelName}
@@ -357,7 +360,7 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                   />
                   {providerInfo.defaultModel && (
                     <p className="mt-1 text-[11px] text-notion-text-tertiary">
-                      Default: {providerInfo.defaultModel}
+                      {t('setupWizard.modelDefault', { model: providerInfo.defaultModel })}
                     </p>
                   )}
                 </div>
@@ -369,7 +372,9 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                   className="flex items-center gap-1 text-xs text-notion-text-tertiary hover:text-notion-text-secondary transition-colors"
                 >
                   {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  {selectedProviderId === 'custom' ? 'Base URL' : 'Custom Base URL (optional)'}
+                  {selectedProviderId === 'custom'
+                    ? t('setupWizard.baseUrlLabel')
+                    : t('setupWizard.customBaseUrl')}
                 </button>
 
                 {showAdvanced && (
@@ -394,7 +399,7 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                     </div>
                     {selectedProviderId !== 'custom' && (
                       <p className="mt-1 text-[11px] text-notion-text-tertiary">
-                        Leave empty to use the official endpoint
+                        {t('setupWizard.baseUrlPlaceholder')}
                       </p>
                     )}
                   </div>
@@ -409,12 +414,12 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                     {testResult === 'success' ? (
                       <>
                         <CheckCircle2 size={13} />
-                        Provider configured successfully!
+                        {t('setupWizard.successMessage')}
                       </>
                     ) : (
                       <>
                         <AlertCircle size={13} />
-                        Failed to save. Please check your API key.
+                        {t('setupWizard.failureMessage')}
                       </>
                     )}
                   </div>
@@ -430,7 +435,7 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                   className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar-hover hover:text-notion-text"
                 >
                   <ChevronLeft size={16} />
-                  Back
+                  {t('common.back')}
                 </button>
                 <div className="flex items-center gap-2">
                   <button
@@ -439,7 +444,7 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                     className="flex items-center gap-1.5 rounded-lg border border-notion-border px-3 py-1.5 text-sm text-notion-text-secondary transition-colors hover:bg-notion-sidebar-hover hover:text-notion-text disabled:opacity-50"
                   >
                     {testing && <Loader2 size={13} className="animate-spin" />}
-                    Test & Save
+                    {t('setupWizard.testAndSave')}
                   </button>
                   <button
                     onClick={handleComplete}
@@ -447,7 +452,7 @@ export function SetupWizardModal({ providers, onComplete, onSkip }: SetupWizardM
                     className="flex items-center gap-1 rounded-lg bg-notion-text px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
                   >
                     {saving && <Loader2 size={13} className="animate-spin" />}
-                    Finish
+                    {t('setupWizard.finish')}
                     <ChevronRight size={16} />
                   </button>
                 </div>

@@ -3,6 +3,7 @@ import {
   type TagCategory,
   type ResearchProfile as ResearchProfileData,
 } from '@shared';
+import { useTranslation } from 'react-i18next';
 
 function BarChart({
   items,
@@ -41,12 +42,12 @@ const CATEGORY_BAR_COLORS: Record<TagCategory, string> = {
 };
 
 export function ResearchProfileView({ profile }: { profile: ResearchProfileData }) {
+  const { t } = useTranslation();
+
   if (profile.totalPapers === 0) {
     return (
       <div className="rounded-xl border border-dashed border-notion-border py-12 text-center">
-        <p className="text-sm text-notion-text-tertiary">
-          No papers in this collection yet. Add papers to see the research profile.
-        </p>
+        <p className="text-sm text-notion-text-tertiary">{t('researchProfile.noPapers')}</p>
       </div>
     );
   }
@@ -66,7 +67,7 @@ export function ResearchProfileView({ profile }: { profile: ResearchProfileData 
   return (
     <div className="space-y-6">
       <div className="text-sm text-notion-text-secondary">
-        {profile.totalPapers} paper{profile.totalPapers !== 1 ? 's' : ''} in collection
+        {t('researchProfile.paperCount', { count: profile.totalPapers })}
       </div>
 
       {/* Tag distribution by category */}
@@ -77,7 +78,7 @@ export function ResearchProfileView({ profile }: { profile: ResearchProfileData 
         return (
           <div key={category}>
             <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${colors.text}`}>
-              {category}
+              {t(`researchProfile.${category}`)}
             </h3>
             <BarChart
               items={tags.slice(0, 10).map((t) => ({ label: t.name, count: t.count }))}
@@ -92,7 +93,7 @@ export function ResearchProfileView({ profile }: { profile: ResearchProfileData 
       {yearDistribution.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-notion-text-secondary mb-2">
-            Publication Years
+            {t('researchProfile.publicationYears')}
           </h3>
           <BarChart
             items={yearDistribution.map((y) => ({ label: String(y.year), count: y.count }))}
@@ -106,7 +107,7 @@ export function ResearchProfileView({ profile }: { profile: ResearchProfileData 
       {topAuthors.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-notion-text-secondary mb-2">
-            Top Authors
+            {t('researchProfile.topAuthors')}
           </h3>
           <div className="space-y-1">
             {topAuthors.map((author, i) => (
@@ -114,7 +115,7 @@ export function ResearchProfileView({ profile }: { profile: ResearchProfileData 
                 <span className="w-5 text-xs text-notion-text-tertiary text-right">{i + 1}.</span>
                 <span className="flex-1 truncate text-notion-text">{author.name}</span>
                 <span className="text-xs text-notion-text-tertiary">
-                  {author.count} paper{author.count !== 1 ? 's' : ''}
+                  {t('researchProfile.paperCount', { count: author.count })}
                 </span>
               </div>
             ))}

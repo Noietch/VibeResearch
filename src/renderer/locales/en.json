@@ -16,6 +16,7 @@
     "browse": "Browse",
     "loading": "Loading…",
     "back": "Go back",
+    "next": "Next",
     "settings": "Settings",
     "search": "Search",
     "active": "Active",
@@ -230,6 +231,13 @@
     "sendHint": "Press Enter to send, Shift+Enter for new line",
     "sourcesSelected": "{{count}} source(s) selected",
     "startConversation": "Start a conversation",
+    "researchChatTitle": "Research Chat",
+    "sourcesWillBeUsed": "{{count}} source(s) will be used as context",
+    "askAboutIdeas": "Ask about research ideas…",
+    "hideSidebar": "Hide sidebar",
+    "showSidebar": "Show sidebar",
+    "paperCount": "{{count}} paper(s)",
+    "moreCount": "+{{count}} more",
     "error": {
       "loadFailed": "Failed to load chat session",
       "sendFailed": "Failed to send message",
@@ -252,5 +260,120 @@
       "gemini": "🤖 Gemini",
       "opencode": "🤖 OpenCode"
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try reloading the application.",
+    "errorDetails": "Error details",
+    "goHome": "Go Home",
+    "reloadApp": "Reload App"
+  },
+  "download": {
+    "title": "Download Paper",
+    "arxivLabel": "arXiv ID or URL",
+    "arxivPlaceholder": "e.g. 2401.12345 or https://arxiv.org/abs/2401.12345",
+    "downloading": "Downloading…",
+    "download": "Download"
+  },
+  "import": {
+    "title": "Import Papers",
+    "timeFilter": {
+      "today": "Today",
+      "week": "Last 7 days",
+      "month": "Last 30 days",
+      "all": "All time"
+    }
+  },
+  "tagManagement": {
+    "title": "Manage Tags",
+    "tagCount": "{{count}} tags",
+    "paperCount": "{{count}} papers",
+    "confirm": "Confirm"
+  },
+  "provider": {
+    "selectModel": "Select model…",
+    "apiKeyConfigured": "API key configured",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "••••••••••••• (leave blank to keep)",
+    "baseUrl": "Base URL",
+    "baseUrlOptional": "(optional, for proxy)",
+    "model": "Model"
+  },
+  "setupWizard": {
+    "welcome": "Welcome to ResearchClaw",
+    "description": "To enable AI-powered features like paper analysis, smart tagging, and research recommendations, please configure your AI provider.",
+    "configureProvider": "Configure AI Provider",
+    "chooseProvider": "Choose a Provider",
+    "chooseProviderDesc": "Select the AI provider you want to use.",
+    "enterApiKey": "Enter API Key",
+    "enterApiKeyDesc": "Enter your {{provider}} API key. It will be stored securely on your device.",
+    "customBaseUrl": "Custom Base URL (optional)",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "Leave empty to use the official endpoint",
+    "modelLabel": "Model",
+    "modelDefault": "Default: {{model}}",
+    "successMessage": "Provider configured successfully!",
+    "failureMessage": "Failed to save. Please check your API key.",
+    "testAndSave": "Test & Save",
+    "finish": "Finish"
+  },
+  "dashboardContent": {
+    "todaysPapers": "Today's Papers",
+    "deleteConfirm": "Delete \"{{title}}\"? This action cannot be undone.",
+    "deleteFailed": "Failed to delete paper"
+  },
+  "researchProfile": {
+    "noPapers": "No papers in this collection yet. Add papers to see the research profile.",
+    "paperCount": "{{count}} paper(s) in collection",
+    "publicationYears": "Publication Years",
+    "topAuthors": "Top Authors",
+    "domain": "Domain",
+    "method": "Method",
+    "topic": "Topic"
+  },
+  "papersByTag": {
+    "timeFilter": {
+      "all": "All time",
+      "today": "Today",
+      "week": "Week",
+      "month": "Month"
+    },
+    "categoryFilter": {
+      "all": "All",
+      "domain": "Domain",
+      "method": "Method",
+      "topic": "Topic"
+    },
+    "status": {
+      "extracting": "Extracting",
+      "metadata": "Metadata",
+      "chunking": "Chunking",
+      "indexing": "Indexing",
+      "needsRetry": "Needs retry"
+    },
+    "manageTags": "Manage Tags",
+    "noPapers": "No papers yet",
+    "noMatch": "No papers match the current filters"
+  },
+  "searchContent": {
+    "noMatch": "No matching papers found"
+  },
+  "sshServer": {
+    "authMethod": "Authentication Method",
+    "password": "Password",
+    "privateKey": "Private Key",
+    "passwordRequired": "Password is required for new servers",
+    "testConnection": "Test Connection",
+    "selectDirectory": "Select This Directory",
+    "deleteConfirm": "Delete \"{{server}}\"?",
+    "saveFailed": "Failed to save"
+  },
+  "projectsPage": {
+    "loadingAgent": "Loading agent…",
+    "remoteWorkingDir": "Remote Working Directory",
+    "noPapersInLibrary": "No papers in library",
+    "noMatchingPapers": "No matching papers",
+    "noSearchMatch": "No papers match your search",
+    "allPapersAdded": "All papers already added"
   }
 }

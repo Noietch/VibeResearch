@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { ipc, type PaperItem } from '../hooks/use-ipc';
 import { ImportModal } from './import-modal';
 import { LoadingSpinner } from './loading-spinner';
@@ -52,6 +53,7 @@ const cardVariants = {
 };
 
 export function DashboardContent() {
+  const { t } = useTranslation();
   const [todayPapers, setTodayPapers] = useState<PaperItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -69,18 +71,21 @@ export function DashboardContent() {
     }
   }, []);
 
-  const handleDelete = useCallback(async (paperId: string, title: string) => {
-    if (!confirm(`Delete "${title}"? This action cannot be undone.`)) return;
-    setDeleting(paperId);
-    try {
-      await ipc.deletePaper(paperId);
-      setTodayPapers((prev) => prev.filter((p) => p.id !== paperId));
-    } catch {
-      alert('Failed to delete paper');
-    } finally {
-      setDeleting(null);
-    }
-  }, []);
+  const handleDelete = useCallback(
+    async (paperId: string, title: string) => {
+      if (!confirm(t('dashboardContent.deleteConfirm', { title }))) return;
+      setDeleting(paperId);
+      try {
+        await ipc.deletePaper(paperId);
+        setTodayPapers((prev) => prev.filter((p) => p.id !== paperId));
+      } catch {
+        alert(t('dashboardContent.deleteFailed'));
+      } finally {
+        setDeleting(null);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     fetchTodayPapers();
@@ -92,7 +97,9 @@ export function DashboardContent() {
         <section>
           <div className="mb-6 flex items-center gap-2">
             <FileText size={20} className="text-blue-500" />
-            <h2 className="text-xl font-semibold text-notion-text">Today's Papers</h2>
+            <h2 className="text-xl font-semibold text-notion-text">
+              {t('dashboardContent.todaysPapers')}
+            </h2>
             {!loading && todayPapers.length > 0 && (
               <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
                 {todayPapers.length}

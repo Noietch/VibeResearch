@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { ipc } from '../hooks/use-ipc';
 import { Download, X, Loader2 } from 'lucide-react';
 
@@ -48,6 +49,7 @@ export function DownloadModal({
   onClose: () => void;
   onDownloaded: () => void;
 }) {
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -111,7 +113,7 @@ export function DownloadModal({
               >
                 <Download size={16} className="text-blue-600" />
               </motion.div>
-              <h2 className="text-base font-semibold text-notion-text">Download Paper</h2>
+              <h2 className="text-base font-semibold text-notion-text">{t('download.title')}</h2>
             </div>
             <motion.button
               onClick={onClose}
@@ -125,13 +127,13 @@ export function DownloadModal({
 
           <form onSubmit={handleSubmit}>
             <label className="mb-1.5 block text-xs font-medium text-notion-text-secondary">
-              arXiv ID or URL
+              {t('download.arxivLabel')}
             </label>
             <motion.input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="e.g. 2401.12345 or https://arxiv.org/abs/2401.12345"
+              placeholder={t('download.arxivPlaceholder')}
               className="w-full rounded-lg border border-notion-border bg-notion-sidebar px-3 py-2.5 text-sm text-notion-text placeholder-notion-text-tertiary outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -164,7 +166,7 @@ export function DownloadModal({
                 whileHover="hover"
                 whileTap="tap"
               >
-                Cancel
+                {t('common.cancel')}
               </motion.button>
               <motion.button
                 type="submit"
@@ -175,7 +177,7 @@ export function DownloadModal({
                 whileTap="tap"
               >
                 {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                {loading ? 'Downloading…' : 'Download'}
+                {loading ? t('download.downloading') : t('download.download')}
               </motion.button>
             </motion.div>
           </form>

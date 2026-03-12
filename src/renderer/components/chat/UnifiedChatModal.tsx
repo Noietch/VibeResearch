@@ -553,7 +553,7 @@ export function UnifiedChatModal({
                     ))}
                     {activePaperIds.length > 3 && (
                       <div className="inline-flex items-center rounded-lg bg-notion-sidebar px-2 py-1 text-xs text-notion-text-tertiary">
-                        +{activePaperIds.length - 3} more
+                        {t('chat.moreCount', { count: activePaperIds.length - 3 })}
                       </div>
                     )}
                   </div>
