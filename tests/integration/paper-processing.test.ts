@@ -52,7 +52,8 @@ describe('paper processing concurrency', () => {
         listChunkIdsForPaper = vi.fn().mockResolvedValue([]);
         listPendingSemanticPaperIds = vi.fn().mockResolvedValue([]);
       }
-      return { PapersRepository };
+      class PaperEmbeddingRepository {}
+      return { PapersRepository, PaperEmbeddingRepository };
     });
     vi.doMock('../../src/main/store/app-settings-store', () => ({
       getSemanticSearchSettings: vi.fn(() => ({
@@ -112,7 +113,8 @@ describe('paper processing concurrency', () => {
         listChunkIdsForPaper = vi.fn().mockResolvedValue([]);
         listPendingSemanticPaperIds = vi.fn().mockResolvedValue([]);
       }
-      return { PapersRepository };
+      class PaperEmbeddingRepository {}
+      return { PapersRepository, PaperEmbeddingRepository };
     });
     vi.doMock('../../src/main/store/app-settings-store', () => ({
       getSemanticSearchSettings: vi.fn(() => ({
@@ -168,7 +170,8 @@ describe('paper processing concurrency', () => {
         listChunkIdsForPaper = vi.fn().mockResolvedValue([]);
         listPendingSemanticPaperIds = vi.fn().mockResolvedValue([]);
       }
-      return { PapersRepository };
+      class PaperEmbeddingRepository {}
+      return { PapersRepository, PaperEmbeddingRepository };
     });
     vi.doMock('../../src/main/store/app-settings-store', () => ({
       getSemanticSearchSettings: vi.fn(() => ({
@@ -206,7 +209,8 @@ describe('paper processing concurrency', () => {
     }));
     vi.doMock('@db', () => {
       class PapersRepository {}
-      return { PapersRepository };
+      class PaperEmbeddingRepository {}
+      return { PapersRepository, PaperEmbeddingRepository };
     });
     vi.doMock('../../src/main/store/app-settings-store', () => ({
       getSemanticSearchSettings: vi.fn(() => ({ enabled: true })),

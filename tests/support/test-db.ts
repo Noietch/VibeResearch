@@ -43,6 +43,10 @@ export const resetTestDatabase = async () => {
   const prisma = getPrismaClient();
 
   // Delete in correct order (children before parents)
+  await prisma.chatMessage.deleteMany();
+  await prisma.chatSession.deleteMany();
+  await prisma.taskResult.deleteMany();
+  await prisma.experimentReport.deleteMany();
   await prisma.agentTodoMessage.deleteMany();
   await prisma.agentTodoRun.deleteMany();
   await prisma.agentTodo.deleteMany();
@@ -53,8 +57,6 @@ export const resetTestDatabase = async () => {
   await prisma.projectRepo.deleteMany();
   await prisma.project.deleteMany();
   await prisma.paperCodeLink.deleteMany();
-  await prisma.paperSearchUnit.deleteMany();
-  await prisma.paperChunk.deleteMany();
   await prisma.readingNote.deleteMany();
   await prisma.paperTag.deleteMany();
   await prisma.sourceEvent.deleteMany();

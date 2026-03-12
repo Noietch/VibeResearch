@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-12 (37)
+
+### feat: ACP chat integration — Phase 1 database schema extension
+
+- **Goal**: Extend database schema to support unified ACP-based chat system that replaces both IdeaChatModal (lightweight chat) and agent-todos (full ACP protocol).
+- **Changes**:
+  - Extended `ChatSession` model with ACP-specific fields (all nullable for backward compatibility):
+    - `backend` (String?) — Backend type: 'lightweight' | 'claude-code' | 'codex' | 'gemini' | 'opencode' | null
+    - `acpSessionId` (String?) — ACP protocol session ID for session resume
+    - `sessionMode` (String?) — Session permission mode: 'default' | 'bypassPermissions'
+    - `currentModelId` (String?) — Active model identifier
+    - `cwd` (String?) — Working directory for agent execution
+  - Extended `ChatMessage` model with ACP metadata field:
+    - `metadataJson` (String, default '{}') — Stores ACP-specific message data (tool calls, permissions, thoughts)
+  - Added index on `ChatSession.backend` for efficient backend filtering
+- **Migration**: Manual SQLite ALTER TABLE commands (Prisma db push failed due to connection issues)
+- **Backward compatibility**: All new fields are nullable. Existing sessions (backend=null) will work as "lightweight" mode.
+- **Next phases**: Phase 2 will refactor IdeaChatModal to use existing ACP components (MessageStream, useAgentStream).
+
 ## 2026-03-12 (36)
 
 ### fix: macOS traffic lights (red/green/yellow buttons) always visible

@@ -33,8 +33,7 @@ model Paper {
 
   events        SourceEvent[]
   tags          PaperTag[]
-  chunks        PaperChunk[]
-  searchUnits   PaperSearchUnit[]
+  embedding     PaperEmbedding?
   readingNotes  ReadingNote[]
   links         PaperCodeLink[]
   projects      ProjectPaper[]
@@ -50,38 +49,17 @@ model Paper {
   @@index([lastReadAt])
 }
 
-model PaperChunk {
-  id             String   @id @default(cuid())
-  paperId        String
-  chunkIndex     Int
-  content        String
-  contentPreview String
-  embeddingJson  String
-  createdAt      DateTime @default(now())
+model PaperEmbedding {
+  id                String   @id @default(cuid())
+  paperId           String   @unique
+  titleEmbedding    String?
+  abstractEmbedding String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
 
-  @@unique([paperId, chunkIndex])
   @@index([paperId])
-}
-
-model PaperSearchUnit {
-  id               String         @id @default(cuid())
-  paperId          String
-  unitType         SearchUnitType
-  sourceChunkIndex Int?
-  unitIndex        Int
-  content          String
-  contentPreview   String
-  normalizedText   String
-  embeddingJson    String
-  createdAt        DateTime       @default(now())
-
-  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
-
-  @@unique([paperId, unitType, sourceChunkIndex, unitIndex])
-  @@index([paperId])
-  @@index([unitType])
 }
 
 model SourceEvent {
@@ -240,12 +218,6 @@ enum ReadingNoteType {
   code
 }
 
-enum SearchUnitType {
-  title
-  abstract
-  sentence
-}
-
 model AgentConfig {
   id            String   @id @default(uuid())
   name          String
@@ -342,80 +314,6 @@ model AgentTodoMessage {
   @@index([msgId])
 }
 
-model RecommendationCandidate {
-  id              String    @id @default(cuid())
-  source          String
-  externalId      String
-  arxivId         String?
-  doi             String?
-  title           String
-  titleNormalized String
-  authorsJson     String    @default("[]")
-  abstract        String?
-  sourceUrl       String?
-  pdfUrl          String?
-  publishedAt     DateTime?
-  venue           String?
-  citationCount   Int?
-  metadataJson    String    @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  results  RecommendationResult[]
-  feedback RecommendationFeedback[]
-
-  @@unique([source, externalId])
-  @@index([arxivId])
-  @@index([doi])
-  @@index([titleNormalized])
-}
-
-model RecommendationResult {
-  id                String                  @id @default(cuid())
-  candidateId       String                  @unique
-  candidate         RecommendationCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  score             Float
-  relevanceScore    Float
-  freshnessScore    Float
-  noveltyScore      Float
-  qualityScore      Float
-  semanticScore     Float?
-  explorationNote   String?
-  reason            String
-  triggerPaperTitle String?
-  triggerPaperId    String?
-  status            String                  @default("new")
-  generatedAt       DateTime                @default(now())
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
-
-  @@index([status])
-  @@index([generatedAt])
-}
-
-model RecommendationFeedback {
-  id          String                  @id @default(cuid())
-  candidateId String
-  candidate   RecommendationCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  action      String
-  createdAt   DateTime                @default(now())
-
-  @@index([candidateId])
-  @@index([action])
-  @@index([createdAt])
-}
-
-model ComparisonNote {
-  id                  String   @id @default(cuid())
-  paperIdsJson        String
-  titlesJson          String   @default("[]")
-  contentMd           String
-  translatedContentMd String?
-  chatMessagesJson    String   @default("[]")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-}
-
 model PaperCitation {
   id            String   @id @default(cuid())
   sourcePaperId String
@@ -490,19 +388,34 @@ model ChatSession {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
+  // ACP-specific fields (nullable for backward compat)
+  backend        String?  // 'lightweight' | 'claude-code' | 'codex' | 'gemini' | 'opencode' | null
+  acpSessionId   String?  // ACP protocol session ID for resume
+  sessionMode    String?  // 'default' | 'bypassPermissions'
+  currentModelId String?  // Active model
+  cwd            String?  // Working directory
+
   messages ChatMessage[]
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([backend])
 }
 
 model ChatMessage {
   id        String      @id @default(cuid())
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  role      String
+  role      String      // 'user' | 'assistant' | 'thought' | 'tool_call' | 'permission'
   content   String
   createdAt DateTime    @default(now())
+
+  // ACP metadata (store as JSON)
+  metadataJson String @default("{}")
+  // Examples:
+  // - thought: { type: 'thought' }
+  // - tool_call: { toolCallId, status, title, kind, rawInput, content }
+  // - permission: { requestId, options, toolCall }
 
   @@index([sessionId])
   @@index([createdAt])

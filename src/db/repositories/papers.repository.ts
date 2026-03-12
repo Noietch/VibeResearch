@@ -37,16 +37,6 @@ export interface SemanticIndexDebugSummary {
   }>;
 }
 
-export interface SearchUnitRow {
-  unitType: 'title' | 'abstract' | 'sentence';
-  sourceChunkIndex: number | null;
-  unitIndex: number;
-  content: string;
-  contentPreview: string;
-  normalizedText: string;
-  embedding: number[];
-}
-
 function mapPaper<
   T extends { authorsJson: string; tags: Array<{ tag: { name: string; category: string } }> },
 >(paper: T) {
@@ -182,6 +172,10 @@ export class PapersRepository {
     }
 
     return mapPaper(paper);
+  }
+
+  async count(): Promise<number> {
+    return this.prisma.paper.count();
   }
 
   async findByShortId(shortId: string) {
@@ -349,9 +343,6 @@ export class PapersRepository {
       await tx.paperTag.deleteMany({
         where: { paperId: { in: ids } },
       });
-      await tx.paperChunk.deleteMany({
-        where: { paperId: { in: ids } },
-      });
       await tx.sourceEvent.deleteMany({
         where: { paperId: { in: ids } },
       });
@@ -399,177 +390,6 @@ export class PapersRepository {
     });
   }
 
-  async replaceChunks(
-    paperId: string,
-    chunks: Array<{
-      chunkIndex: number;
-      content: string;
-      contentPreview: string;
-      embedding: number[];
-    }>,
-  ) {
-    await this.prisma.$transaction([
-      this.prisma.paperChunk.deleteMany({ where: { paperId } }),
-      ...chunks.map((chunk) =>
-        this.prisma.paperChunk.create({
-          data: {
-            id: randomUUID(),
-            paperId,
-            chunkIndex: chunk.chunkIndex,
-            content: chunk.content,
-            contentPreview: chunk.contentPreview,
-            embeddingJson: JSON.stringify(chunk.embedding),
-          },
-        }),
-      ),
-    ]);
-  }
-
-  async replaceSearchUnits(paperId: string, units: SearchUnitRow[]) {
-    await this.prisma.$transaction([
-      this.prisma.paperSearchUnit.deleteMany({ where: { paperId } }),
-      ...units.map((unit) =>
-        this.prisma.paperSearchUnit.create({
-          data: {
-            id: randomUUID(),
-            paperId,
-            unitType: unit.unitType,
-            sourceChunkIndex: unit.sourceChunkIndex,
-            unitIndex: unit.unitIndex,
-            content: unit.content,
-            contentPreview: unit.contentPreview,
-            normalizedText: unit.normalizedText,
-            embeddingJson: JSON.stringify(unit.embedding),
-          },
-        }),
-      ),
-    ]);
-  }
-
-  async listChunksForSemanticSearch() {
-    return this.prisma.paperChunk.findMany({
-      include: {
-        paper: {
-          include: {
-            tags: { include: { tag: true } },
-          },
-        },
-      },
-      orderBy: [{ paperId: 'asc' }, { chunkIndex: 'asc' }],
-    });
-  }
-
-  async countChunksForSemanticSearch(): Promise<number> {
-    return this.prisma.paperChunk.count();
-  }
-
-  async findChunksByIds(ids: string[]) {
-    if (ids.length === 0) return [];
-    return this.prisma.paperChunk.findMany({
-      where: { id: { in: ids } },
-      include: {
-        paper: {
-          include: {
-            tags: { include: { tag: true } },
-          },
-        },
-      },
-    });
-  }
-
-  async listSearchUnitsForSemanticSearch() {
-    return this.prisma.paperSearchUnit.findMany({
-      include: {
-        paper: {
-          include: {
-            tags: { include: { tag: true } },
-          },
-        },
-      },
-      orderBy: [
-        { paperId: 'asc' },
-        { unitType: 'asc' },
-        { sourceChunkIndex: 'asc' },
-        { unitIndex: 'asc' },
-      ],
-    });
-  }
-
-  async countSearchUnitsForSemanticSearch(): Promise<number> {
-    return this.prisma.paperSearchUnit.count();
-  }
-
-  async findSearchUnitsByIds(ids: string[]) {
-    if (ids.length === 0) return [];
-    return this.prisma.paperSearchUnit.findMany({
-      where: { id: { in: ids } },
-      include: {
-        paper: {
-          include: {
-            tags: { include: { tag: true } },
-          },
-        },
-      },
-    });
-  }
-
-  async listSearchUnitIdsForPaper(paperId: string): Promise<string[]> {
-    const rows = await this.prisma.paperSearchUnit.findMany({
-      where: { paperId },
-      select: { id: true },
-      orderBy: [{ unitType: 'asc' }, { sourceChunkIndex: 'asc' }, { unitIndex: 'asc' }],
-    });
-    return rows.map((row) => row.id);
-  }
-
-  async listSearchUnitsForPaper(paperId: string) {
-    return this.prisma.paperSearchUnit.findMany({
-      where: { paperId },
-      orderBy: [{ unitType: 'asc' }, { sourceChunkIndex: 'asc' }, { unitIndex: 'asc' }],
-    });
-  }
-
-  async listSearchUnitIdsForPapers(paperIds: string[]): Promise<string[]> {
-    if (paperIds.length === 0) return [];
-    const rows = await this.prisma.paperSearchUnit.findMany({
-      where: { paperId: { in: paperIds } },
-      select: { id: true },
-    });
-    return rows.map((row) => row.id);
-  }
-
-  async getSearchSourcePaper(paperId: string) {
-    return this.prisma.paper.findUnique({
-      where: { id: paperId },
-      include: {
-        chunks: { orderBy: { chunkIndex: 'asc' } },
-        tags: { include: { tag: true } },
-      },
-    });
-  }
-
-  async listChunkIdsForPaper(paperId: string): Promise<string[]> {
-    const rows = await this.prisma.paperChunk.findMany({
-      where: { paperId },
-      select: { id: true },
-      orderBy: { chunkIndex: 'asc' },
-    });
-    return rows.map((r) => r.id);
-  }
-
-  async listChunkIdsForPapers(paperIds: string[]): Promise<string[]> {
-    if (paperIds.length === 0) return [];
-    const rows = await this.prisma.paperChunk.findMany({
-      where: { paperId: { in: paperIds } },
-      select: { id: true },
-    });
-    return rows.map((r) => r.id);
-  }
-
-  async getChunkCountForPaper(paperId: string): Promise<number> {
-    return this.prisma.paperChunk.count({ where: { paperId } });
-  }
-
   async listIndexedPaperIds(): Promise<string[]> {
     const rows = await this.prisma.paper.findMany({
       where: { indexedAt: { not: null } },
@@ -600,7 +420,7 @@ export class PapersRepository {
   }
 
   async getSemanticIndexDebugSummary(): Promise<SemanticIndexDebugSummary> {
-    const [totalPapers, indexedPapers, pendingPapers, failedPapers, totalChunks, recentFailures] =
+    const [totalPapers, indexedPapers, pendingPapers, failedPapers, recentFailures] =
       await Promise.all([
         this.prisma.paper.count(),
         this.prisma.paper.count({ where: { indexedAt: { not: null } } }),
@@ -611,7 +431,6 @@ export class PapersRepository {
           },
         }),
         this.prisma.paper.count({ where: { processingStatus: 'failed' } }),
-        this.prisma.paperChunk.count(),
         this.prisma.paper.findMany({
           where: { processingStatus: 'failed' },
           orderBy: { updatedAt: 'desc' },
@@ -632,7 +451,7 @@ export class PapersRepository {
       indexedPapers,
       pendingPapers,
       failedPapers,
-      totalChunks,
+      totalChunks: 0, // paperChunk model was removed, return 0
       recentFailures,
     };
   }
@@ -862,5 +681,51 @@ export class PapersRepository {
       where: { id: paperId },
       data: { citationsExtractedAt: new Date() },
     });
+  }
+
+  /**
+   * Find papers that don't have embeddings yet
+   */
+  async findPapersWithoutEmbeddings(limit?: number) {
+    const papers = await this.prisma.paper.findMany({
+      where: {
+        embedding: null,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      include: {
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+    });
+
+    return papers.map(mapPaper);
+  }
+
+  /**
+   * Get paper with its embedding
+   */
+  async getPaperWithEmbedding(paperId: string) {
+    const paper = await this.prisma.paper.findUnique({
+      where: { id: paperId },
+      include: {
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+        embedding: true,
+      },
+    });
+
+    if (!paper) return null;
+
+    return {
+      ...mapPaper(paper),
+      embedding: paper.embedding,
+    };
   }
 }
