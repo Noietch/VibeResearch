@@ -1,5 +1,60 @@
 # Changelog
 
+## 2026-03-12 (60)
+
+### fix: i18n - Default language changed to Chinese, all hardcoded text now uses translations
+
+**Summary**: Changed default application language to Chinese and removed all hardcoded Chinese text from UI components.
+
+**Changes**:
+
+1. **Default language changed from English to Chinese**:
+   - `src/renderer/main.tsx`: Changed `initialLang` logic to default to `'zh'` instead of `'en'`
+   - `src/main/store/app-settings-store.ts`: Changed `getLanguage()` default from `'en'` to `'zh'`
+
+2. **Fixed hardcoded model descriptions in ModelCombobox**:
+   - Added translation keys for all model descriptions (`modelCombobox.descriptions.*`)
+   - Created `DESC_KEYS` mapping to convert Chinese descriptions to translation keys
+   - Modified component to use `t()` function with dynamic translation based on current language
+   - Supports both Chinese and English for all 136 model descriptions
+
+3. **Fixed hardcoded tool call summaries in ToolCallGroup**:
+   - Added translation keys for tool operations (`toolCall.*`)
+   - Changed summary builder to use `t()` function instead of hardcoded strings
+   - Supports: "读取文件", "编辑文件", "执行命令", "搜索", "调用工具", "项操作", "步"
+
+**Translation keys added**:
+
+```json
+"modelCombobox.descriptions": {
+  "flagship", "flagshipModel", "chatCurrent", "multiTurn",
+  "configurableReasoning", "codingOptimized", "searchModel",
+  "deepThinking", "fastEconomical", "reasoningModel", etc.
+}
+
+"toolCall": {
+  "readFiles", "editFiles", "executeCommands",
+  "search", "callTools", "operations", "steps"
+}
+```
+
+**Impact**:
+
+- ✅ Application now defaults to Chinese on first launch (unless OS locale is English)
+- ✅ Language switch works correctly (Chinese ↔ English)
+- ✅ All UI text properly translated (no more mixed languages)
+- ✅ Model descriptions display in user's selected language
+- ✅ Agent tool call summaries display in user's selected language
+
+**Files changed**:
+
+- `src/renderer/main.tsx`
+- `src/main/store/app-settings-store.ts`
+- `src/renderer/components/model-combobox.tsx`
+- `src/renderer/components/agent-todo/ToolCallGroup.tsx`
+- `src/renderer/locales/zh.json`
+- `src/renderer/locales/en.json`
+
 ## 2026-03-12 (59)
 
 ### fix: Chat history now correctly filters by paper (no cross-contamination)

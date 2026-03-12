@@ -8,8 +8,46 @@ export interface ModelOption {
   description?: string;
 }
 
+// Description key mapping for i18n
+const DESC_KEYS: Record<string, string> = {
+  最新旗舰模型: 'flagship',
+  旗舰模型: 'flagshipModel',
+  ChatGPT当前版本: 'chatCurrent',
+  多轮交互模型: 'multiTurn',
+  可配置推理能力: 'configurableReasoning',
+  编码优化: 'codingOptimized',
+  搜索模型: 'searchModel',
+  深度思考: 'deepThinking',
+  快速经济版: 'fastEconomical',
+  推理模型: 'reasoningModel',
+  复杂推理: 'complexReasoning',
+  '1M输入32k输出': 'largeContext',
+  经济版: 'economical',
+  多模态: 'multimodal',
+  经济版多模态: 'economicalMultimodal',
+  '128K输入': 'largeInput',
+  经典模型: 'classic',
+  经济快速: 'fastEconomical',
+  开源模型: 'opensource',
+  最强能力: 'strongest',
+  思考模式: 'thinkingMode',
+  均衡性价比: 'balanced',
+  快速版: 'fast',
+  无思考模式: 'noThinking',
+  轻量版: 'lightweight',
+  生图模型: 'imageGen',
+  聊天模型: 'chatModel',
+  实验版: 'experimental',
+  R1推理: 'r1Reasoning',
+  基础模型: 'base',
+  大模型: 'largeModel',
+  最大模型: 'maxModel',
+  编码模型: 'codingModel',
+  思考加速: 'thinkingAccel',
+};
+
 // Comprehensive model list organized by provider
-const MODEL_OPTIONS: ModelOption[] = [
+const MODEL_OPTIONS_RAW: ModelOption[] = [
   // OpenAI GPT-5 series
   { id: 'gpt-5.4', provider: 'openai', description: '最新旗舰模型' },
   { id: 'gpt-5.4-2026-03-05', provider: 'openai', description: '最新旗舰模型' },
@@ -166,6 +204,20 @@ export function ModelCombobox({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Translate model descriptions
+  const MODEL_OPTIONS = useMemo(() => {
+    return MODEL_OPTIONS_RAW.map((model) => {
+      if (!model.description) return model;
+      const descKey = DESC_KEYS[model.description];
+      // If description is a fixed string (e.g., "Opus 4.5"), keep it as is
+      if (!descKey) return model;
+      return {
+        ...model,
+        description: t(`modelCombobox.descriptions.${descKey}`),
+      };
+    });
+  }, [t]);
+
   // Filter models based on search
   const filteredModels = useMemo(() => {
     if (!search.trim()) return MODEL_OPTIONS;
@@ -176,7 +228,7 @@ export function ModelCombobox({
         m.provider.toLowerCase().includes(q) ||
         m.description?.toLowerCase().includes(q),
     );
-  }, [search]);
+  }, [search, MODEL_OPTIONS]);
 
   // Group filtered models by provider
   const groupedModels = useMemo(() => {

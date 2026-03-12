@@ -211,7 +211,42 @@
   },
   "modelCombobox": {
     "placeholder": "选择或输入模型ID",
-    "noMatch": "未找到匹配模型，按回车使用自定义ID"
+    "noMatch": "未找到匹配模型，按回车使用自定义ID",
+    "descriptions": {
+      "flagship": "最新旗舰模型",
+      "flagshipModel": "旗舰模型",
+      "chatCurrent": "ChatGPT当前版本",
+      "multiTurn": "多轮交互模型",
+      "configurableReasoning": "可配置推理能力",
+      "codingOptimized": "编码优化",
+      "searchModel": "搜索模型",
+      "deepThinking": "深度思考",
+      "fastEconomical": "快速经济版",
+      "reasoningModel": "推理模型",
+      "complexReasoning": "复杂推理",
+      "largeContext": "1M输入32k输出",
+      "economical": "经济版",
+      "multimodal": "多模态",
+      "economicalMultimodal": "经济版多模态",
+      "largeInput": "128K输入",
+      "classic": "经典模型",
+      "opensource": "开源模型",
+      "strongest": "最强能力",
+      "thinkingMode": "思考模式",
+      "balanced": "均衡性价比",
+      "fast": "快速版",
+      "noThinking": "无思考模式",
+      "lightweight": "轻量版",
+      "imageGen": "生图模型",
+      "chatModel": "聊天模型",
+      "experimental": "实验版",
+      "r1Reasoning": "R1推理",
+      "base": "基础模型",
+      "largeModel": "大模型",
+      "maxModel": "最大模型",
+      "codingModel": "编码模型",
+      "thinkingAccel": "思考加速"
+    }
   },
   "agentTodos": {
     "title": "任务",
@@ -378,5 +413,14 @@
     "noMatchingPapers": "没有匹配的论文",
     "noSearchMatch": "没有符合搜索条件的论文",
     "allPapersAdded": "所有论文都已添加"
+  },
+  "toolCall": {
+    "readFiles": "读取 {{count}} 个文件",
+    "editFiles": "编辑 {{count}} 个文件",
+    "executeCommands": "执行 {{count}} 条命令",
+    "search": "搜索 {{count}} 次",
+    "callTools": "调用 {{count}} 个工具",
+    "operations": "{{count}} 项操作",
+    "steps": "{{count}} 步"
   }
 }

@@ -19,9 +19,9 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 // Initialize i18next synchronously to avoid first-frame flicker.
-// Language priority: localStorage (fast, persisted from last session) → 'en'
+// Language priority: localStorage (fast, persisted from last session) → 'zh' (default Chinese)
 const savedLang = localStorage.getItem('researchclaw-language');
-const initialLang: 'en' | 'zh' = savedLang === 'zh' ? 'zh' : 'en';
+const initialLang: 'en' | 'zh' = savedLang === 'en' ? 'en' : 'zh';
 
 i18n.use(initReactI18next).init({
   resources: {

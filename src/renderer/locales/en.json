@@ -211,7 +211,42 @@
   },
   "modelCombobox": {
     "placeholder": "Select or enter model ID",
-    "noMatch": "No matching model found, press Enter to use custom ID"
+    "noMatch": "No matching model found, press Enter to use custom ID",
+    "descriptions": {
+      "flagship": "Latest flagship",
+      "flagshipModel": "Flagship",
+      "chatCurrent": "ChatGPT current",
+      "multiTurn": "Multi-turn",
+      "configurableReasoning": "Configurable reasoning",
+      "codingOptimized": "Coding optimized",
+      "searchModel": "Search model",
+      "deepThinking": "Deep thinking",
+      "fastEconomical": "Fast & economical",
+      "reasoningModel": "Reasoning",
+      "complexReasoning": "Complex reasoning",
+      "largeContext": "1M in 32k out",
+      "economical": "Economical",
+      "multimodal": "Multimodal",
+      "economicalMultimodal": "Economical multimodal",
+      "largeInput": "128K input",
+      "classic": "Classic",
+      "opensource": "Open source",
+      "strongest": "Strongest",
+      "thinkingMode": "Thinking mode",
+      "balanced": "Balanced",
+      "fast": "Fast",
+      "noThinking": "No thinking",
+      "lightweight": "Lightweight",
+      "imageGen": "Image generation",
+      "chatModel": "Chat",
+      "experimental": "Experimental",
+      "r1Reasoning": "R1 reasoning",
+      "base": "Base",
+      "largeModel": "Large",
+      "maxModel": "Max",
+      "codingModel": "Coding",
+      "thinkingAccel": "Thinking turbo"
+    }
   },
   "agentTodos": {
     "title": "Tasks",
@@ -378,5 +413,14 @@
     "noMatchingPapers": "No matching papers",
     "noSearchMatch": "No papers match your search",
     "allPapersAdded": "All papers already added"
+  },
+  "toolCall": {
+    "readFiles": "Read {{count}} file(s)",
+    "editFiles": "Edit {{count}} file(s)",
+    "executeCommands": "Execute {{count}} command(s)",
+    "search": "Search {{count}} time(s)",
+    "callTools": "Call {{count}} tool(s)",
+    "operations": "{{count}} operation(s)",
+    "steps": "{{count}} steps"
   }
 }

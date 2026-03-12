@@ -309,7 +309,7 @@ export function setDevMode(enabled: boolean): void {
 }
 
 export function getLanguage(): 'en' | 'zh' {
-  return load().language ?? 'en';
+  return load().language ?? 'zh';
 }
 
 export function setLanguage(lang: 'en' | 'zh'): void {
