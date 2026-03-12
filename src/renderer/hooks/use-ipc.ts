@@ -968,6 +968,7 @@ export const ipc = {
     prompt: string;
     backend?: string | null;
     cwd?: string;
+    language?: 'en' | 'zh';
   }) => invoke<{ jobId: string; started: boolean }>('acp-chat:send', input),
   killAcpChatJob: (jobId: string) => invoke<{ killed: boolean }>('acp-chat:kill', jobId),
   respondToAcpChatPermission: (jobId: string, requestId: number, optionId: string) =>

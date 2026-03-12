@@ -51,7 +51,7 @@ export function UnifiedChatModal({
   paperIds,
   repoIds,
 }: UnifiedChatModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [input, setInput] = useState('');
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -256,6 +256,7 @@ export function UnifiedChatModal({
         prompt: text,
         backend,
         cwd: projectWorkdir ?? undefined,
+        language: i18n.language === 'zh' ? 'zh' : 'en',
       });
       jobIdRef.current = result.jobId;
     } catch (err) {

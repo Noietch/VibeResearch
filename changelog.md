@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-03-12 (49)
+
+### feat: Add i18n support for chat system prompts
+
+**Summary**: Chat system prompts now dynamically switch between English and Chinese based on the user's language setting, providing a more consistent localized experience.
+
+**Changes:**
+
+- `src/shared/prompts/chat.prompt.ts`: New file with multilingual chat prompts
+  - `getChatSystemPrompt(language)` - System prompt for research ideation assistant
+  - `getChatContextIntro(language)` - Context introduction message
+  - `getChatContextResponse(language)` - Assistant's response to context
+- `src/main/services/acp-chat.service.ts`: Updated to use multilingual prompts
+  - Added `language` parameter to `sendMessage()` and `runLightweightChat()`
+  - System prompt now generated based on user's language setting
+- `src/main/services/chat.service.ts`: Updated for consistency
+  - Added `language` parameter to `chat()` method
+- `src/main/ipc/acp-chat.ipc.ts`: Added `language` field to IPC interface
+- `src/renderer/hooks/use-ipc.ts`: Added `language` parameter to `sendAcpChatMessage()`
+- `src/renderer/components/chat/UnifiedChatModal.tsx`: Pass current language to backend
+  - Uses `i18n.language` to determine user's language setting
+  - Sends language parameter with each chat message
+
+**Impact**: Chat responses and system prompts now match the user's selected language (English/Chinese), improving UX consistency with the rest of the UI.
+
+---
+
 ## 2026-03-12 (48)
 
 ### fix: Fix semantic search dimension mismatch and missing repository method

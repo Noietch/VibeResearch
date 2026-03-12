@@ -5,6 +5,7 @@ import {
   streamText,
 } from './ai-provider.service';
 import { getActiveModel, getModelWithKey } from '../store/model-config-store';
+import { getChatSystemPrompt, getChatContextIntro, getChatContextResponse } from '@shared';
 
 export class ChatService {
   private repo = new ChatRepository();
@@ -67,6 +68,7 @@ export class ChatService {
       paperIds: string[];
       repoIds?: string[];
       messages: { role: 'user' | 'assistant'; content: string }[];
+      language?: 'en' | 'zh';
     },
     onChunk: (chunk: string) => void,
     signal?: AbortSignal,
@@ -95,13 +97,8 @@ export class ChatService {
     if (!configWithKey) throw new Error('Model config not found');
     const model = getLanguageModelFromConfig(configWithKey);
 
-    const systemPrompt = [
-      'You are a research ideation assistant helping researchers explore and develop novel research ideas.',
-      'You engage in thoughtful, conversational dialogue to help the user brainstorm, refine, and deepen research directions.',
-      'Draw on the provided papers context to ground your suggestions in concrete evidence.',
-      'Ask clarifying questions, suggest connections between ideas, and help the user think through feasibility and novelty.',
-      'Be concise but substantive. Respond in the same language as the user.',
-    ].join(' ');
+    const language = input.language ?? 'en';
+    const systemPrompt = getChatSystemPrompt(language);
 
     const contextParts: string[] = [];
     if (paperContext) contextParts.push('Papers:\n' + paperContext);
@@ -113,12 +110,11 @@ export class ChatService {
       formattedMessages.push(
         {
           role: 'user',
-          content: `${contextStr}\n\nI will discuss research ideas with you. Please be ready.`,
+          content: `${contextStr}\n\n${getChatContextIntro(language)}`,
         },
         {
           role: 'assistant',
-          content:
-            "I understand the project context and the provided materials. I'm ready to help you explore and develop research ideas. What would you like to discuss?",
+          content: getChatContextResponse(language),
         },
       );
     }

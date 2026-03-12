@@ -117,6 +117,7 @@ export function setupAcpChatIpc() {
         prompt: string;
         backend?: string | null;
         cwd?: string;
+        language?: 'en' | 'zh';
       },
     ): Promise<IpcResult<{ jobId: string; started: boolean }>> => {
       try {
