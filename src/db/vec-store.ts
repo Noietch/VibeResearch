@@ -3,6 +3,26 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { app } from 'electron';
 import { getStorageDir } from '../main/store/storage-path';
 
+/**
+ * Get storage directory for VecStore
+ * In test environment, uses TEST_STORAGE_DIR from env
+ * In production, uses getStorageDir()
+ */
+function getVecStoreDir(): string {
+  // Test environment override - MUST use test directory
+  if (process.env.NODE_ENV === 'test') {
+    if (!process.env.RESEARCH_CLAW_STORAGE_DIR) {
+      throw new Error(
+        'RESEARCH_CLAW_STORAGE_DIR must be set in test environment. ' +
+          'Ensure electron-mock.ts is loaded in vitest.config.ts setupFiles.',
+      );
+    }
+    return process.env.RESEARCH_CLAW_STORAGE_DIR;
+  }
+  // Production: use configured storage directory
+  return getStorageDir ? getStorageDir() : join(app.getPath('userData'), 'storage');
+}
+
 export interface VecEntry {
   chunkId: string;
   embedding: Float32Array;
@@ -38,8 +58,7 @@ export class VecStore {
 
   constructor(dataDir?: string) {
     // Use provided directory or default to storage directory
-    this.dataDir =
-      dataDir || (getStorageDir ? getStorageDir() : join(app.getPath('userData'), 'storage'));
+    this.dataDir = dataDir || getVecStoreDir();
     this.ensureDir();
   }
 

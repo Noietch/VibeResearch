@@ -1,13 +1,31 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
 import { VecStore, resetVecStore } from '../../src/db/vec-store';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 describe('VecStore', () => {
   let store: VecStore;
+  let tempDir: string;
+
+  beforeAll(() => {
+    // Ensure we're in test mode
+    process.env.NODE_ENV = 'test';
+  });
 
   beforeEach(() => {
     resetVecStore();
-    store = new VecStore();
+    // Create a temporary directory for each test
+    tempDir = mkdtempSync(join(tmpdir(), 'vec-store-test-'));
+    store = new VecStore(tempDir);
     store.initialize(3, 'test-model');
+  });
+
+  afterEach(() => {
+    // Clean up temporary directory
+    if (tempDir) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('should initialize with dimension and model', () => {
@@ -67,9 +85,12 @@ describe('VecStore', () => {
   });
 
   it('should return empty results when not initialized', () => {
-    const newStore = new VecStore();
+    const newTempDir = mkdtempSync(join(tmpdir(), 'vec-store-test-'));
+    const newStore = new VecStore(newTempDir);
     // Not initialized
     expect(newStore.isInitialized()).toBe(false);
     expect(newStore.searchKNN(new Float32Array([1, 0, 0]), 5)).toEqual([]);
+    // Clean up
+    rmSync(newTempDir, { recursive: true, force: true });
   });
 });

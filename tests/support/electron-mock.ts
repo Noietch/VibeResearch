@@ -5,6 +5,11 @@
  * Services that use BrowserWindow, ipcMain, etc. will use these mocks.
  */
 
+import { initTestEnv, TEST_STORAGE_DIR } from './test-env';
+
+// Initialize test environment BEFORE any other imports
+initTestEnv();
+
 // Mock BrowserWindow
 const mockWebContents = {
   send: vi.fn(),
@@ -30,7 +35,7 @@ vi.mock('electron', () => ({
   },
   app: {
     getPath: vi.fn((name: string) => {
-      if (name === 'userData') return '/tmp/researchclaw-test';
+      if (name === 'userData') return TEST_STORAGE_DIR;
       return '/tmp';
     }),
     getVersion: vi.fn(() => '0.0.1-test'),

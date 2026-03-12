@@ -1,18 +1,21 @@
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { rmSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getPrismaClient } from '@db';
+import { TEST_DB_PATH, TEST_STORAGE_DIR } from './test-env';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
 const prismaBin = path.join(repoRoot, 'node_modules', '.bin', 'prisma');
-const testDbPath = path.join(repoRoot, 'tests', 'tmp', 'integration.sqlite');
+const testDbPath = TEST_DB_PATH;
 
 let initialized = false;
 
 const ensureDatabaseUrl = () => {
   process.env.DATABASE_URL = `file:${testDbPath}`;
+  // Ensure test storage directory exists
+  mkdirSync(TEST_STORAGE_DIR, { recursive: true });
 };
 
 export const ensureTestDatabaseSchema = () => {
@@ -21,10 +24,15 @@ export const ensureTestDatabaseSchema = () => {
   }
 
   ensureDatabaseUrl();
-  rmSync(testDbPath, { force: true });
 
+  // Clean up test database files
+  rmSync(testDbPath, { force: true });
   rmSync(`${testDbPath}-wal`, { force: true });
   rmSync(`${testDbPath}-journal`, { force: true });
+
+  // Clean up test storage directory (vec-store, settings, etc.)
+  rmSync(TEST_STORAGE_DIR, { recursive: true, force: true });
+  mkdirSync(TEST_STORAGE_DIR, { recursive: true });
 
   execFileSync(prismaBin, ['db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate'], {
     cwd: repoRoot,
