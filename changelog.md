@@ -1106,6 +1106,18 @@ When loading a completed chat session, the code would set `agentRunId` to point 
 - **Added DB index** on `Paper.lastReadAt` in `prisma/schema.prisma` for sort/filter query performance
 - All tests pass (457 passed, 48 skipped)
 
+## 2026-03-12 (35)
+
+### fix: improve error feedback in paper chat (ReaderPage)
+
+- **Problem**: Sending messages in paper chat had no visible feedback when errors occurred (no agent selected, agent running, etc.)
+- **Solution**: Added `useToast` hook to `ReaderPage` with specific error messages for each failure case:
+  - No agent selected: "Please select an agent first (Settings > Agents)"
+  - Agent still running: "Agent is still running, please wait"
+  - Paper not loaded: "Paper data not loaded"
+  - General send failure: Shows the actual error message
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+
 ## 2026-03-12 (34)
 
 ### fix: agent detection and add button issues in AgentSettings
