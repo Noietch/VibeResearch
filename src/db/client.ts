@@ -6,18 +6,26 @@ type PrismaClientType = InstanceType<typeof PrismaClient>;
 import { getDbPath } from '../main/store/storage-path';
 
 let prisma: PrismaClientType | undefined;
+let currentDatabaseUrl: string | undefined;
 
 export const getPrismaClient = (): PrismaClientType => {
-  if (!prisma) {
-    // Set DATABASE_URL before PrismaClient initializes
-    // This must happen before the first PrismaClient instantiation
-    // Respect existing DATABASE_URL (e.g., set by tests)
-    if (!process.env.DATABASE_URL) {
-      const dbPath = getDbPath();
-      process.env.DATABASE_URL = `file:${dbPath}`;
-    }
+  // Set DATABASE_URL before PrismaClient initializes
+  // Respect existing DATABASE_URL (e.g., set by tests)
+  if (!process.env.DATABASE_URL) {
+    const dbPath = getDbPath();
+    process.env.DATABASE_URL = `file:${dbPath}`;
+  }
 
+  // Recreate client if DATABASE_URL changed (e.g., switching to test database)
+  if (prisma && currentDatabaseUrl !== process.env.DATABASE_URL) {
+    prisma.$disconnect();
+    prisma = undefined;
+  }
+
+  if (!prisma) {
+    currentDatabaseUrl = process.env.DATABASE_URL;
     prisma = new PrismaClient();
   }
+
   return prisma;
 };
