@@ -11,6 +11,7 @@ interface Message {
   toolCallId?: string | null;
   toolName?: string | null;
   createdAt: string;
+  runId?: string; // Track which run this message belongs to
 }
 
 interface PermissionRequest {
@@ -249,17 +250,28 @@ export function useAgentStream(todoId: string, externalTodoIdRef?: MutableRefObj
   // subscription never needs to be torn down and re-created when todoId changes.
   useEffect(() => {
     const offStream = onIpc('agent-todo:stream', (_event: unknown, data: unknown) => {
-      const { todoId: eventTodoId, message } = data as { todoId: string; message: Message };
+      const {
+        todoId: eventTodoId,
+        runId,
+        message,
+      } = data as {
+        todoId: string;
+        runId: string;
+        message: Message;
+      };
       if (eventTodoId !== todoIdRef.current) return;
+
+      // Attach runId to the message so downstream consumers can filter by run
+      const messageWithRunId = { ...message, runId };
 
       // === Fix: Buffer events during recovery ===
       // If we're recovering state from the backend, buffer events to prevent race conditions
       if (isRecoveringRef.current) {
-        pendingEventsRef.current.push({ message });
+        pendingEventsRef.current.push({ message: messageWithRunId });
         return;
       }
 
-      processStreamEvent(message);
+      processStreamEvent(messageWithRunId);
     });
 
     const offStatus = onIpc('agent-todo:status', (_event: unknown, data: unknown) => {

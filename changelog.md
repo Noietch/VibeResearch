@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-03-12 (57)
+
+### fix: Chat message ordering and deduplication across runs
+
+**Summary**: Fixed critical bugs where chat messages were displayed out of order and duplicated when sending multiple messages in agent-todo interface.
+
+**Problem**:
+
+1. **Messages displayed out of chronological order**: User messages and assistant responses appeared in wrong positions
+2. **Duplicate messages on second send**: After sending a second message, the first message would appear twice
+
+**Root cause**:
+
+1. **`useAgentStream` accumulates messages across entire todo lifetime**: The `messages` state in `useAgentStream` is cumulative and only resets when switching todos, not when switching runs. This caused messages from previous runs to persist in the stream.
+
+2. **Missing `runId` tracking**: When IPC events (`agent-todo:stream`) arrived, the `runId` was extracted but immediately discarded. Messages didn't know which run they belonged to.
+
+3. **`useRunMessages` merged all stream messages**: It received the cumulative `streamMessages` array (containing messages from all runs) and merged them into the current run's display, causing duplicates.
+
+4. **Incorrect sorting logic**: `mergeStreamInto` was re-sorting all messages by `createdAt` after every merge, which could shuffle messages with the same timestamp.
+
+**Solution**:
+
+1. **Added `runId` to Message interface** (`src/renderer/hooks/use-agent-stream.ts`):
+   - Attach `runId` to each message when receiving IPC events
+   - Messages now carry their run identity throughout the pipeline
+
+2. **Filter by runId in useRunMessages** (`src/renderer/hooks/use-run-messages.ts`):
+   - Only accept stream messages that match `selectedRunId`
+   - Prevents messages from other runs from being merged into current view
+   - Removed incorrect sorting logic (trust database ordering)
+
+3. **Improved optimistic message deduplication**:
+   - Check for duplicates against ALL messages in merged list, not just stream
+   - Properly remove optimistic messages when real ones arrive
+
+**Impact**:
+
+- Messages now display in correct chronological order
+- No duplicate messages when sending multiple messages
+- Switching between runs shows correct message history
+- Stream messages only appear in their corresponding run
+
+**Validation**: All 457 tests pass. Requires manual testing in dev environment to verify chat interface behavior.
+
+---
+
 ## 2026-03-12 (56)
 
 ### fix: Properly persist and accumulate streaming text messages

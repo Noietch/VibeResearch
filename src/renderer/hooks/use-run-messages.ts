@@ -11,6 +11,7 @@ interface Message {
   toolCallId?: string | null;
   toolName?: string | null;
   createdAt?: string;
+  runId?: string; // Track which run this message belongs to
 }
 
 /**
@@ -73,8 +74,8 @@ function mergeFromDb(rawMsgs: any[]): Message[] {
  * - tool_call: deep-merge
  * - others: replace
  * - IMPORTANT: Base list is already sorted by createdAt from DB. We preserve this order
- *   by only updating in-place for existing messages, and appending new messages at the end.
- *   Then we sort the entire list to handle new messages with older timestamps.
+ *   by only updating in-place for existing messages. New messages are appended at the end
+ *   with proper timestamps, maintaining chronological order.
  */
 function mergeStreamInto(base: Message[], incoming: Message[]): Message[] {
   const result = [...base];
@@ -100,20 +101,19 @@ function mergeStreamInto(base: Message[], incoming: Message[]): Message[] {
         };
       }
     } else {
-      result.push(msg);
+      // New message from stream - append at the end
+      // The stream should provide proper timestamps, but if not, use current time
+      result.push({
+        ...msg,
+        createdAt: msg.createdAt || new Date().toISOString(),
+      });
       idxMap.set(msg.msgId, result.length - 1);
     }
   }
 
-  // Sort by createdAt to ensure chronological order
-  // This fixes the issue where user messages appear at wrong positions
-  // Handle missing createdAt by using a very late timestamp so they appear at the end
-  result.sort((a, b) => {
-    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Date.now() + 1000000;
-    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Date.now() + 1000000;
-    return aTime - bTime;
-  });
-
+  // DO NOT SORT - trust the database ordering and append order
+  // Database messages are already sorted by createdAt ASC
+  // Stream messages are appended in the order they arrive
   return result;
 }
 
@@ -161,27 +161,74 @@ export function useRunMessages(
 
   // Merge stream messages into the list (only for the current active run)
   useEffect(() => {
-    if (!isCurrentRun || streamMessages.length === 0) return;
+    if (!isCurrentRun || streamMessages.length === 0 || !runId) return;
 
     setMessages((prev) => {
-      const merged = mergeStreamInto(prev, streamMessages);
+      // CRITICAL FIX: Only accept messages that belong to the current runId
+      // streamMessages is cumulative across the entire todo's lifetime
+      // Filter by runId to ensure we only show messages for this specific run
+      const currentRunMessages = streamMessages.filter((m) => m.runId === runId);
 
-      // Remove optimistic user messages whose text now appears in the stream
-      const streamUserTexts = new Set(
-        streamMessages
-          .filter((m) => m.role === 'user' && m.type === 'text')
+      if (currentRunMessages.length === 0) {
+        // No messages for this run - check for optimistic cleanup
+        const allUserTexts = new Set(
+          prev
+            .filter((m) => m.role === 'user' && m.type === 'text' && !m.msgId.startsWith('opt-'))
+            .map((m) => (m.content as { text: string }).text),
+        );
+
+        if (allUserTexts.size === 0) return prev;
+
+        const filtered = prev.filter((m) => {
+          if (!m.msgId.startsWith('opt-')) return true;
+          const text = (m.content as { text: string }).text;
+          return !allUserTexts.has(text);
+        });
+
+        return filtered.length === prev.length ? prev : filtered;
+      }
+
+      // Filter out messages already in DB to avoid duplicates
+      const prevMsgIds = new Set(prev.map((m) => m.msgId));
+      const newStreamMessages = currentRunMessages.filter((m) => !prevMsgIds.has(m.msgId));
+
+      if (newStreamMessages.length === 0) {
+        // No new messages - check for optimistic cleanup
+        const allUserTexts = new Set(
+          prev
+            .filter((m) => m.role === 'user' && m.type === 'text' && !m.msgId.startsWith('opt-'))
+            .map((m) => (m.content as { text: string }).text),
+        );
+
+        if (allUserTexts.size === 0) return prev;
+
+        const filtered = prev.filter((m) => {
+          if (!m.msgId.startsWith('opt-')) return true;
+          const text = (m.content as { text: string }).text;
+          return !allUserTexts.has(text);
+        });
+
+        return filtered.length === prev.length ? prev : filtered;
+      }
+
+      const merged = mergeStreamInto(prev, newStreamMessages);
+
+      // Remove optimistic user messages whose text now appears in real messages
+      const allUserTexts = new Set(
+        merged
+          .filter((m) => m.role === 'user' && m.type === 'text' && !m.msgId.startsWith('opt-'))
           .map((m) => (m.content as { text: string }).text),
       );
 
-      if (streamUserTexts.size === 0) return merged;
+      if (allUserTexts.size === 0) return merged;
 
       return merged.filter((m) => {
         if (!m.msgId.startsWith('opt-')) return true;
         const text = (m.content as { text: string }).text;
-        return !streamUserTexts.has(text);
+        return !allUserTexts.has(text);
       });
     });
-  }, [streamMessages, isCurrentRun]);
+  }, [streamMessages, isCurrentRun, runId]);
 
   // Append an optimistic user message immediately after the user sends
   // The message will be replaced by the real one from the stream
