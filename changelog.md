@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-03-12 (54)
+
+### fix: Dev script now properly handles Ctrl+C shutdown
+
+**Summary**: Fixed issue where `npm run dev` would not terminate child processes when pressing Ctrl+C, leaving zombie Electron and Vite processes running.
+
+**Problem**: When users pressed Ctrl+C to stop `npm run dev`, the parent script would exit but child processes (Electron, Vite) would continue running in the background. This required manual `pkill` commands to clean up.
+
+**Root cause**:
+
+- Child processes spawned without `detached: false` option
+- `shutdown()` function used simple `kill()` without proper signal handling
+- No fallback to force-kill if graceful shutdown failed
+
+**Solution** (`scripts/dev.mjs`):
+
+- Added `detached: false` to `spawn()` options to ensure child processes are in the same process group
+- Enhanced `shutdown()` to send `SIGTERM` first for graceful shutdown
+- Added 2-second timeout with `SIGKILL` fallback if process doesn't exit
+- Added error handlers for kill operations
+- Added 2.5-second delay before parent process exits to allow cleanup
+
+**Impact**:
+
+- Ctrl+C now properly terminates all child processes
+- No more zombie Electron/Vite processes
+- Cleaner development workflow
+
+**Validation**: Manual testing required after next `npm run dev` session.
+
+---
+
 ## 2026-03-12 (53)
 
 ### fix: Prevent test data from polluting production database

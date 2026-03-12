@@ -25,16 +25,36 @@ function shutdown() {
 
   log('dev', 'Shutting down...');
 
-  if (electronProcess) {
-    electronProcess.kill();
-    electronProcess = null;
-  }
-  if (viteProcess) {
-    viteProcess.kill();
-    viteProcess = null;
-  }
+  // Kill child processes with SIGTERM first, then SIGKILL if needed
+  const killProcess = (proc, name) => {
+    if (!proc || proc.killed) return;
 
-  process.exit(0);
+    try {
+      // Try graceful shutdown first
+      proc.kill('SIGTERM');
+
+      // Force kill after 2 seconds if still running
+      setTimeout(() => {
+        if (proc && !proc.killed) {
+          log('dev', `Force killing ${name}...`);
+          proc.kill('SIGKILL');
+        }
+      }, 2000);
+    } catch (err) {
+      log('dev', `Error killing ${name}: ${err.message}`);
+    }
+  };
+
+  killProcess(electronProcess, 'electron');
+  killProcess(viteProcess, 'vite');
+
+  electronProcess = null;
+  viteProcess = null;
+
+  // Exit after a short delay to allow cleanup
+  setTimeout(() => {
+    process.exit(0);
+  }, 2500);
 }
 
 process.on('SIGINT', shutdown);
@@ -49,6 +69,8 @@ async function runCommand(command, args, label, options = {}) {
     env: { ...process.env, ...options.env },
     stdio: 'pipe',
     shell: isWindows,
+    // Ensure child processes are killed when parent exits
+    detached: false,
   });
 
   child.stdout?.on('data', (data) => {
@@ -71,6 +93,13 @@ async function runCommand(command, args, label, options = {}) {
       if (label === 'electron' && code === 0) {
         shutdown();
       }
+    }
+  });
+
+  // Handle errors
+  child.on('error', (err) => {
+    if (!isShuttingDown) {
+      log(label, `Process error: ${err.message}`);
     }
   });
 
