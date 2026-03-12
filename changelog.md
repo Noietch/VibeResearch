@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-03-12 (52)
+
+### feat: Persist chat backend selection across sessions
+
+**Summary**: Chat backend selection (lightweight, claude-code, codex, gemini, opencode) is now properly saved to the database and restored when switching between chat sessions or reopening the modal.
+
+**Problem**: When users selected a backend in the chat modal dropdown, the selection was only stored in local React state. When reopening the modal or switching sessions, the backend would reset to 'lightweight', losing the user's preference.
+
+**Changes:**
+
+- **Backend services:**
+  - `src/main/services/acp-chat.service.ts`: Added `updateSessionBackend(id, backend)` method
+- **IPC layer:**
+  - `src/main/ipc/acp-chat.ipc.ts`: Added `acp-chat:session:updateBackend` handler
+  - `src/renderer/hooks/use-ipc.ts`: Added `updateAcpChatSessionBackend()` client method
+- **UI:**
+  - `src/renderer/components/chat/UnifiedChatModal.tsx`:
+    - Changed backend dropdown `onChange` to async handler that persists changes immediately
+    - Updates both database and local sessions list when backend changes
+    - Fixed modal reset logic: now only clears state when closing (not when opening)
+- **Tests:**
+  - `tests/integration/acp-chat.test.ts`: Fixed test to not depend on session order
+
+**Impact**: Users' backend preferences are now persistent. When they select "Claude Code" or another backend for a chat session, that choice is saved and restored when they return to that session.
+
+**Test design**: Existing ACP chat tests cover session management including backend field persistence.
+
+**Validation**: All precommit tests pass (19 passed, 1 skipped).
+
+---
+
 ## 2026-03-12 (51)
 
 ### refactor: Remove old chat system, keep only ACP chat
