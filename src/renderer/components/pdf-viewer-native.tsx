@@ -15,7 +15,6 @@ export function PdfViewerNative({ path, onFileNotFound }: PdfViewerNativeProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [scale, setScale] = useState(1.0);
   const containerRef = useRef<HTMLDivElement>(null);
   const embedRef = useRef<HTMLEmbedElement>(null);
   const onFileNotFoundRef = useRef(onFileNotFound);
@@ -25,36 +24,6 @@ export function PdfViewerNative({ path, onFileNotFound }: PdfViewerNativeProps) 
   useEffect(() => {
     onFileNotFoundRef.current = onFileNotFound;
   }, [onFileNotFound]);
-
-  // Handle pinch-to-zoom with trackpad
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      // Check if it's a pinch gesture (ctrlKey is set for pinch on trackpad)
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Pinch zoom
-        const delta = -e.deltaY;
-        const zoomFactor = delta > 0 ? 1.05 : 0.95;
-
-        setScale((prevScale) => {
-          const newScale = Math.max(0.5, Math.min(3.0, prevScale * zoomFactor));
-          return newScale;
-        });
-      }
-    };
-
-    // CRITICAL: { passive: false } allows preventDefault to work
-    container.addEventListener('wheel', handleWheel, { passive: false });
-
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-    };
-  }, []);
 
   // Load PDF data
   useEffect(() => {
@@ -89,11 +58,12 @@ export function PdfViewerNative({ path, onFileNotFound }: PdfViewerNativeProps) 
         const blob = new Blob([bytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
 
-        // Add URL fragment to hide toolbar by default
-        const urlWithoutToolbar = `${url}#toolbar=0&navpanes=0`;
+        // Keep Chrome's native toolbar (includes search, zoom, navigation)
+        // Hide left navigation panel, set initial view to fit width
+        const urlWithSettings = `${url}#toolbar=1&navpanes=0&view=FitH`;
 
         cleanupRef.current = () => URL.revokeObjectURL(url);
-        setPdfUrl(urlWithoutToolbar);
+        setPdfUrl(urlWithSettings);
         setLoading(false);
       } catch (err) {
         if (!isMounted) return;
@@ -136,29 +106,14 @@ export function PdfViewerNative({ path, onFileNotFound }: PdfViewerNativeProps) 
   }
 
   return (
-    <div ref={containerRef} className="h-full w-full overflow-auto">
+    <div ref={containerRef} className="h-full w-full">
       {pdfUrl && (
-        <div
-          className="flex h-full w-full items-center justify-center"
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: 'center center',
-            transition: 'transform 0.05s ease-out',
-            minHeight: '100%',
-            minWidth: '100%',
-          }}
-        >
-          <embed
-            ref={embedRef}
-            src={pdfUrl}
-            type="application/pdf"
-            style={{
-              border: 'none',
-              width: '100%',
-              height: '100%',
-            }}
-          />
-        </div>
+        <embed
+          ref={embedRef}
+          src={pdfUrl}
+          type="application/pdf"
+          className="h-full w-full border-0"
+        />
       )}
     </div>
   );
