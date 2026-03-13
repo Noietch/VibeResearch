@@ -108,11 +108,11 @@ export function PdfViewerNative({ path, onFileNotFound }: PdfViewerNativeProps) 
   return (
     <div ref={containerRef} className="h-full w-full">
       {pdfUrl && (
-        <embed
-          ref={embedRef}
+        <iframe
+          ref={embedRef as any}
           src={pdfUrl}
-          type="application/pdf"
           className="h-full w-full border-0"
+          title="PDF Viewer"
         />
       )}
     </div>
