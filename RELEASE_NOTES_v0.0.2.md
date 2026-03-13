@@ -47,11 +47,10 @@ ResearchClaw is a standalone Electron desktop app for researchers to manage pape
 - Library paper picker for adding to collections
 - Collection-based paper management
 
-#### 6. Built-in Embedding Provider
+#### 6. Semantic Search
 
-- Zero-dependency semantic search with bundled embedding model
+- OpenAI-compatible embedding API support
 - Offline-first vector search using sqlite-vec
-- ONNX Runtime optimized for low memory usage
 - Automatic background citation extraction
 
 #### 7. Hybrid Recommendations

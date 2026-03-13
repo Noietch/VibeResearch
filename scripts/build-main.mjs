@@ -62,9 +62,6 @@ const external = [
   '@prisma/client',
   // sql.js: uses dynamic WASM loading
   'sql.js',
-  // Transformers.js + ONNX Runtime — must stay external for WASM/native loading
-  '@huggingface/transformers',
-  'onnxruntime-node',
   // pdf-parse relies on ESM/conditional exports that break when bundled into the main process
   'pdf-parse',
   // SSH2 + cpu-features: contain .node native addons
