@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-14 (66)
+
+### fix: Prevent Prisma pre-commit failures from inherited RUST_LOG
+
+**Summary**: Updated the test database bootstrap so Prisma CLI schema pushes no longer inherit `RUST_LOG=warn`, which was causing the schema engine to fail during pre-commit integration tests.
+
+**Changes**:
+
+1. Removed `RUST_LOG` from the environment passed to `prisma db push` in test setup
+2. Added a regression test covering the sanitized Prisma CLI environment
+3. Verified `npm run precommit:check` now passes again
+
+## 2026-03-13 (65)
+
+### fix: Make top tabs scroll when too many pages are open
+
+**Summary**: Updated the app shell tab bar so open tabs stay usable when they exceed the available title-bar width.
+
+**Changes**:
+
+1. Added a horizontally scrollable tab strip in the top title bar
+2. Kept per-tab width bounds so labels still truncate cleanly
+3. Auto-scrolled the active tab into view when tabs change
+4. Added a frontend regression test for the tab-strip behavior
+
 ## 2026-03-12 (64)
 
 ### feat: Improve PDF viewer centering and pinch-to-zoom smoothness

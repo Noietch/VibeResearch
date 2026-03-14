@@ -218,6 +218,7 @@ export function AppShell({
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [setupProviders, setSetupProviders] = useState<ProviderConfig[]>([]);
   const [devMode, setDevMode] = useState(false);
+  const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Load dev mode setting
   useEffect(() => {
@@ -338,6 +339,16 @@ export function AppShell({
         (job.stage === 'done' || job.stage === 'error' || job.stage === 'cancelled'),
     ) ?? null;
 
+  useEffect(() => {
+    const activeTab = tabRefs.current[activeId];
+    if (!activeTab) return;
+
+    activeTab.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [activeId, tabs]);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
       {/* Top title bar - spans full width */}
@@ -351,54 +362,60 @@ export function AppShell({
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
 
-        {/* Tabs */}
-        <div
-          className="flex items-stretch"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          {tabs.map((tab) => {
-            const isActive = tab.id === activeId;
-            const Icon = tab.icon;
-            return (
-              <div
-                key={tab.id}
-                className={`group relative flex items-center gap-1.5 border-r border-notion-border px-3 cursor-pointer select-none min-w-0 ${
-                  isActive
-                    ? 'bg-white text-notion-text'
-                    : 'text-notion-text-secondary hover:bg-notion-sidebar-hover hover:text-notion-text'
-                }`}
-                style={{ minWidth: 80, maxWidth: 180 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  activateTab(tab.id);
-                }}
-              >
-                {/* active indicator */}
-                {isActive && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-                <Icon size={13} strokeWidth={isActive ? 2.2 : 1.8} className="flex-shrink-0" />
-                <span className="truncate text-xs font-medium">{tab.label}</span>
-                {tab.closeable && (
-                  <button
-                    className={`ml-0.5 flex-shrink-0 rounded p-0.5 transition-colors ${
-                      isActive
-                        ? 'text-notion-text-tertiary hover:bg-notion-sidebar hover:text-notion-text'
-                        : 'text-transparent group-hover:text-notion-text-tertiary hover:!text-notion-text'
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeTab(tab.id);
-                    }}
-                  >
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {/* Tabs + remaining drag region */}
+        <div className="min-w-0 flex flex-1 items-stretch">
+          <div
+            data-testid="top-tab-strip"
+            className="notion-scrollbar flex min-w-0 max-w-full items-stretch overflow-x-auto overflow-y-hidden"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            {tabs.map((tab) => {
+              const isActive = tab.id === activeId;
+              const Icon = tab.icon;
+              return (
+                <div
+                  key={tab.id}
+                  ref={(node) => {
+                    tabRefs.current[tab.id] = node;
+                  }}
+                  className={`group relative flex flex-shrink-0 items-center gap-1.5 border-r border-notion-border px-3 cursor-pointer select-none min-w-0 ${
+                    isActive
+                      ? 'bg-white text-notion-text'
+                      : 'text-notion-text-secondary hover:bg-notion-sidebar-hover hover:text-notion-text'
+                  }`}
+                  style={{ minWidth: 80, maxWidth: 180 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    activateTab(tab.id);
+                  }}
+                >
+                  {/* active indicator */}
+                  {isActive && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                  <Icon size={13} strokeWidth={isActive ? 2.2 : 1.8} className="flex-shrink-0" />
+                  <span className="truncate text-xs font-medium">{tab.label}</span>
+                  {tab.closeable && (
+                    <button
+                      className={`ml-0.5 flex-shrink-0 rounded p-0.5 transition-colors ${
+                        isActive
+                          ? 'text-notion-text-tertiary hover:bg-notion-sidebar hover:text-notion-text'
+                          : 'text-transparent group-hover:text-notion-text-tertiary hover:!text-notion-text'
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                      }}
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-        {/* remaining space is drag region */}
-        <div className="flex-1" />
+          {/* remaining space is drag region */}
+          <div className="flex-1" />
+        </div>
 
         {/* Windows window controls - right side */}
         {isWindows && <WindowsWindowControls />}

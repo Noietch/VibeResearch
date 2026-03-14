@@ -34,13 +34,17 @@ export const ensureTestDatabaseSchema = () => {
   rmSync(TEST_STORAGE_DIR, { recursive: true, force: true });
   mkdirSync(TEST_STORAGE_DIR, { recursive: true });
 
+  const prismaEnv = {
+    ...process.env,
+    DATABASE_URL: `file:${testDbPath}`,
+  };
+  // Prisma 6.4.1 schema engine crashes on db push when RUST_LOG=warn is inherited.
+  delete prismaEnv.RUST_LOG;
+
   execFileSync(prismaBin, ['db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate'], {
     cwd: repoRoot,
     stdio: 'pipe',
-    env: {
-      ...process.env,
-      DATABASE_URL: `file:${testDbPath}`,
-    },
+    env: prismaEnv,
   });
 
   initialized = true;
