@@ -189,10 +189,57 @@ export interface AgenticSearchStep {
 export interface SourceEvent {
   id: string;
   paperId: string;
-  source: 'chrome' | 'manual' | 'arxiv';
+  source: 'chrome' | 'manual' | 'arxiv' | 'zotero' | 'doi' | 'bibtex';
   rawTitle?: string | null;
   rawUrl?: string | null;
   importedAt: string;
+}
+
+export interface ZoteroDetectResult {
+  found: boolean;
+  dbPath: string;
+  storageDir: string;
+}
+
+export interface ZoteroScannedItem {
+  zoteroKey: string;
+  title: string;
+  authors: string[];
+  year?: number;
+  doi?: string;
+  url?: string;
+  abstract?: string;
+  pdfPath?: string;
+  collections: string[];
+  itemType: string;
+}
+
+export interface ZoteroScanResult {
+  items: ZoteroScannedItem[];
+  newCount: number;
+  existingCount: number;
+  collections: string[];
+}
+
+export interface ZoteroImportStatus {
+  active: boolean;
+  total: number;
+  completed: number;
+  success: number;
+  failed: number;
+  skipped: number;
+  phase: 'idle' | 'importing' | 'completed' | 'cancelled' | 'failed';
+  message: string;
+}
+
+export interface ParsedPaperEntry {
+  title: string;
+  authors: string[];
+  year?: number;
+  doi?: string;
+  url?: string;
+  abstract?: string;
+  journal?: string;
 }
 
 export interface AgenticSearchPaper {
@@ -912,6 +959,26 @@ export const ipc = {
   importScannedPapers: (papers: ScanResult['papers']) =>
     invoke<{ started: boolean }>('ingest:importScanned', papers),
   cancelImport: () => invoke<{ cancelled: boolean }>('ingest:cancel'),
+
+  // Zotero
+  zoteroDetect: (customDbPath?: string) =>
+    invoke<ZoteroDetectResult>('zotero:detect', customDbPath),
+  zoteroScan: (opts?: { dbPath?: string; collection?: string }) =>
+    invoke<ZoteroScanResult>('zotero:scan', opts),
+  zoteroImport: (items: ZoteroScannedItem[]) =>
+    invoke<{ started: boolean }>('zotero:import', items),
+  zoteroCancel: () => invoke<{ cancelled: boolean }>('zotero:cancel'),
+  zoteroStatus: () => invoke<ZoteroImportStatus>('zotero:status'),
+
+  // BibTeX/RIS parsing
+  parseBibtex: (filePath: string) => invoke<ParsedPaperEntry[]>('zotero:parseBibtex', filePath),
+  parseRis: (filePath: string) => invoke<ParsedPaperEntry[]>('zotero:parseRis', filePath),
+  importParsedEntries: (entries: ParsedPaperEntry[]) =>
+    invoke<{ imported: number; skipped: number }>('zotero:importParsed', entries),
+
+  // DOI import
+  importByDoi: (input: string) =>
+    invoke<{ paper: PaperItem; source: string }>('papers:importByDoi', input),
 
   // Providers
   listProviders: () => invoke<ProviderConfig[]>('providers:list'),

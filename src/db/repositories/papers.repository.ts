@@ -17,6 +17,7 @@ export interface CreatePaperParams {
   abstract?: string;
   pdfUrl?: string;
   pdfPath?: string;
+  doi?: string;
   tags: string[];
   categorizedTags?: CategorizedTag[];
 }
@@ -82,6 +83,7 @@ export class PapersRepository {
         abstract: params.abstract,
         pdfUrl: params.pdfUrl,
         pdfPath: params.pdfPath,
+        doi: params.doi,
         tags: {
           create: tags.map((tag) => ({
             tagId: tag.id,
@@ -205,6 +207,20 @@ export class PapersRepository {
       return null;
     }
 
+    return mapPaper(paper);
+  }
+
+  async findByDoi(doi: string) {
+    const paper = await this.prisma.paper.findFirst({
+      where: { doi },
+      include: {
+        tags: { include: { tag: true } },
+        links: true,
+        readingNotes: true,
+      },
+    });
+
+    if (!paper) return null;
     return mapPaper(paper);
   }
 

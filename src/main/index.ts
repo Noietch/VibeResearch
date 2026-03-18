@@ -14,23 +14,15 @@ import { startAgentLocalService, stopAgentLocalService } from './services/agent-
 import { setupTokenUsageIpc } from './ipc/token-usage.ipc';
 import { setupTaggingIpc } from './ipc/tagging.ipc';
 import { setupAgentTodoIpc, getAgentTodoService } from './ipc/agent-todo.ipc';
-import { setupSshIpc } from './ipc/ssh.ipc';
-import { setupTaskResultsIpc } from './ipc/task-results.ipc';
-import { setupExperimentReportIpc } from './ipc/experiment-report.ipc';
 import { stopAllRunners } from './services/agent-runner-registry';
-import { setupCitationsIpc } from './ipc/citations.ipc';
-import { setupUserProfileIpc } from './ipc/user-profile.ipc';
-import { setupAcpChatIpc } from './ipc/acp-chat.ipc';
-import { ensureStorageDir, getDbPath, getStorageDir } from './store/storage-path';
-import { hasLanguagePreference, setLanguage } from './store/app-settings-store';
+import { setupCollectionsIpc, ensureDefaultCollections } from './ipc/collections.ipc';
+import { setupZoteroIpc } from './ipc/zotero.ipc';
+import { ensureStorageDir, getDbPath } from './store/storage-path';
 import { PapersRepository } from '@db';
 import { resumeAutomaticPaperProcessing } from './services/paper-processing.service';
-import { resumeAutomaticCitationExtraction } from './services/citation-processing.service';
 import { stopOllamaService, warmupOllamaService } from './services/ollama.service';
-import { closeVecStore } from '../db/vec-store';
+import { closeVecDb, getVecDb } from '../db/vec-client';
 import * as vecIndex from './services/vec-index.service';
-import * as paperEmbeddingService from './services/paper-embedding.service';
-import { getPrismaClient } from '../db/client';
 
 // CJS-compatible __dirname (esbuild bundles to CJS, so __dirname is available globally)
 // In CJS format, __dirname is automatically provided by Node.js
@@ -48,18 +40,8 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('[main] Unhandled rejection at:', promise, 'reason:', reason);
 });
 
-// Set DATABASE_URL before any DB imports (use ~/.researchclaw/)
+// Set DATABASE_URL before any DB imports (use ~/.vibe-research/)
 ensureStorageDir();
-
-// Auto-detect OS language on first launch (only if user has never set a preference)
-try {
-  if (!hasLanguagePreference()) {
-    const locale = app.getLocale(); // e.g. 'zh-CN', 'zh-TW', 'en-US'
-    setLanguage(locale.startsWith('zh') ? 'zh' : 'en');
-  }
-} catch {
-  // Non-critical — ignore if settings file isn't accessible yet
-}
 const dbPath = getDbPath();
 process.env.DATABASE_URL = `file:${dbPath}`;
 
@@ -151,35 +133,24 @@ if (!process.env.PRISMA_QUERY_ENGINE_LIBRARY) {
   }
 }
 
-async function dropDerivedIndexTablesForPrisma(): Promise<void> {
-  const prisma = getPrismaClient();
+async function dropVecTablesForPrisma(dbPath: string): Promise<void> {
+  if (!fs.existsSync(dbPath)) return;
+
+  closeVecDb();
+  const db = getVecDb();
   const tables = [
     'vec_chunks',
     'vec_chunks_chunks',
     'vec_chunks_info',
     'vec_chunks_rowids',
     'vec_chunks_vector_chunks00',
-    'vec_search_units',
-    'vec_search_units_chunks',
-    'vec_search_units_info',
-    'vec_search_units_rowids',
-    'vec_search_units_vector_chunks00',
-    'paper_search_units_fts',
-    'paper_search_units_fts_config',
-    'paper_search_units_fts_content',
-    'paper_search_units_fts_data',
-    'paper_search_units_fts_docsize',
-    'paper_search_units_fts_idx',
-    'vec_meta',
   ];
 
   for (const table of tables) {
-    try {
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS ${table}`);
-    } catch {
-      // Ignore errors if table doesn't exist
-    }
+    db.prepare(`DROP TABLE IF EXISTS ${table}`).run();
   }
+
+  closeVecDb();
 }
 
 function getSchemaHash(schemaPath: string): string {
@@ -187,26 +158,21 @@ function getSchemaHash(schemaPath: string): string {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-function getSchemaHashPath(): string {
-  return path.join(getStorageDir(), 'schema-hash.json');
-}
-
 function getSavedSchemaHash(): string | null {
   try {
-    const hashPath = getSchemaHashPath();
-    if (fs.existsSync(hashPath)) {
-      const data = JSON.parse(fs.readFileSync(hashPath, 'utf-8'));
-      return data.hash ?? null;
-    }
+    const db = getVecDb();
+    const row = db.prepare("SELECT value FROM vec_meta WHERE key = 'schema_hash'").get() as
+      | { value: string }
+      | undefined;
+    return row?.value ?? null;
   } catch {
-    // ignore
+    return null;
   }
-  return null;
 }
 
 function saveSchemaHash(hash: string): void {
-  const hashPath = getSchemaHashPath();
-  fs.writeFileSync(hashPath, JSON.stringify({ hash }), 'utf-8');
+  const db = getVecDb();
+  db.prepare("INSERT OR REPLACE INTO vec_meta (key, value) VALUES ('schema_hash', ?)").run(hash);
 }
 
 async function ensureDatabase() {
@@ -224,10 +190,7 @@ async function ensureDatabase() {
     const prismaPath = candidatePrisma.find((p) => fs.existsSync(p));
     const schemaPath = candidateSchema.find((p) => fs.existsSync(p));
     if (!prismaPath || !schemaPath) {
-      // Packaged app: prisma CLI not available, use raw SQL to create tables
-      console.log('[ensureDatabase] Prisma CLI not found, falling back to raw SQL initialization');
-      const { initSchemaWithRawSql } = await import('../db/init-schema');
-      await initSchemaWithRawSql();
+      console.error('[ensureDatabase] Prisma or schema not found:', { prismaPath, schemaPath });
       return;
     }
 
@@ -241,70 +204,26 @@ async function ensureDatabase() {
 
     console.log('[ensureDatabase] Schema changed or first run, running db push...');
 
-    // Proactively drop derived search/vector tables before db push to avoid Prisma introspect errors
-    await dropDerivedIndexTablesForPrisma();
+    // Proactively drop vec tables before db push to avoid introspect errors
+    await dropVecTablesForPrisma(dbPath);
 
-    try {
-      execSync(
-        `"${prismaPath}" db push --schema="${schemaPath}" --skip-generate --accept-data-loss`,
-        {
-          env: { ...process.env },
-          stdio: 'pipe',
-        },
-      );
-      saveSchemaHash(currentHash);
-      console.log('[ensureDatabase] db push completed successfully');
-    } catch (dbPushError) {
-      console.error('[ensureDatabase] db push failed, attempting recovery:', dbPushError);
+    execSync(
+      `"${prismaPath}" db push --schema="${schemaPath}" --skip-generate --accept-data-loss`,
+      {
+        env: { ...process.env },
+        stdio: 'pipe',
+      },
+    );
 
-      // Try to recover by cleaning WAL files and retrying
-      const walPath = dbPath + '-wal';
-      const journalPath = dbPath + '-journal';
-      try {
-        if (fs.existsSync(walPath)) {
-          fs.unlinkSync(walPath);
-          console.log('[ensureDatabase] Removed stale WAL file');
-        }
-        if (fs.existsSync(journalPath)) {
-          fs.unlinkSync(journalPath);
-          console.log('[ensureDatabase] Removed stale journal file');
-        }
-
-        // Retry db push
-        execSync(
-          `"${prismaPath}" db push --schema="${schemaPath}" --skip-generate --accept-data-loss`,
-          {
-            env: { ...process.env },
-            stdio: 'pipe',
-          },
-        );
-        saveSchemaHash(currentHash);
-        console.log('[ensureDatabase] db push completed after recovery');
-      } catch (retryError) {
-        console.error('[ensureDatabase] Recovery failed, falling back to raw SQL initialization');
-        // Fall back to raw SQL schema initialization
-        const { initSchemaWithRawSql } = await import('../db/init-schema');
-        await initSchemaWithRawSql();
-        saveSchemaHash(currentHash);
-      }
-    }
+    saveSchemaHash(currentHash);
+    console.log('[ensureDatabase] db push completed successfully');
   } catch (err) {
     console.error('[ensureDatabase] Failed to initialize database:', err);
-    // Final fallback: try raw SQL
-    try {
-      const { initSchemaWithRawSql } = await import('../db/init-schema');
-      await initSchemaWithRawSql();
-      console.log('[ensureDatabase] Raw SQL initialization completed as fallback');
-    } catch (fallbackError) {
-      console.error('[ensureDatabase] All database initialization attempts failed:', fallbackError);
-    }
   }
 }
 
 function createWindow() {
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  const isDev =
-    !!devServerUrl || process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === '1';
+  const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === '1';
 
   // __dirname is dist/main/ — go up to assets/
   const iconPath = path.join(__dirname, '../../assets/icon.icns');
@@ -313,7 +232,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'ResearchClaw',
+    title: 'Vibe Research',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 13, y: 16 },
     backgroundColor: '#ffffff',
@@ -326,18 +245,11 @@ function createWindow() {
     },
   });
 
-  if (devServerUrl) {
-    win.loadURL(devServerUrl);
-  } else if (isDev) {
-    win.loadURL('http://localhost:5173');
+  if (isDev) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL ?? 'http://localhost:5173');
   } else {
     win.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
-
-  // Open DevTools in development mode (disabled by default)
-  // if (isDev) {
-  //   win.webContents.openDevTools();
-  // }
 
   // Intercept navigation from PDF viewer iframes - open external links in browser
   const isInternalUrl = (url: string) =>
@@ -385,7 +297,7 @@ function setupWindowControls(win: BrowserWindow) {
 function setupFileIpc() {
   // Read local file and return as base64
   ipcMain.handle('file:read', async (_event, filePath: string) => {
-    // Security: only allow files within user's researchclaw directory
+    // Security: only allow files within user's vibe-research directory
     const allowedBase = path.dirname(dbPath);
     const resolvedPath = path.resolve(filePath);
 
@@ -425,11 +337,7 @@ app.whenReady().then(async () => {
   }
 
   await ensureDatabase();
-  try {
-    await startAgentLocalService();
-  } catch (err) {
-    console.error('[startup] Failed to start agent local service:', err);
-  }
+  await startAgentLocalService();
   void warmupOllamaService('app-ready');
 
   // One-time tag category migration (after DB is ready)
@@ -443,8 +351,8 @@ app.whenReady().then(async () => {
       console.error('[startup] Failed to load tagging service:', err);
     });
 
-  // Simple ping handler for renderer to check if main is ready
-  ipcMain.handle('ping', () => 'pong');
+  // Ensure default collections exist
+  ensureDefaultCollections();
 
   // Register all IPC handlers
   setupPapersIpc();
@@ -457,46 +365,28 @@ app.whenReady().then(async () => {
   setupTokenUsageIpc();
   setupTaggingIpc();
   setupAgentTodoIpc();
-  setupSshIpc();
-  setupTaskResultsIpc();
-  setupExperimentReportIpc();
   getAgentTodoService()
     .initialize()
     .catch((err) => console.error('[AgentTodo] Failed to initialize scheduler:', err));
-  setupCitationsIpc();
-  setupUserProfileIpc();
-  setupAcpChatIpc();
+  setupCollectionsIpc();
+  setupZoteroIpc();
   setupFileIpc();
 
   // Initialize vec index (background, non-blocking)
   void (async () => {
     try {
-      // Initialize vector index
-      await vecIndex.initialize();
-
-      // Load paper embeddings into vector store
-      await paperEmbeddingService.initializeVecStore();
-
-      // Check for papers without embeddings
-      const stats = await paperEmbeddingService.getEmbeddingStats();
-      if (stats.papersWithoutEmbeddings > 0) {
-        console.log(
-          `[startup] Found ${stats.papersWithoutEmbeddings} papers without embeddings, processing in background...`,
-        );
-
-        // Process pending papers in background (non-blocking)
-        void (async () => {
-          let processed = 0;
-          while (processed < stats.papersWithoutEmbeddings) {
-            const count = await paperEmbeddingService.processPendingPapers(10);
-            if (count === 0) break;
-            processed += count;
-            console.log(`[startup] Processed ${processed}/${stats.papersWithoutEmbeddings} papers`);
-          }
-          console.log('[startup] All papers processed');
-        })();
-      } else {
-        console.log('[startup] All papers have embeddings');
+      const { getVecDb } = await import('../db/vec-client');
+      getVecDb(); // ensure connection is open
+      const status = vecIndex.getStatus();
+      if (!status.initialized) {
+        // Check if there are existing chunks that need indexing
+        const repo = new PapersRepository();
+        const chunkCount = (await repo.listChunksForSemanticSearch()).length;
+        if (chunkCount > 0) {
+          console.log(`[startup] Rebuilding vec index from ${chunkCount} existing chunks...`);
+          const inserted = await vecIndex.rebuildFromPrisma();
+          console.log(`[startup] Vec index rebuilt: ${inserted} chunks indexed`);
+        }
       }
     } catch (err) {
       console.error('[startup] Vec index initialization failed:', err);
@@ -507,18 +397,8 @@ app.whenReady().then(async () => {
     console.error('[startup] Failed to resume paper processing:', err),
   );
 
-  // Start automatic citation extraction (background, after paper processing)
-  resumeAutomaticCitationExtraction().catch((err) =>
-    console.error('[startup] Failed to resume citation extraction:', err),
-  );
-
   const win = createWindow();
   setupWindowControls(win);
-
-  // Notify renderer that main process is ready
-  win.webContents.on('did-finish-load', () => {
-    win.webContents.send('main:ready');
-  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -536,7 +416,7 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   stopAgentLocalService();
   stopOllamaService();
-  closeVecStore();
+  closeVecDb();
   try {
     getAgentTodoService().getScheduler().stopAll();
   } catch {}

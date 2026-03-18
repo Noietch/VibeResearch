@@ -1,19 +1,13 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { PapersRepository } from '@db';
-import { extractArxivId, arxivPdfUrl } from '@shared';
-import {
-  getPapersDir,
-  getProxy,
-  getProxyEnabled,
-  getProxyScope,
-} from '../store/app-settings-store';
+import { extractArxivId } from '@shared';
+import { getPapersDir, getProxy, getProxyScope } from '../store/app-settings-store';
+import { isDoi, resolveByDoi, resolveByUrl, extractDoiFromUrl } from './doi-resolver.service';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { Agent } from 'node:http';
 import { proxyFetch } from './proxy-fetch';
 import { schedulePaperProcessing } from './paper-processing.service';
-import { scheduleAutoPaperEnrichment } from './auto-paper-enrichment.service';
-import { PapersService } from './papers.service';
 
 /** Minimum size for a valid PDF (arXiv PDFs are typically > 50KB) */
 const MIN_PDF_SIZE = 1024; // 1KB
@@ -26,9 +20,8 @@ function isValidPdf(buffer: Buffer): boolean {
 
 function getProxyAgent(): Agent | undefined {
   const proxy = getProxy();
-  const proxyEnabled = getProxyEnabled();
   const scope = getProxyScope();
-  if (!proxyEnabled || !proxy || !scope.pdfDownload) return undefined;
+  if (!proxy || !scope.pdfDownload) return undefined;
   return new HttpsProxyAgent(proxy);
 }
 
@@ -73,29 +66,42 @@ async function fetchArxivMetadata(arxivId: string): Promise<{
 }
 
 function parseInput(input: string): {
-  type: 'arxiv_id' | 'arxiv_url' | 'pdf_url';
+  type: 'arxiv_id' | 'arxiv_url' | 'pdf_url' | 'doi' | 'url';
   arxivId: string | null;
   pdfUrl: string | null;
+  doi: string | null;
 } {
   const trimmed = input.trim();
+  // arXiv ID: 2301.12345 or 2301.12345v2
   if (/^\d{4}\.\d{4,5}(v\d+)?$/.test(trimmed)) {
-    return { type: 'arxiv_id', arxivId: trimmed, pdfUrl: null };
+    return { type: 'arxiv_id', arxivId: trimmed, pdfUrl: null, doi: null };
   }
+  // DOI: 10.xxxx/yyyy
+  if (isDoi(trimmed)) {
+    return { type: 'doi', arxivId: null, pdfUrl: null, doi: trimmed };
+  }
+  // URL handling
   if (trimmed.includes('arxiv.org')) {
     const arxivId = extractArxivId(trimmed);
-    if (arxivId) return { type: 'arxiv_url', arxivId, pdfUrl: null };
+    if (arxivId) return { type: 'arxiv_url', arxivId, pdfUrl: null, doi: null };
   }
   if (trimmed.startsWith('http')) {
     const arxivId = extractArxivId(trimmed);
-    if (arxivId) return { type: 'arxiv_url', arxivId, pdfUrl: null };
-    return { type: 'pdf_url', arxivId: null, pdfUrl: trimmed };
+    if (arxivId) return { type: 'arxiv_url', arxivId, pdfUrl: null, doi: null };
+    // Check if URL contains a DOI
+    const doiFromUrl = extractDoiFromUrl(trimmed);
+    if (doiFromUrl) return { type: 'doi', arxivId: null, pdfUrl: null, doi: doiFromUrl };
+    // Check if it's a direct PDF URL or a general academic URL
+    if (trimmed.match(/\.pdf(\?|$)/i)) {
+      return { type: 'pdf_url', arxivId: null, pdfUrl: trimmed, doi: null };
+    }
+    return { type: 'url', arxivId: null, pdfUrl: null, doi: null };
   }
-  return { type: 'arxiv_id', arxivId: trimmed, pdfUrl: null };
+  return { type: 'arxiv_id', arxivId: trimmed, pdfUrl: null, doi: null };
 }
 
 export class DownloadService {
   private papersRepository = new PapersRepository();
-  private papersService = new PapersService();
 
   private getPaperFolder(shortId: string): string {
     return path.join(getPapersDir(), shortId);
@@ -110,6 +116,14 @@ export class DownloadService {
 
   async downloadFromInput(input: string, tags: string[] = []) {
     const parsed = parseInput(input);
+
+    // Handle DOI or general URL via doi-resolver
+    if (parsed.type === 'doi' && parsed.doi) {
+      return this.importByDoi(parsed.doi, input, tags);
+    }
+    if (parsed.type === 'url') {
+      return this.importByUrl(input.trim(), tags);
+    }
 
     let arxivId: string | null = null;
     let title: string;
@@ -131,9 +145,9 @@ export class DownloadService {
       authors = metadata.authors;
       abstract = metadata.abstract;
       submittedAt = metadata.submittedAt;
-      pdfUrl = arxivPdfUrl(arxivId);
+      pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
     } else {
-      throw new Error('Invalid input: must be an arXiv ID, arXiv URL, or PDF URL');
+      throw new Error('Invalid input: must be an arXiv ID, arXiv URL, DOI, or PDF URL');
     }
 
     const shortId = arxivId || `local-${Date.now().toString(36)}`;
@@ -145,7 +159,8 @@ export class DownloadService {
     }
 
     await this.ensurePaperFolder(shortId);
-    const paper = await this.papersService.create({
+    const paper = await this.papersRepository.create({
+      shortId,
       title,
       authors,
       source: 'arxiv',
@@ -160,22 +175,87 @@ export class DownloadService {
     return { paper, download: downloadResult, existed: false };
   }
 
-  async downloadPdfById(
-    paperId: string,
-    pdfUrl: string,
-    onProgress?: (downloaded: number, total: number) => void,
-  ) {
-    const paper = await this.papersRepository.findById(paperId);
-    if (!paper) throw new Error('Paper not found');
-    return this.downloadPdf(paperId, paper.shortId, pdfUrl, onProgress);
+  private async importByDoi(doi: string, originalInput: string, tags: string[] = []) {
+    const metadata = await resolveByDoi(doi);
+    if (!metadata) {
+      throw new Error(`Could not resolve metadata for DOI: ${doi}`);
+    }
+    return this.createFromMetadata(metadata, doi, tags);
   }
 
-  private async downloadPdf(
-    paperId: string,
-    shortId: string,
-    pdfUrl: string,
-    onProgress?: (downloaded: number, total: number) => void,
+  private async importByUrl(url: string, tags: string[] = []) {
+    const metadata = await resolveByUrl(url);
+    if (!metadata) {
+      throw new Error('Could not resolve paper metadata from URL. Try using a DOI instead.');
+    }
+    return this.createFromMetadata(metadata, metadata.doi ?? null, tags);
+  }
+
+  private async createFromMetadata(
+    metadata: {
+      title: string;
+      authors: string[];
+      year?: number;
+      doi?: string;
+      url?: string;
+      abstract?: string;
+    },
+    doi: string | null,
+    tags: string[],
   ) {
+    // Generate shortId
+    let shortId: string;
+    if (doi) {
+      const sanitized = doi.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 80);
+      shortId = `doi-${sanitized}`;
+    } else {
+      shortId = `local-${Date.now().toString(36)}`;
+    }
+
+    // Check existing
+    const existing = await this.papersRepository.findByShortId(shortId);
+    if (existing) {
+      return {
+        paper: existing,
+        download: { success: true, size: 0, skipped: true },
+        existed: true,
+      };
+    }
+
+    // Also check by DOI in DB
+    if (doi) {
+      const byDoi = await this.papersRepository.findByDoi(doi);
+      if (byDoi) {
+        return { paper: byDoi, download: { success: true, size: 0, skipped: true }, existed: true };
+      }
+    }
+
+    await this.ensurePaperFolder(shortId);
+    const submittedAt = metadata.year ? new Date(`${metadata.year}-01-01T00:00:00Z`) : undefined;
+
+    const paper = await this.papersRepository.create({
+      shortId,
+      title: metadata.title,
+      authors: metadata.authors,
+      source: 'doi',
+      sourceUrl: metadata.url,
+      submittedAt,
+      abstract: metadata.abstract,
+      doi: doi ?? undefined,
+      tags,
+    });
+
+    schedulePaperProcessing(paper.id);
+    return { paper, download: { success: true, size: 0, skipped: false }, existed: false };
+  }
+
+  async downloadPdfById(paperId: string, pdfUrl: string) {
+    const paper = await this.papersRepository.findById(paperId);
+    if (!paper) throw new Error('Paper not found');
+    return this.downloadPdf(paperId, paper.shortId, pdfUrl);
+  }
+
+  private async downloadPdf(paperId: string, shortId: string, pdfUrl: string) {
     const folder = this.getPaperFolder(shortId);
     const filePath = path.join(folder, 'paper.pdf');
 
@@ -188,7 +268,6 @@ export class DownloadService {
         if (isValidPdf(fileBuffer)) {
           await this.papersRepository.updatePdfPath(paperId, filePath);
           schedulePaperProcessing(paperId);
-          scheduleAutoPaperEnrichment(paperId);
           return { success: true, size: stats.size, skipped: true };
         }
         // Invalid file — clear DB path, delete file, then re-download
@@ -205,7 +284,6 @@ export class DownloadService {
       const response = await proxyFetch(pdfUrl, {
         agent,
         timeoutMs: 60000,
-        onProgress,
       });
 
       if (!response.ok) throw new Error(`Failed: ${response.status}`);
@@ -222,7 +300,6 @@ export class DownloadService {
       await fs.writeFile(filePath, buffer);
       await this.papersRepository.updatePdfPath(paperId, filePath);
       schedulePaperProcessing(paperId);
-      scheduleAutoPaperEnrichment(paperId);
 
       return { success: true, size: buffer.length, skipped: false };
     } catch (error) {

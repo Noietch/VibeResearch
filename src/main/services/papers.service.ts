@@ -10,7 +10,7 @@ import * as paperEmbeddingService from './paper-embedding.service';
 
 export interface CreatePaperInput {
   title: string;
-  source: 'chrome' | 'manual' | 'arxiv';
+  source: 'chrome' | 'manual' | 'arxiv' | 'zotero' | 'doi' | 'bibtex';
   sourceUrl?: string;
   tags?: string[];
   authors?: string[];
@@ -19,16 +19,22 @@ export interface CreatePaperInput {
   abstract?: string;
   pdfUrl?: string;
   pdfPath?: string;
+  doi?: string;
 }
 
 export class PapersService {
   private papersRepository = new PapersRepository();
   private eventsRepository = new SourceEventsRepository();
 
-  private async generateShortId(sourceUrl?: string): Promise<string> {
+  private async generateShortId(sourceUrl?: string, doi?: string): Promise<string> {
     if (sourceUrl) {
       const arxivId = extractArxivId(sourceUrl);
       if (arxivId) return arxivId;
+    }
+    if (doi) {
+      // Sanitize DOI for use as shortId: replace slashes and special chars
+      const sanitized = doi.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 80);
+      return `doi-${sanitized}`;
     }
     const count = await this.papersRepository.countByShortIdPrefix('local-');
     return `local-${(count + 1).toString().padStart(3, '0')}`;
@@ -46,7 +52,7 @@ export class PapersService {
   }
 
   async create(input: CreatePaperInput) {
-    const shortId = await this.generateShortId(input.sourceUrl);
+    const shortId = await this.generateShortId(input.sourceUrl, input.doi);
     await this.ensurePaperFolder(shortId);
 
     const submittedAt =
@@ -61,6 +67,7 @@ export class PapersService {
       submittedAt,
       abstract: input.abstract,
       pdfUrl: input.pdfUrl,
+      doi: input.doi,
       tags: input.tags ?? [],
     });
 
@@ -86,12 +93,14 @@ export class PapersService {
 
   async upsertFromIngest(input: {
     title: string;
-    source: 'chrome' | 'manual' | 'arxiv';
+    source: 'chrome' | 'manual' | 'arxiv' | 'zotero' | 'doi' | 'bibtex';
     sourceUrl?: string;
     tags: string[];
     authors?: string[];
     abstract?: string;
     submittedAt?: Date;
+    doi?: string;
+    pdfPath?: string;
   }) {
     // Deduplicate by shortId (arxiv ID extracted from sourceUrl)
     if (input.sourceUrl) {
@@ -103,6 +112,12 @@ export class PapersService {
       }
     }
 
+    // Deduplicate by DOI
+    if (input.doi) {
+      const existing = await this.papersRepository.findByDoi(input.doi);
+      if (existing) return existing;
+    }
+
     return this.create({
       title: input.title,
       source: input.source,
@@ -111,6 +126,8 @@ export class PapersService {
       authors: input.authors ?? [],
       abstract: input.abstract,
       submittedAt: input.submittedAt,
+      doi: input.doi,
+      pdfPath: input.pdfPath,
     });
   }
 
