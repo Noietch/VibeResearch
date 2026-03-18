@@ -154,10 +154,10 @@ export async function scanZoteroLibrary(
 
     // Query items (academic item types only, exclude deleted)
     const itemsResult = db.exec(`
-      SELECT i.itemID, i.key, it.type
+      SELECT i.itemID, i.key, it.typeName
       FROM items i
       JOIN itemTypes it ON i.itemTypeID = it.itemTypeID
-      WHERE it.type IN (
+      WHERE it.typeName IN (
         'journalArticle', 'conferencePaper', 'preprint', 'book',
         'bookSection', 'thesis', 'report', 'manuscript', 'webpage'
       )
@@ -186,12 +186,12 @@ export async function scanZoteroLibrary(
 
     // Query item data fields (title, DOI, abstract, url, date)
     const fieldsResult = db.exec(`
-      SELECT id.itemID, f.name, idv.value
+      SELECT id.itemID, f.fieldName, idv.value
       FROM itemData id
       JOIN itemDataValues idv ON id.valueID = idv.valueID
       JOIN fields f ON id.fieldID = f.fieldID
       WHERE id.itemID IN (${itemIds.join(',')})
-      AND f.name IN ('title', 'DOI', 'abstractNote', 'url', 'date')
+      AND f.fieldName IN ('title', 'DOI', 'abstractNote', 'url', 'date')
     `);
 
     if (fieldsResult.length > 0) {
