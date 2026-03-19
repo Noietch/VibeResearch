@@ -286,10 +286,6 @@
       "papersImported": "篇论文已导入"
     }
   },
-  "setupWizard": {
-    "title": "欢迎使用 ResearchClaw",
-    "skip": "暂时跳过"
-  },
   "compare": {
     "title": "论文对比",
     "addPaper": "添加论文",
@@ -441,6 +437,8 @@
     "model": "模型"
   },
   "setupWizard": {
+    "title": "欢迎使用 ResearchClaw",
+    "skip": "暂时跳过",
     "welcome": "欢迎使用 ResearchClaw",
     "description": "要启用论文分析、智能标签和研究推荐等 AI 功能，请配置您的 AI 服务商。",
     "configureProvider": "配置 AI 服务商",

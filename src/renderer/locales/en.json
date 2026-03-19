@@ -286,10 +286,6 @@
       "papersImported": "papers imported"
     }
   },
-  "setupWizard": {
-    "title": "Welcome to ResearchClaw",
-    "skip": "Skip for now"
-  },
   "compare": {
     "title": "Compare Papers",
     "addPaper": "Add paper",
@@ -441,6 +437,8 @@
     "model": "Model"
   },
   "setupWizard": {
+    "title": "Welcome to ResearchClaw",
+    "skip": "Skip for now",
     "welcome": "Welcome to ResearchClaw",
     "description": "To enable AI-powered features like paper analysis, smart tagging, and research recommendations, please configure your AI provider.",
     "configureProvider": "Configure AI Provider",
