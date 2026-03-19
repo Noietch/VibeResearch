@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-19 (session 43)
+
+### fix: batch processing improvements + abstract extraction
+
+- **Batch concurrency**: Increased from 3/6 to 8 for all batch operations
+  - `tagging.service.ts`: 3 → 8
+  - `ingest.service.ts`: 6 → 8
+  - `zotero.service.ts`: 6 → 8
+  - `auto-paper-enrichment.service.ts`: 2 → 8
+- **Abstract extraction**: Auto-save inferred abstract back to database during tagging
+  - When a paper has no abstract, the PDF-extracted abstract will be saved automatically
+  - Metadata source marked as 'pdf-extraction'
+- **i18n fixes**: Added missing translation keys for importModal
+
 ## 2026-03-19 (session 42)
 
 ### feat: arXiv daily discovery + AI quality scoring

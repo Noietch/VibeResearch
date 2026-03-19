@@ -352,6 +352,19 @@ export async function tagPaper(
       : metadataTitle;
   const abstract = metadataAbstract.trim() || inferred.abstract || '';
 
+  // Save inferred abstract back to database if paper is missing it
+  if (!metadataAbstract.trim() && inferred.abstract) {
+    try {
+      await repo.updateMetadata(paperId, {
+        abstract: inferred.abstract,
+        metadataSource: 'pdf-extraction',
+      });
+      appendLog('tagging', 'tagPaper:saved_inferred_abstract', { paperId }, 'tagging.log');
+    } catch {
+      // Ignore errors
+    }
+  }
+
   appendLog(
     'tagging',
     'tagPaper:start',

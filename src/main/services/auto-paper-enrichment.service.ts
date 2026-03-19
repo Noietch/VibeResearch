@@ -5,7 +5,7 @@ import { tagPaper } from './tagging.service';
 
 const AUTO_ENRICH_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.VIBE_AUTO_ENRICH_CONCURRENCY ?? '2', 10) || 2,
+  Number.parseInt(process.env.VIBE_AUTO_ENRICH_CONCURRENCY ?? '8', 10) || 8,
 );
 
 const queue: string[] = [];
