@@ -82,6 +82,40 @@ function getDefaultPapersDir(): string {
   return getPapersBaseDir();
 }
 
+function getActiveEmbeddingConfigFromSettings(settings: AppSettings): EmbeddingConfig | null {
+  const configs = settings.embeddingConfigs ?? [];
+  if (configs.length === 0) {
+    settings.activeEmbeddingConfigId = undefined;
+    return null;
+  }
+
+  if (!settings.activeEmbeddingConfigId && configs.length === 1) {
+    settings.activeEmbeddingConfigId = configs[0].id;
+  }
+
+  const activeConfig = configs.find((c) => c.id === settings.activeEmbeddingConfigId) ?? null;
+
+  if (!activeConfig && settings.activeEmbeddingConfigId) {
+    settings.activeEmbeddingConfigId = undefined;
+  }
+
+  return activeConfig;
+}
+
+function applyActiveEmbeddingConfig(settings: AppSettings): void {
+  const activeConfig = getActiveEmbeddingConfigFromSettings(settings);
+  if (!activeConfig) return;
+
+  settings.semanticSearch = {
+    ...DEFAULT_SEMANTIC_SEARCH_SETTINGS,
+    ...settings.semanticSearch,
+    embeddingProvider: activeConfig.provider,
+    embeddingModel: activeConfig.embeddingModel,
+    embeddingApiBase: activeConfig.embeddingApiBase,
+    embeddingApiKey: activeConfig.embeddingApiKey,
+  };
+}
+
 function load(): AppSettings {
   try {
     const settingsPath = getSettingsPath();
@@ -126,6 +160,7 @@ function load(): AppSettings {
           saved.activeEmbeddingConfigId = undefined;
         }
       }
+      applyActiveEmbeddingConfig(saved);
       // No default embedding config created - user must configure one in Welcome/Settings
       return saved;
     }

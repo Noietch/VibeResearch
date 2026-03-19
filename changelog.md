@@ -5155,3 +5155,123 @@ When loading a completed chat session, the code would set `agentRunId` to point 
 - **Rationale**: The paper import failure was caused by `pdf-parse` being bundled into the Electron main-process output, where its `PDFParse` export name existed but its bound value became `undefined`
 - **Test Design**: Run the focused extractor test first, then rebuild the main process so the externalization takes effect in the generated bundle
 - **Validation**: Pending `npx vitest run tests/integration/pdf-extractor.test.ts` and `npm run build:main`
+
+### Fix: Make Agent ACP Test Connection Home/CWD Cross-Platform
+
+- **Scope**: `src/main/agent/acp-connection.ts`, `src/main/ipc/agent-todo.ipc.ts`, `src/main/services/openai-compatible-embedding-provider.ts`, `src/main/utils/home-env.ts`, `src/main/utils/proxy-env.ts`, `src/renderer/components/settings/AgentSettings.tsx`, `tests/integration/home-env.test.ts`, `tests/integration/proxy-env.test.ts`
+- **Changes**:
+  - Added small helpers to build a cross-platform home override env and resolve a working directory from `HOME` or `USERPROFILE`
+  - Replaced the ACP test handler's Unix-only `process.env.HOME ?? '/tmp'` fallback with the new helper so Windows now gets a valid working directory
+  - Applied both `HOME` and `USERPROFILE` when staging temporary agent home files and cleaned the temp directory up after each connection test
+  - Increased the renderer-side agent Test Connection timeout from 5 seconds to 20 seconds to reduce false failures during first-run `npx` startup
+  - Injected saved CLI proxy settings into local ACP spawns so Codex/Claude/Gemini ACP bridges inherit the app's `cliTools` proxy configuration
+  - Routed OpenAI-compatible embedding requests through the app proxy when the `aiApi` proxy scope is enabled, so background `PaperEmbedding` jobs stop bypassing the configured proxy
+- **Rationale**: Codex ACP tests were brittle on Windows because the IPC handler could spawn the agent with an invalid `/tmp` cwd and an incomplete home override, while the 5 second renderer timeout was too short for slower ACP startup paths
+- **Test Design**: Cover the new home env and CLI proxy env helpers directly and rebuild the main process to verify the ACP spawn path still compiles cleanly
+- **Validation**: `npx.cmd vitest run tests/integration/home-env.test.ts tests/integration/proxy-env.test.ts`, `npm.cmd run build:main`, `npx.cmd prettier --check src/main/agent/acp-connection.ts src/main/ipc/agent-todo.ipc.ts src/main/services/openai-compatible-embedding-provider.ts src/main/utils/home-env.ts src/main/utils/proxy-env.ts src/renderer/components/settings/AgentSettings.tsx tests/integration/home-env.test.ts tests/integration/proxy-env.test.ts changelog.md`
+
+### Fix: Launch ACP Bridge Commands Safely on Windows
+
+- **Scope**: `src/main/agent/acp-connection.ts`, `src/main/utils/shell-env.ts`, `tests/integration/acp-connection.spawn.test.ts`
+- **Changes**:
+  - Added a Windows-specific ACP spawn path that launches `.cmd` and `.bat` bridge commands through `cmd.exe /d /s /c` instead of trying to execute them directly
+  - Taught command resolution to prefer Windows executable shim extensions over extensionless npm wrapper files when resolving CLI tools from `PATH`
+  - Added a focused regression test that verifies ACP bridge commands choose the Windows-safe spawn parameters
+- **Rationale**: Agent Test Connection on Windows was still failing with `spawn EINVAL` because ACP bridge commands such as `npx.cmd @zed-industries/codex-acp` were being passed to `spawn()` as direct executables
+- **Test Design**: Cover the Windows spawn-decision logic with a focused integration test, then rebuild the main process to ensure the ACP path still compiles
+- **Validation**: `npx.cmd vitest run tests/integration/acp-connection.spawn.test.ts`, `npm.cmd run build:main`
+
+### Fix: Resolve Windows Shell Explicitly for ACP Chat Spawns
+
+- **Scope**: `src/main/agent/acp-connection.ts`, `src/main/utils/shell-env.ts`, `tests/integration/acp-connection.spawn.test.ts`
+- **Changes**:
+  - Added explicit Windows shell resolution that prefers `ComSpec` and falls back to `SystemRoot\\System32\\cmd.exe`
+  - Switched ACP Windows shell launches to use the resolved shell path instead of relying on Node's default `cmd.exe` lookup
+  - Extended the ACP regression test to cover Windows shell resolution directly
+- **Rationale**: Library reading chat and other ACP-backed agent flows could still fail with `spawn cmd.exe ENOENT` when the Electron environment lacked a shell path that Node could resolve implicitly
+- **Test Design**: Extend the focused ACP Windows spawn test to cover shell path resolution, then rebuild the main process and rerun formatting checks
+- **Validation**: `npx.cmd vitest run tests/integration/acp-connection.spawn.test.ts`, `npm.cmd run build:main`, `npm.cmd run lint`
+
+### Fix: Infer Agent Tool for Legacy Agent Configs
+
+- **Scope**: `src/shared/types/agent-todo.ts`, `src/main/services/agent-todo.service.ts`, `src/main/ipc/agent-todo.ipc.ts`, `tests/integration/agent-todo.service.test.ts`
+- **Changes**:
+  - Added a shared helper that infers `agentTool` from legacy `backend` values such as `codex` and `claudecode` when the stored `agentTool` field is missing
+  - Updated agent listing, todo loading, todo execution, and ACP test connection to use the inferred tool consistently
+  - Normalized the backend passed into `AgentTaskRunner` so legacy configs still get the right resume and env-injection behavior
+  - Added a regression test covering old Codex configs that have no `agentTool` but still need `OPENAI_API_KEY` injected
+- **Rationale**: Paper-reader agent chat could hit OpenAI's “You didn't provide an API key” error because older agent records skipped Codex env injection whenever `agentTool` was blank in the database
+- **Test Design**: Verify inferred tool mapping during list/run flows with a focused service test, then rerun formatting and the targeted test set
+- **Validation**: `npx.cmd vitest run tests/integration/agent-todo.service.test.ts tests/integration/acp-connection.spawn.test.ts`, `npm.cmd run lint`, `npm.cmd run build:main`
+
+### Fix: Stage Codex Home Files for Reader Agent Runs
+
+- **Scope**: `src/main/services/agent-config.service.ts`, `src/main/services/agent-todo.service.ts`, `src/main/services/agent-task-runner.ts`, `src/main/ipc/agent-todo.ipc.ts`, `tests/integration/agent-config.service.test.ts`, `tests/integration/agent-todo.service.test.ts`, `tests/integration/codex-acp.test.ts`
+- **Changes**:
+  - Staged synthesized `.codex/auth.json` and `.codex/config.toml` files for local `runTodo()` executions when agents only provide inline `apiKey`, `baseUrl`, and `defaultModel`
+  - Updated synthesized Codex `config.toml` content to match the real custom-provider shape that works with prompt execution (`model_provider`, `[model_providers.custom]`, `wire_api`, and `requires_openai_auth`)
+  - Applied the temporary `HOME` and `USERPROFILE` override to the real reader-agent run path so Codex sees the same auth/config shape during prompt execution as it does during connection tests
+  - Added runner-level cleanup for staged temp-home directories after stop, process exit, or failed starts/sends
+  - Passed `apiKey`, `baseUrl`, and `defaultModel` into the ACP test-connection path so both code paths synthesize home files consistently
+- **Rationale**: Reader-page agent chat could still fail with OpenAI's missing API key error because only the connection test path staged Codex home files, and the first synthesized `config.toml` shape was not close enough to the real working Codex provider config used during prompt execution
+- **Test Design**: Extend focused config and service tests to assert the staged Codex file contents, then add a real `codex-acp` integration test that sends a prompt using the same synthesized temp-home strategy as reader chat
+- **Validation**: `npx.cmd vitest run tests/integration/agent-config.service.test.ts tests/integration/agent-todo.service.test.ts tests/integration/acp-connection.spawn.test.ts`, `RUN_CODEX_E2E=1 npx.cmd vitest run tests/integration/codex-acp.test.ts`, `npm.cmd run lint`, `npm.cmd run build:main`; `npm.cmd run test` still fails on pre-existing unrelated suites (`prisma ENOENT` setup failures, `tests/integration/acp-chat.test.ts`, `tests/unit/shell-env.test.ts`, and `tests/support/verify-isolation.test.ts`)
+
+## 2026-03-18
+
+### fix: Recreate embedding provider for per-card Test requests
+
+- **Scope**: `src/main/services/local-semantic.service.ts`, `tests/integration/local-semantic.service.test.ts`
+- **Changes**:
+  - Replaced the local semantic provider cache key so it now tracks the effective embedding provider, model, base URL, and API key instead of only the provider type
+  - Added a regression test covering the exact failure mode where a cached no-key provider is reused after the settings UI sends a test request with a new API key override
+- **Rationale**: The Embedding Models `Test` action could reuse a previously cached provider instance from another card or from the active config, causing the outgoing `/embeddings` request to omit the new `Authorization: Bearer ...` header and fail with OpenAI-compatible `401` errors
+- **Test Design**: Mock the embedding HTTP client, create one request from stored settings without an API key, then issue a second request with per-call overrides and assert the second request uses the new base URL, model, and bearer token
+- **Validation**: `npx.cmd vitest run tests/integration/local-semantic.service.test.ts`, `npm.cmd run build:main`
+
+### fix: Make background paper embedding follow the active embedding config
+
+- **Scope**: `src/main/store/app-settings-store.ts`, `src/main/index.ts`, `tests/integration/app-settings-store.test.ts`
+- **Changes**:
+  - Made `getSemanticSearchSettings()` inherit the provider, model, base URL, and API key from the active embedding config when one is selected
+  - Auto-select the only saved embedding config when there is exactly one config but no active ID yet
+  - Added startup guards so pending paper embedding is skipped when semantic search is disabled or embedding config is still incomplete
+  - Added regression tests covering active-config override and first-config auto-activation
+- **Rationale**: Background `PaperEmbedding` jobs were still reading stale `semanticSearch` fields even after the settings UI had a valid active embedding card, which left startup indexing requests on an old no-key config and produced repeated `401` errors
+- **Test Design**: Persist settings with a stale semantic config plus a valid active embedding card, then assert the store returns the active card's embedding fields; separately save the first embedding config and verify it becomes active and immediately drives semantic settings
+- **Validation**: `npx.cmd vitest run tests/integration/local-semantic.service.test.ts tests/integration/app-settings-store.test.ts`, `npm.cmd run build:main`
+
+### fix: Read Chrome history snapshots with WAL files
+
+- **Scope**: `src/main/services/ingest.service.ts`, `tests/integration/chrome-history-reader.test.ts`
+- **Changes**:
+  - Replaced the Chrome history scan path from `sql.js` byte-buffer reads to a disk-backed `node:sqlite` snapshot reader
+  - Copied adjacent `History-wal` and `History-shm` files into the temporary snapshot before querying, so live Chrome databases keep their `urls` table and latest rows
+  - Added a clearer error when the selected SQLite file is not a real Chrome history database
+  - Switched Windows and Linux path resolution to use `LOCALAPPDATA` / `XDG_CONFIG_HOME` when available
+- **Rationale**: When Chrome keeps history in WAL mode, copying only the `History` main file can produce a temporary database with no `urls` table, which caused the import UI to fail with `no such table: urls` even though the browser history itself was valid
+- **Test Design**: Create a WAL-backed Chrome history fixture and verify the reader still finds arXiv rows after snapshotting, then verify an unrelated SQLite file fails with the new missing-table error
+- **Validation**: `npx.cmd vitest run tests/integration/chrome-history-reader.test.ts`, `npm.cmd run build:main`
+
+### fix: Fail ACP agent startup cleanly when Windows shell spawn breaks
+
+- **Scope**: `src/main/agent/acp-connection.ts`, `src/main/services/agent-task-runner.ts`, `src/main/utils/shell-env.ts`, `tests/integration/acp-connection.spawn.test.ts`, `tests/integration/agent-task-runner.test.ts`, `tests/integration/codex-acp.test.ts`
+- **Changes**:
+  - Wrapped local ACP child-process startup so synchronous `spawn()` failures and async child `error` events are both converted into handled startup errors
+  - Waited for the child `spawn` event before opening ACP stdio streams, and raced ACP initialization against startup failure so dead-on-arrival processes do not continue into broken pipe writes
+  - Switched Windows ACP launches back to Node's default shell handling while still seeding `ComSpec`, so `.cmd`-based agents do not depend on spawning an explicit `C:\\Windows\\System32\\cmd.exe` path
+  - Stopped `AgentTaskRunner` from emitting Node's reserved `'error'` event unless a listener explicitly opted in, so task failures stay as normal UI/IPC errors instead of becoming `ERR_UNHANDLED_ERROR`
+  - Aligned the optional Codex ACP E2E helper with the same Windows shell strategy used by the runtime path
+  - Added regression tests that simulate both `spawn ... ENOENT` during ACP startup and the runner-level failure path that previously crashed on an unhandled EventEmitter error
+- **Rationale**: Reader-page agent chat on Windows could fail twice: first on `spawn C:\\WINDOWS\\system32\\cmd.exe ENOENT`, and then again when `AgentTaskRunner.pushEvent('error', ...)` triggered EventEmitter's fatal reserved error behavior instead of reporting a normal task failure
+- **Test Design**: Mock `child_process.spawn()` to return a child that emits `error`, assert `AcpConnection.spawn()` rejects with a wrapped startup error and uses the safer Windows shell option, then mock `AcpConnection.spawn()` to reject inside `AgentTaskRunner.start()` and verify the runner reports failure without bubbling `ERR_UNHANDLED_ERROR`
+- **Validation**: `npx.cmd vitest run tests/integration/acp-connection.spawn.test.ts tests/integration/agent-task-runner.test.ts tests/integration/codex-acp.test.ts`, `npm.cmd run build:main`, and `npm.cmd run lint` passed; `npm.cmd run test` still fails in pre-existing unrelated areas (`tests/integration/acp-chat.test.ts`, `tests/unit/shell-env.test.ts`, `tests/support/verify-isolation.test.ts`, and multiple Prisma-backed suites that still hit `node_modules\\.bin\\prisma ENOENT` during test DB setup)
+
+### fix: Use the Windows Prisma shim in test DB setup
+
+- **Scope**: `tests/support/test-db.ts`
+- **Changes**:
+  - Switched the integration test schema bootstrap helper to use the Windows `prisma.cmd` shim while enabling shell execution only on Windows, so the same helper works across platforms
+- **Rationale**: The Husky pre-commit hook could not start its required Prisma-backed integration suites on Windows because `execFileSync()` was targeting the Unix-style `prisma` shim path, and direct `.cmd` execution also fails without shell dispatch
+- **Test Design**: Re-run the exact pre-commit test target (`tests/integration/papers.test.ts`, `tests/integration/reading.test.ts`, `tests/integration/projects.test.ts`) so the schema bootstrap path is exercised through the real hook flow, then rerun the full suite to confirm Prisma-backed suites execute again
+- **Validation**: `npx.cmd vitest run tests/integration/papers.test.ts tests/integration/reading.test.ts tests/integration/projects.test.ts` passed, `npm.cmd run lint` passed, and `npm.cmd run test` now only fails in pre-existing unrelated suites (`tests/unit/shell-env.test.ts` and `tests/support/verify-isolation.test.ts`)

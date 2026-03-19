@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 function createRepositoryMock() {
@@ -88,7 +90,7 @@ describe('AgentTodoService', () => {
     const service = new AgentTodoService();
 
     await expect(service.listAgents()).resolves.toEqual([
-      expect.objectContaining({ acpArgs: ['serve', '--stdio'] }),
+      expect.objectContaining({ acpArgs: ['serve', '--stdio'], agentTool: 'codex' }),
     ]);
     await expect(service.listTodos()).resolves.toEqual([
       expect.objectContaining({
@@ -338,5 +340,111 @@ describe('AgentTodoService', () => {
       'hello agent',
     );
     expect(runner.sendMessage).toHaveBeenCalledWith('hello agent');
+  });
+
+  it('injects Codex API env and stages synthesized home files for legacy agent configs', async () => {
+    const repository = createRepositoryMock();
+    repository.findTodoById.mockResolvedValue({
+      id: 'todo-1',
+      title: 'Chat',
+      prompt: 'Summarize this paper',
+      cwd: 'D:/papers/1234.5678',
+      yoloMode: false,
+      agent: {
+        id: 'agent-1',
+        name: 'Codex Legacy',
+        backend: 'codex',
+        agentTool: null,
+        cliPath: 'npx @zed-industries/codex-acp',
+        acpArgs: '[]',
+        extraEnv: '{}',
+        defaultModel: 'gpt-5',
+        apiKey: 'sk-test',
+        baseUrl: 'https://example.com/v1',
+        isRemote: false,
+      },
+    });
+    repository.findRunsByTodoId.mockResolvedValue([]);
+    repository.createRun.mockResolvedValue({ id: 'run-1' });
+
+    const runnerCtor = vi.fn();
+    let runnerConfig: any;
+    class MockAgentTaskRunner {
+      on = vi.fn();
+      start = vi.fn().mockResolvedValue(undefined);
+      getSessionId = vi.fn(() => null);
+      getStatus = vi.fn(() => 'completed');
+
+      constructor(config: unknown) {
+        runnerConfig = config;
+        runnerCtor(config);
+      }
+    }
+
+    vi.doMock('@db', () => ({
+      AgentTodoRepository: class {
+        constructor() {
+          return repository;
+        }
+      },
+      ProjectsRepository: class {
+        getProject = vi.fn().mockResolvedValue(null);
+      },
+    }));
+    vi.doMock('../../src/main/agent/agent-detector', () => ({
+      detectAgents: vi.fn(),
+    }));
+    vi.doMock('../../src/main/services/agent-task-runner', () => ({
+      AgentTaskRunner: MockAgentTaskRunner,
+    }));
+    vi.doMock('../../src/main/services/agent-runner-registry', () => ({
+      registerRunner: vi.fn(),
+      getRunner: vi.fn(() => null),
+      stopRunner: vi.fn(),
+    }));
+    vi.doMock('../../src/main/services/agent-scheduler', () => ({
+      AgentScheduler: class {
+        constructor() {
+          return { loadFromDb: vi.fn(), add: vi.fn(), remove: vi.fn() };
+        }
+      },
+    }));
+    vi.doMock('../../src/main/agent/session-stats-reader', () => ({
+      readSessionStats: vi.fn(),
+    }));
+
+    const { AgentTodoService } = await import('../../src/main/services/agent-todo.service');
+    const service = new AgentTodoService();
+
+    await service.runTodo('todo-1');
+
+    expect(runnerCtor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backend: 'codex',
+        extraEnv: expect.objectContaining({
+          OPENAI_API_KEY: 'sk-test',
+          OPENAI_BASE_URL: 'https://example.com/v1',
+        }),
+      }),
+    );
+
+    const tempHomeDir = runnerConfig.extraEnv.HOME;
+    expect(tempHomeDir).toBe(runnerConfig.extraEnv.USERPROFILE);
+    expect(typeof runnerConfig.cleanup).toBe('function');
+
+    const authPath = path.join(tempHomeDir, '.codex', 'auth.json');
+    const configPath = path.join(tempHomeDir, '.codex', 'config.toml');
+    expect(JSON.parse(fs.readFileSync(authPath, 'utf8'))).toEqual({
+      OPENAI_API_KEY: 'sk-test',
+    });
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('model_provider = "custom"');
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('model = "gpt-5"');
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('[model_providers.custom]');
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('wire_api = "responses"');
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('requires_openai_auth = true');
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('base_url = "https://example.com/v1"');
+
+    runnerConfig.cleanup();
+    expect(fs.existsSync(tempHomeDir)).toBe(false);
   });
 });

@@ -1,12 +1,17 @@
+import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import { AgentTodoRepository, ProjectsRepository } from '@db';
+import { inferAgentToolKind } from '@shared';
 import { detectAgents, DetectedAgent } from '../agent/agent-detector';
 import { AgentTaskRunner } from './agent-task-runner';
+import { resolveAgentCliArgs, resolveAgentHomeFiles } from './agent-config.service';
 import { registerRunner, getRunner, stopRunner } from './agent-runner-registry';
 import { AgentScheduler } from './agent-scheduler';
 import { readSessionStats } from '../agent/session-stats-reader';
 import { getSshConnectConfig } from '../store/ssh-server-store';
 import { decryptString } from '../utils/encryption';
+import { createHomeOverrideEnv } from '../utils/home-env';
 import type { SshConnectConfig } from '@shared';
 
 /**
@@ -28,6 +33,39 @@ export function parseExtraEnv(raw: string | null | undefined): Record<string, st
     }
   }
   return {};
+}
+
+function normalizeAgentConfig<T extends { agentTool?: string | null; backend?: string | null }>(
+  config: T,
+): T & { agentTool: ReturnType<typeof inferAgentToolKind> } {
+  return {
+    ...config,
+    agentTool: inferAgentToolKind(config),
+  };
+}
+
+function stageAgentHomeFiles(
+  homeFiles: Array<{ relativePath: string; content: string }>,
+): { env: Record<'HOME' | 'USERPROFILE', string>; cleanup: () => void } | null {
+  if (homeFiles.length === 0) return null;
+
+  const tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-agent-home-'));
+  for (const file of homeFiles) {
+    const destination = path.join(tempHomeDir, file.relativePath);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, file.content, 'utf8');
+  }
+
+  return {
+    env: createHomeOverrideEnv(tempHomeDir),
+    cleanup: () => {
+      try {
+        fs.rmSync(tempHomeDir, { recursive: true, force: true });
+      } catch {
+        // Ignore temp-home cleanup failures.
+      }
+    },
+  };
 }
 
 export class AgentTodoService {
@@ -63,7 +101,7 @@ export class AgentTodoService {
   async listAgents() {
     const configs = await this.repository.findAllAgentConfigs();
     return configs.map((c) => ({
-      ...c,
+      ...normalizeAgentConfig(c),
       acpArgs: JSON.parse(c.acpArgs) as string[],
       remoteExtraEnv: parseExtraEnv((c as any).remoteExtraEnv),
       // Never expose the encrypted passphrase to renderer
@@ -191,7 +229,7 @@ export class AgentTodoService {
     const todos = await this.repository.findAllTodos(query);
     return todos.map((t) => ({
       ...t,
-      agent: { ...t.agent, acpArgs: JSON.parse(t.agent.acpArgs) as string[] },
+      agent: { ...normalizeAgentConfig(t.agent), acpArgs: JSON.parse(t.agent.acpArgs) as string[] },
       resultsCount: t._count?.results ?? 0,
     }));
   }
@@ -201,7 +239,10 @@ export class AgentTodoService {
     if (!todo) throw new Error(`AgentTodo not found: ${id}`);
     return {
       ...todo,
-      agent: { ...todo.agent, acpArgs: JSON.parse(todo.agent.acpArgs) as string[] },
+      agent: {
+        ...normalizeAgentConfig(todo.agent),
+        acpArgs: JSON.parse(todo.agent.acpArgs) as string[],
+      },
     };
   }
 
@@ -257,7 +298,8 @@ export class AgentTodoService {
     }
 
     const agentConfig = todo.agent;
-    const cliPath = agentConfig.cliPath ?? agentConfig.backend;
+    const agentTool = inferAgentToolKind(agentConfig);
+    let cliPath = agentConfig.cliPath ?? agentConfig.backend;
     const acpArgs = agentConfig.acpArgs;
     const extraEnv = parseExtraEnv(agentConfig.extraEnv);
 
@@ -265,7 +307,7 @@ export class AgentTodoService {
     const model = (todo as any).model ?? agentConfig.defaultModel;
     if (model) {
       // Use appropriate env var based on agent type
-      if (agentConfig.agentTool === 'codex') {
+      if (agentTool === 'codex') {
         extraEnv['OPENAI_MODEL'] = model;
       } else {
         extraEnv['ANTHROPIC_MODEL'] = model;
@@ -273,10 +315,10 @@ export class AgentTodoService {
     }
 
     // Inject API configuration based on agent type
-    if (agentConfig.agentTool === 'codex') {
+    if (agentTool === 'codex') {
       if (agentConfig.apiKey) extraEnv['OPENAI_API_KEY'] = agentConfig.apiKey;
       if (agentConfig.baseUrl) extraEnv['OPENAI_BASE_URL'] = agentConfig.baseUrl;
-    } else if (agentConfig.agentTool === 'claude-code') {
+    } else if (agentTool === 'claude-code') {
       if (agentConfig.apiKey) extraEnv['ANTHROPIC_API_KEY'] = agentConfig.apiKey;
       if (agentConfig.baseUrl) extraEnv['ANTHROPIC_BASE_URL'] = agentConfig.baseUrl;
     }
@@ -300,7 +342,7 @@ export class AgentTodoService {
       };
       // Use remoteCliPath if set
       if (agent.remoteCliPath) {
-        (agentConfig as any).cliPath = agent.remoteCliPath;
+        cliPath = agent.remoteCliPath;
       }
       // Merge remoteExtraEnv on top of extraEnv
       const remoteEnv = parseExtraEnv((agentConfig as any).remoteExtraEnv);
@@ -317,6 +359,29 @@ export class AgentTodoService {
         } catch (error) {
           console.error('Failed to resolve SSH config from project:', error);
         }
+      }
+    }
+
+    let finalAcpArgs = [...acpArgs];
+    let cleanup: (() => void) | undefined;
+
+    // Only stage local config files for local runs. Remote agents must rely on
+    // files that already exist on the remote host.
+    if (!sshConfig) {
+      const configInput = {
+        agentTool,
+        configContent: agentConfig.configContent ?? undefined,
+        authContent: agentConfig.authContent ?? undefined,
+        apiKey: agentConfig.apiKey ?? undefined,
+        baseUrl: agentConfig.baseUrl ?? undefined,
+        defaultModel: model ?? undefined,
+      };
+      finalAcpArgs = [...resolveAgentCliArgs(configInput), ...acpArgs];
+
+      const stagedHome = stageAgentHomeFiles(resolveAgentHomeFiles(configInput));
+      if (stagedHome) {
+        Object.assign(extraEnv, stagedHome.env);
+        cleanup = stagedHome.cleanup;
       }
     }
 
@@ -343,14 +408,15 @@ export class AgentTodoService {
     const runner = new AgentTaskRunner({
       todoId,
       runId: run.id,
-      backend: agentConfig.backend,
+      backend: agentTool === 'custom' ? agentConfig.backend : agentTool,
       cliPath,
-      acpArgs,
+      acpArgs: finalAcpArgs,
       cwd,
       yoloMode: todo.yoloMode,
       extraEnv,
       sshConfig,
       resumeSessionId,
+      cleanup,
     });
 
     registerRunner(todoId, runner);

@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron';
+import { inferAgentToolKind } from '@shared';
 import { AgentTodoService } from '../services/agent-todo.service';
 import { AcpConnection } from '../agent/acp-connection';
 import { resolveAgentCliArgs, resolveAgentHomeFiles } from '../services/agent-config.service';
+import { createHomeOverrideEnv, resolveHomeWorkingDirectory } from '../utils/home-env';
 import type { AgentToolKind } from '@shared';
 
 let service: AgentTodoService | null = null;
@@ -183,6 +185,7 @@ export function setupAgentTodoIpc() {
   // ACP connectivity test — spawns the real CLI, runs initialize + session/new, then kills it
   ipcMain.handle('agent-todo:test-acp', async (_, agentId: string) => {
     let conn: AcpConnection | null = null;
+    let tempHomeDir: string | null = null;
     const stderrLines: string[] = [];
     try {
       const agents = await getService().listAgents();
@@ -195,7 +198,7 @@ export function setupAgentTodoIpc() {
         typeof agent.extraEnv === 'string' ? agent.extraEnv : '{}',
       ) as Record<string, string>;
 
-      const agentTool = (agent.agentTool ?? 'claude-code') as AgentToolKind;
+      const agentTool = inferAgentToolKind(agent) as AgentToolKind;
 
       // Inject API credentials into env (same as normal run flow)
       if (agentTool === 'codex') {
@@ -213,6 +216,9 @@ export function setupAgentTodoIpc() {
         agentTool,
         configContent: agent.configContent ?? undefined,
         authContent: agent.authContent ?? undefined,
+        apiKey: agent.apiKey ?? undefined,
+        baseUrl: agent.baseUrl ?? undefined,
+        defaultModel: agent.defaultModel ?? undefined,
       };
       const prependArgs = resolveAgentCliArgs(configInput);
       const homeFiles = resolveAgentHomeFiles(configInput);
@@ -222,13 +228,13 @@ export function setupAgentTodoIpc() {
         const os = await import('node:os');
         const fs = await import('node:fs');
         const path = await import('node:path');
-        const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-agent-test-'));
+        tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-agent-test-'));
         for (const hf of homeFiles) {
-          const fullPath = path.join(tmpHome, hf.relativePath);
+          const fullPath = path.join(tempHomeDir, hf.relativePath);
           fs.mkdirSync(path.dirname(fullPath), { recursive: true });
           fs.writeFileSync(fullPath, hf.content, 'utf-8');
         }
-        extraEnv['HOME'] = tmpHome;
+        Object.assign(extraEnv, createHomeOverrideEnv(tempHomeDir));
       }
 
       const finalArgs = [...prependArgs, ...acpArgs];
@@ -236,17 +242,26 @@ export function setupAgentTodoIpc() {
       conn = new AcpConnection();
       conn.on('stderr', (text: string) => stderrLines.push(text));
 
-      const cwd = process.env.HOME ?? '/tmp';
+      const cwd = resolveHomeWorkingDirectory(extraEnv);
       await conn.spawn(cliPath, finalArgs, cwd, extraEnv);
       const sessionId = await conn.createSession(cwd);
-      conn.kill();
       await getService().incrementAgentCallCount(agentId);
       return ok({ sessionId });
     } catch (e: unknown) {
-      conn?.kill();
       const message = (e as Error).message;
       const stderr = stderrLines.join('\n').trim();
       return err(stderr ? `${message}\n${stderr}` : message);
+    } finally {
+      conn?.kill();
+      if (tempHomeDir) {
+        const fs = await import('node:fs');
+        try {
+          fs.rmSync(tempHomeDir, { recursive: true, force: true });
+        } catch {
+          // Ignore temp-home cleanup failures on Windows when the shell process
+          // has not fully released file handles yet.
+        }
+      }
     }
   });
 }

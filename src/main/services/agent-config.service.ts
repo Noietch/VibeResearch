@@ -87,6 +87,36 @@ function upsertHomeFile(
   files.push({ relativePath, content });
 }
 
+function escapeTomlString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function buildCodexConfigContent(input: {
+  baseUrl?: string | null;
+  defaultModel?: string | null;
+}): string {
+  const lines: string[] = [];
+  const model = input.defaultModel?.trim();
+  const baseUrl = input.baseUrl?.trim();
+
+  if (baseUrl) {
+    lines.push('model_provider = "custom"');
+  }
+  if (model) {
+    lines.push(`model = "${escapeTomlString(model)}"`);
+  }
+  if (baseUrl) {
+    if (lines.length > 0) lines.push('');
+    lines.push('[model_providers.custom]');
+    lines.push('name = "custom"');
+    lines.push('wire_api = "responses"');
+    lines.push('requires_openai_auth = true');
+    lines.push(`base_url = "${escapeTomlString(baseUrl)}"`);
+  }
+
+  return lines.join('\n').trim();
+}
+
 export function getMissingAgentConfigMessage(
   model: Pick<ModelConfig, 'agentTool' | 'configContent' | 'authContent'>,
 ): string | null {
@@ -147,7 +177,11 @@ export function resolveAgentCliArgs(
 }
 
 export function resolveAgentHomeFiles(
-  model: Pick<ModelConfig, 'agentTool' | 'configContent' | 'authContent'>,
+  model: Pick<ModelConfig, 'agentTool' | 'configContent' | 'authContent'> & {
+    apiKey?: string | null;
+    baseUrl?: string | null;
+    defaultModel?: string | null;
+  },
 ): Array<{ relativePath: string; content: string }> {
   const tool = model.agentTool;
   if (!tool || tool === 'custom') return [];
@@ -157,8 +191,17 @@ export function resolveAgentHomeFiles(
   }
 
   if (tool === 'codex') {
-    const inlineConfig = model.configContent?.trim();
-    const inlineAuth = model.authContent?.trim();
+    let inlineConfig = model.configContent?.trim();
+    let inlineAuth = model.authContent?.trim();
+
+    if (!inlineAuth && model.apiKey?.trim()) {
+      inlineAuth = JSON.stringify({ OPENAI_API_KEY: model.apiKey.trim() }, null, 2);
+    }
+
+    if (!inlineConfig) {
+      inlineConfig = buildCodexConfigContent(model);
+    }
+
     if (!inlineConfig && !inlineAuth) {
       return [];
     }

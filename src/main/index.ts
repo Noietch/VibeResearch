@@ -22,13 +22,18 @@ import { setupCitationsIpc } from './ipc/citations.ipc';
 import { setupUserProfileIpc } from './ipc/user-profile.ipc';
 import { setupAcpChatIpc } from './ipc/acp-chat.ipc';
 import { ensureStorageDir, getDbPath, getStorageDir } from './store/storage-path';
-import { hasLanguagePreference, setLanguage } from './store/app-settings-store';
+import {
+  getSemanticSearchSettings,
+  hasLanguagePreference,
+  setLanguage,
+} from './store/app-settings-store';
 import { PapersRepository } from '@db';
 import { resumeAutomaticPaperProcessing } from './services/paper-processing.service';
 import { resumeAutomaticCitationExtraction } from './services/citation-processing.service';
 import { stopOllamaService, warmupOllamaService } from './services/ollama.service';
 import { closeVecStore } from '../db/vec-store';
 import * as vecIndex from './services/vec-index.service';
+import { localSemanticService } from './services/local-semantic.service';
 import * as paperEmbeddingService from './services/paper-embedding.service';
 import { getPrismaClient } from '../db/client';
 
@@ -476,6 +481,19 @@ app.whenReady().then(async () => {
 
       // Load paper embeddings into vector store
       await paperEmbeddingService.initializeVecStore();
+
+      const semanticSettings = getSemanticSearchSettings();
+      if (!semanticSettings.enabled) {
+        console.log('[startup] Semantic search disabled, skipping pending embeddings');
+        return;
+      }
+
+      if (!localSemanticService.hasValidConfig()) {
+        console.log(
+          '[startup] Embedding config incomplete, skipping pending embeddings until Settings is configured',
+        );
+        return;
+      }
 
       // Check for papers without embeddings
       const stats = await paperEmbeddingService.getEmbeddingStats();

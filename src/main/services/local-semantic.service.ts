@@ -7,7 +7,7 @@ import { OpenAICompatibleEmbeddingProvider } from './openai-compatible-embedding
 
 export class LocalSemanticService {
   private provider: EmbeddingProvider | null = null;
-  private currentProviderId: 'openai-compatible' | 'ollama' | null = null;
+  private currentProviderKey: string | null = null;
 
   private getSettings(overrides: Partial<SemanticSearchSettings> = {}): SemanticSearchSettings {
     return {
@@ -16,19 +16,28 @@ export class LocalSemanticService {
     };
   }
 
+  private getProviderKey(settings: SemanticSearchSettings): string {
+    return JSON.stringify({
+      provider: settings.embeddingProvider ?? 'openai-compatible',
+      model: settings.embeddingModel,
+      baseUrl: settings.embeddingApiBase?.trim().replace(/\/+$/, '') ?? '',
+      apiKey: settings.embeddingApiKey ?? '',
+    });
+  }
+
   getOrCreateProvider(overrides: Partial<SemanticSearchSettings> = {}): EmbeddingProvider {
     const settings = this.getSettings(overrides);
-    const providerId = settings.embeddingProvider ?? 'openai-compatible';
+    const providerKey = this.getProviderKey(settings);
 
-    if (this.provider && this.currentProviderId === providerId) {
+    if (this.provider && this.currentProviderKey === providerKey) {
       return this.provider;
     }
 
-    // Provider changed — dispose old one
+    // Recreate the provider whenever the effective embedding config changes.
     this.provider?.dispose();
 
     this.provider = new OpenAICompatibleEmbeddingProvider(settings);
-    this.currentProviderId = providerId;
+    this.currentProviderKey = providerKey;
     return this.provider;
   }
 
@@ -49,7 +58,7 @@ export class LocalSemanticService {
   switchProvider(): void {
     this.provider?.dispose();
     this.provider = null;
-    this.currentProviderId = null;
+    this.currentProviderKey = null;
   }
 
   getProviderStatus() {

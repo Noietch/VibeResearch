@@ -176,6 +176,44 @@ export function getAgentToolMeta(tool: AgentToolKind): AgentToolMeta {
   );
 }
 
+export function inferAgentToolKind(input: {
+  agentTool?: string | null;
+  backend?: string | null;
+}): AgentToolKind {
+  switch (input.agentTool) {
+    case 'claude-code':
+    case 'codex':
+    case 'gemini':
+    case 'openclaw':
+    case 'opencode':
+    case 'qwen':
+    case 'goose':
+    case 'custom':
+      return input.agentTool;
+  }
+
+  switch ((input.backend ?? '').trim().toLowerCase()) {
+    case 'claude-code':
+    case 'claudecode':
+    case 'claude':
+      return 'claude-code';
+    case 'codex':
+      return 'codex';
+    case 'gemini':
+      return 'gemini';
+    case 'openclaw':
+      return 'openclaw';
+    case 'opencode':
+      return 'opencode';
+    case 'qwen':
+      return 'qwen';
+    case 'goose':
+      return 'goose';
+    default:
+      return 'custom';
+  }
+}
+
 export interface AgentConfigItem {
   id: string;
   name: string;
