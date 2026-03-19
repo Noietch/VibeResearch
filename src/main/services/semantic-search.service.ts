@@ -85,8 +85,32 @@ export async function search(query: string, limit = 20): Promise<SemanticSearchR
       };
     });
 
-    // Sort by final score and return top results
-    const ranked = scored.sort((a, b) => b.finalScore - a.finalScore).slice(0, limit);
+    // Rank by final score, then trim irrelevant tail using adaptive gap detection.
+    // OpenAI text-embedding-3-small produces relatively low absolute cosine
+    // similarities, so a fixed threshold doesn't work well. Instead we keep
+    // the top cluster of results and cut where the score drops sharply.
+    const sorted = scored.sort((a, b) => b.finalScore - a.finalScore);
+
+    let cutoff = sorted.length;
+    if (sorted.length >= 2) {
+      const topScore = sorted[0].finalScore;
+      // Always keep results within 60% of the top score
+      const minAcceptable = topScore * 0.4;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].finalScore < minAcceptable) {
+          cutoff = i;
+          break;
+        }
+        // Also cut at large relative gaps (> 30% drop from previous)
+        const gap = sorted[i - 1].finalScore - sorted[i].finalScore;
+        if (gap > sorted[i - 1].finalScore * 0.3 && i >= 2) {
+          cutoff = i;
+          break;
+        }
+      }
+    }
+
+    const ranked = sorted.slice(0, Math.min(cutoff, limit));
 
     return {
       mode: 'semantic',

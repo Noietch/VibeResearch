@@ -79,6 +79,18 @@ export function searchKNN(
 }
 
 /**
+ * Clear all vectors and reinitialize for the current embedding model
+ */
+export function clearAndReinitialize(model?: string): void {
+  vecStore.clear();
+  const embeddingModel =
+    model || getAppSettings().semanticSearch?.embeddingModel || 'text-embedding-3-small';
+  const modelConfig = OPENAI_EMBEDDING_MODELS.find((m) => m.id === embeddingModel);
+  const dimension = modelConfig?.dimensions || 1536;
+  vecStore.initialize(dimension, embeddingModel);
+}
+
+/**
  * Clear all vectors
  */
 export function clear(): void {

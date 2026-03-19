@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-03-17 (36)
+
+### feat: batch embedding rebuild after model switch
+
+- **Problem**: Switching embedding models or configuring one for the first time left all papers un-indexed because `resumeAutomaticPaperProcessing()` was a no-op.
+- **Solution**:
+  - Implemented concurrent batch embedding in `paper-processing.service.ts` (5 papers in parallel)
+  - Added "Rebuild All Index" button with progress bar in `EmbeddingSection` (Settings page)
+  - Registered `embedding:rebuildAll`, `embedding:cancelRebuild`, `embedding:getRebuildStatus` IPC handlers
+- **Scope**: `paper-processing.service.ts`, `providers.ipc.ts`, `use-ipc.ts`, `settings/page.tsx`, i18n locales
+
+### feat: auto-extract metadata from local PDF uploads
+
+- **Problem**: Uploading local PDFs only used filename as title, with no abstract or authors extracted.
+- **Solution**: After local PDF upload, asynchronously extract title/authors/abstract using the lightweight LLM model via existing `extractPaperMetadata()`. Frontend auto-refreshes via `papers:metadataUpdated` broadcast.
+- **Scope**: `papers.service.ts`, `papers-by-tag.tsx`
+
+### fix: embedding provider config sync and resilience
+
+- **Problem**: Switching embedding configs didn't refresh the cached provider (stale baseUrl), and embedding API timed out.
+- **Solution**:
+  - Provider refresh on any config field change (baseUrl, apiKey), not just model/provider
+  - Auto-normalize bare host URLs (e.g. `http://localhost:11434` → append `/v1`)
+  - Tolerate non-200 HTTP status if response body contains valid embeddings
+  - Embedding test timeout increased from 5s to 30s
+- **Scope**: `openai-compatible-embedding-provider.ts`, `providers.service.ts`, `local-semantic.service.ts`
+
+### ui: remove analyze button from paper cards
+
+- **Scope**: `papers-by-tag.tsx`
+
 ## 2026-03-15 v0.0.3
 
 ### Release: v0.0.3 - i18n improvements
@@ -1105,6 +1136,35 @@ When loading a completed chat session, the code would set `agentRunId` to point 
 - **Deleted dead code**: removed empty `ensureRecommendationResultColumns()` function and its call in `src/main/index.ts`
 - **Added DB index** on `Paper.lastReadAt` in `prisma/schema.prisma` for sort/filter query performance
 - All tests pass (457 passed, 48 skipped)
+
+## 2026-03-12 (35)
+
+### fix: improve error feedback in paper chat (ReaderPage)
+
+- **Problem**: Sending messages in paper chat had no visible feedback when errors occurred (no agent selected, agent running, etc.)
+- **Solution**: Added `useToast` hook to `ReaderPage` with specific error messages for each failure case:
+  - No agent selected: "Please select an agent first (Settings > Agents)"
+  - Agent still running: "Agent is still running, please wait"
+  - Paper not loaded: "Paper data not loaded"
+  - General send failure: Shows the actual error message
+- **Scope**: `src/renderer/pages/papers/reader/page.tsx`
+
+## 2026-03-12 (34)
+
+### fix: agent detection and add button issues in AgentSettings
+
+- **Problem**:
+  1. "Scan Local Agents" button failed to detect some CLI tools (e.g., codex) when app launched from GUI on macOS
+  2. "Add" button for detected agents had no visible feedback when errors occurred
+- **Root Cause**:
+  1. GUI apps on macOS don't inherit shell PATH, so CLI tools installed via nvm/fnm/pnpm etc. were not found
+  2. Error handling in `handleQuickAddAgent` only logged to console, users saw no feedback
+- **Solution**:
+  1. Added `buildEnhancedPath()` in `agent-detector.ts` that includes common CLI tool paths (nvm, homebrew, pnpm, etc.)
+  2. Added `useToast` hook to `AgentSettings.tsx` for visible error/success notifications
+- **Scope**:
+  - `src/main/agent/agent-detector.ts` - enhanced PATH for GUI app detection
+  - `src/renderer/components/settings/AgentSettings.tsx` - toast notifications for add/detect actions
 
 ## 2026-03-12 (33)
 

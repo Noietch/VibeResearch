@@ -8,6 +8,7 @@ import { useAgentStream } from '../../../hooks/use-agent-stream';
 import { MessageStream } from '../../../components/agent-todo/MessageStream';
 import { AgentLogo } from '../../../components/agent-todo/AgentLogo';
 import { arxivPdfUrl } from '@shared';
+import { useToast } from '../../../components/toast';
 import {
   ArrowLeft,
   Loader2,
@@ -177,6 +178,7 @@ export function ReaderPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { updateTabLabel } = useTabs();
+  const { error: showError, warning: showWarning } = useToast();
 
   const [paper, setPaper] = useState<PaperItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -630,7 +632,19 @@ export function ReaderPage() {
 
   const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
-    if (!text || agentRunning || !paper || !chatModel) return;
+    if (!text) return;
+    if (agentRunning) {
+      showWarning('Agent is still running, please wait');
+      return;
+    }
+    if (!paper) {
+      showError('Paper data not loaded');
+      return;
+    }
+    if (!chatModel) {
+      showError('Please select an agent first (Settings > Agents)');
+      return;
+    }
 
     setChatInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -659,45 +673,47 @@ export function ReaderPage() {
     const cwd = paperDir ?? undefined;
     const agentId = chatModel.id;
 
-    const runId = agentRunIdRef.current;
-    const isRunning = agentStatus === 'running' || agentStatus === 'initializing';
+    try {
+      const runId = agentRunIdRef.current;
+      const isRunning = agentStatus === 'running' || agentStatus === 'initializing';
 
-    if (!agentTodoId) {
-      // First message: create a new todo and run it.
-      // Inject paper context with file paths so agent can directly access them
-      const paperContext = [
-        `当前文章: "${paper.title}"`,
-        ...(cwd ? [`工作目录: ${cwd}`] : []),
-        ...(cwd ? [`PDF路径: ${cwd}/paper.pdf`] : []),
-        ...(cwd ? [`文本路径: ${cwd}/text.txt`] : []),
-      ].join('\n');
-      const promptWithContext = `${paperContext}\n\n---\n\n用户问题: ${fullText}`;
+      if (!agentTodoId) {
+        // First message: create a new todo and run it.
+        // Inject paper context with file paths so agent can directly access them
+        const paperContext = [
+          `当前文章: "${paper.title}"`,
+          ...(cwd ? [`工作目录: ${cwd}`] : []),
+          ...(cwd ? [`PDF路径: ${cwd}/paper.pdf`] : []),
+          ...(cwd ? [`文本路径: ${cwd}/text.txt`] : []),
+        ].join('\n');
+        const promptWithContext = `${paperContext}\n\n---\n\n用户问题: ${fullText}`;
 
-      // Update agentTodoIdRef synchronously BEFORE runAgentTodo so that
-      // IPC stream callbacks see the correct todoId immediately, without
-      // waiting for React to re-render with the new agentTodoId state.
-      const todo = await ipc.createAgentTodo({
-        title: `Chat: ${paper.title.slice(0, 60)}`,
-        prompt: promptWithContext,
-        cwd: cwd ?? '',
-        agentId,
-      });
-      agentTodoIdRef.current = todo.id;
-      setAgentTodoId(todo.id);
-      const run = await ipc.runAgentTodo(todo.id);
-      setAgentRunId(run.id);
-      agentRunIdRef.current = run.id;
-    } else if (!runId || !isRunning) {
-      // No active run or agent stopped: resume the existing todo with a new run.
-      // Update the prompt to the new user message, then run.
-      // The service layer will automatically find the previous sessionId and resume it.
-      await ipc.updateAgentTodo(agentTodoId, { prompt: fullText });
-      const run = await ipc.runAgentTodo(agentTodoId);
-      setAgentRunId(run.id);
-      agentRunIdRef.current = run.id;
-    } else {
-      // Follow-up message: send to existing active run
-      await ipc.sendAgentMessage(agentTodoId, runId, fullText);
+        // Update agentTodoIdRef synchronously BEFORE runAgentTodo so that
+        // IPC stream callbacks see the correct todoId immediately, without
+        // waiting for React to re-render with the new agentTodoId state.
+        const todo = await ipc.createAgentTodo({
+          title: `Chat: ${paper.title.slice(0, 60)}`,
+          prompt: promptWithContext,
+          cwd: cwd ?? '',
+          agentId,
+        });
+        agentTodoIdRef.current = todo.id;
+        setAgentTodoId(todo.id);
+        const run = await ipc.runAgentTodo(todo.id);
+        setAgentRunId(run.id);
+        agentRunIdRef.current = run.id;
+      } else if (!runId || !isRunning) {
+        // No active run or agent stopped: resume the existing todo with a new run.
+        await ipc.updateAgentTodo(agentTodoId, { prompt: fullText });
+        const run = await ipc.runAgentTodo(agentTodoId);
+        setAgentRunId(run.id);
+        agentRunIdRef.current = run.id;
+      } else {
+        // Follow-up message: send to existing active run
+        await ipc.sendAgentMessage(agentTodoId, runId, fullText);
+      }
+    } catch (err) {
+      showError(`Failed to send message: ${(err as Error).message}`);
     }
   }, [
     chatInput,
@@ -708,6 +724,8 @@ export function ReaderPage() {
     paperDir,
     attachedPapers,
     agentStatus,
+    showError,
+    showWarning,
   ]);
 
   const handleChatKill = useCallback(async () => {
