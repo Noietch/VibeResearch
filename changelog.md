@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-03-19 (session 46)
+
+### feat: persistence + in-app reading for Discovery
+
+- **Scope**: `src/main/ipc/discovery.ipc.ts`, `src/main/store/storage-path.ts`, `src/renderer/pages/discovery/page.tsx`, `src/renderer/hooks/use-ipc.ts`, `src/renderer/locales/en.json`, `src/renderer/locales/zh.json`
+- **Persistence**: Discovery results saved to `discovery-cache.json`
+  - Auto-loads cached results on page mount
+  - Shows fetch time in header (green if today, orange if older)
+  - Preserves evaluated/relevance scores between sessions
+- **In-app reading**: "Read PDF" now imports and opens reader
+  - Downloads paper via `downloadPaper(arxivId)`
+  - Navigates to `/papers/:shortId/reader` after download
+  - Keeps user in-app instead of opening browser
+- **New i18n keys**: `fetchedJustNow`, `fetchedHoursAgo`, `fetchedDaysAgo`
+
 ## 2026-03-19 (session 45)
 
 ### feat: smart filter + PDF preview for Discovery page

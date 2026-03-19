@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ipc, onIpc, type DiscoveredPaper } from '../../hooks/use-ipc';
+import { useTabs } from '../../hooks/use-tabs';
 import {
   Sparkles,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   FileText,
   Target,
   FileSearch,
+  Clock,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -77,6 +79,7 @@ function getRecommendationStyle(rec: string): { bg: string; text: string } {
 export function DiscoveryPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { openTab } = useTabs();
 
   const [papers, setPapers] = useState<DiscoveredPaper[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,6 +94,31 @@ export function DiscoveryPage() {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [daysBack, setDaysBack] = useState(7);
   const [sortByRelevance, setSortByRelevance] = useState(false);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [isFromToday, setIsFromToday] = useState(false);
+
+  // Load cached results on mount
+  useEffect(() => {
+    const loadCached = async () => {
+      try {
+        const cached = await ipc.getLastDiscoveryResult();
+        if (cached && cached.papers.length > 0) {
+          setPapers(cached.papers);
+          setFetchedAt(cached.fetchedAt);
+          setIsFromToday(cached.isFromToday);
+          // Check if any paper has relevance score
+          if (
+            cached.papers.some((p) => p.relevanceScore !== null && p.relevanceScore !== undefined)
+          ) {
+            setSortByRelevance(true);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load cached discovery results:', e);
+      }
+    };
+    loadCached();
+  }, []);
 
   const handleFetch = useCallback(async () => {
     if (selectedCategories.length === 0) return;
@@ -108,6 +136,9 @@ export function DiscoveryPage() {
 
       if (result.success && result.papers) {
         setPapers(result.papers);
+        setFetchedAt(result.fetchedAt);
+        setIsFromToday(true);
+        setSortByRelevance(false);
       } else {
         setError(result.error || 'Failed to fetch papers');
       }
@@ -145,13 +176,29 @@ export function DiscoveryPage() {
     return unsub;
   }, []);
 
-  const handleImport = useCallback(async (paper: DiscoveredPaper) => {
-    try {
-      await ipc.downloadFromInput(paper.arxivId);
-    } catch (e) {
-      console.error('Import failed:', e);
-    }
-  }, []);
+  const handleImport = useCallback(
+    async (paper: DiscoveredPaper, openReader = false) => {
+      try {
+        const result = await ipc.downloadPaper(paper.arxivId);
+        if (result && result.paper && openReader) {
+          // Navigate to reader after import
+          openTab(`/papers/${result.paper.shortId}/reader`);
+        }
+        return result;
+      } catch (e) {
+        console.error('Import failed:', e);
+        return null;
+      }
+    },
+    [openTab],
+  );
+
+  const handleImportAndRead = useCallback(
+    async (paper: DiscoveredPaper) => {
+      await handleImport(paper, true);
+    },
+    [handleImport],
+  );
 
   // Calculate relevance scores based on user's library
   const handleCalculateRelevance = useCallback(async () => {
@@ -189,10 +236,28 @@ export function DiscoveryPage() {
     return scoreB - scoreA;
   });
 
-  // Open PDF in new window
-  const handleViewPdf = useCallback((paper: DiscoveredPaper) => {
-    window.open(paper.pdfUrl, '_blank');
-  }, []);
+  // Format fetch time
+  const formatFetchTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffHours < 1) {
+      return t('discovery.fetchedJustNow', 'Fetched just now');
+    } else if (diffHours < 24) {
+      return t('discovery.fetchedHoursAgo', {
+        count: diffHours,
+        defaultValue: `Fetched ${diffHours}h ago`,
+      });
+    } else {
+      return t('discovery.fetchedDaysAgo', {
+        count: diffDays,
+        defaultValue: `Fetched ${diffDays}d ago`,
+      });
+    }
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-notion-sidebar">
@@ -207,9 +272,23 @@ export function DiscoveryPage() {
               <h1 className="text-lg font-semibold text-notion-text">
                 {t('discovery.title', 'Discover Papers')}
               </h1>
-              <p className="text-xs text-notion-text-secondary">
-                {t('discovery.subtitle', 'Find and evaluate new papers from arXiv')}
-              </p>
+              <div className="flex items-center gap-2 text-xs text-notion-text-secondary">
+                <span>{t('discovery.subtitle', 'Find and evaluate new papers from arXiv')}</span>
+                {fetchedAt && (
+                  <>
+                    <span className="text-notion-border">·</span>
+                    <span
+                      className={clsx(
+                        'flex items-center gap-1',
+                        isFromToday ? 'text-green-600' : 'text-orange-500',
+                      )}
+                    >
+                      <Clock size={10} />
+                      {formatFetchTime(fetchedAt)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -415,8 +494,8 @@ export function DiscoveryPage() {
                   paper={paper}
                   showRelevance={sortByRelevance}
                   onImport={handleImport}
+                  onImportAndRead={handleImportAndRead}
                   onView={() => window.open(paper.absUrl, '_blank')}
-                  onReadPdf={() => window.open(paper.pdfUrl, '_blank')}
                 />
               ))}
             </motion.div>
@@ -431,14 +510,14 @@ function PaperCard({
   paper,
   showRelevance,
   onImport,
+  onImportAndRead,
   onView,
-  onReadPdf,
 }: {
   paper: DiscoveredPaper;
   showRelevance: boolean;
   onImport: (paper: DiscoveredPaper) => void;
+  onImportAndRead: (paper: DiscoveredPaper) => void;
   onView: () => void;
-  onReadPdf: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -539,7 +618,7 @@ function PaperCard({
           {/* Actions */}
           <div className="mt-3 flex gap-2">
             <button
-              onClick={onReadPdf}
+              onClick={() => onImportAndRead(paper)}
               className="flex items-center gap-1.5 rounded-lg border border-notion-border bg-white px-3 py-1 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
             >
               <FileSearch size={12} />

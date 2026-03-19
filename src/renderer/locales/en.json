@@ -555,6 +555,9 @@
     "sortByQuality": "Sort by Quality",
     "calculatingRelevance": "Calculating relevance to your library...",
     "relevanceScore": "Relevance to your library",
-    "readPdf": "Read PDF"
+    "readPdf": "Read PDF",
+    "fetchedJustNow": "Fetched just now",
+    "fetchedHoursAgo": "Fetched {{count}}h ago",
+    "fetchedDaysAgo": "Fetched {{count}}d ago"
   }
 }

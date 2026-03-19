@@ -1377,6 +1377,7 @@ export const ipc = {
       total: number;
       fetchedAt: string;
       categories: string[];
+      isFromToday: boolean;
     } | null>('discovery:getLastResult'),
   clearDiscoveryCache: () => invoke<{ success: boolean }>('discovery:clear'),
   calculateRelevance: () =>
