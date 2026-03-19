@@ -524,9 +524,10 @@ app.whenReady().then(async () => {
   );
 
   // Start automatic citation extraction (background, after paper processing)
-  resumeAutomaticCitationExtraction().catch((err) =>
-    console.error('[startup] Failed to resume citation extraction:', err),
-  );
+  // TODO: Re-enable when needed
+  // resumeAutomaticCitationExtraction().catch((err) =>
+  //   console.error('[startup] Failed to resume citation extraction:', err),
+  // );
 
   const win = createWindow();
   setupWindowControls(win);
