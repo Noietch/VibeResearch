@@ -43,9 +43,14 @@ function getSemanticSearchService() {
 export function setupPapersIpc() {
   ipcMain.handle(
     'papers:download',
-    async (_, input: string, tags?: string[]): Promise<IpcResult<unknown>> => {
+    async (
+      _,
+      input: string,
+      tags?: string[],
+      isTemporary?: boolean,
+    ): Promise<IpcResult<unknown>> => {
       try {
-        const result = await getDownloadService().downloadFromInput(input, tags ?? []);
+        const result = await getDownloadService().downloadFromInput(input, tags ?? [], isTemporary);
         return ok(result);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -63,6 +68,7 @@ export function setupPapersIpc() {
         year?: number;
         tag?: string;
         importedWithin?: 'today' | 'week' | 'month' | 'all';
+        temporary?: boolean;
       } = {},
     ): Promise<IpcResult<unknown>> => {
       try {
@@ -268,6 +274,36 @@ export function setupPapersIpc() {
     },
   );
 
+  ipcMain.handle(
+    'papers:updateReadingProgress',
+    async (
+      _,
+      id: string,
+      lastReadPage: number,
+      totalPages: number,
+    ): Promise<IpcResult<unknown>> => {
+      try {
+        await new PapersRepository().updateReadingProgress(id, lastReadPage, totalPages);
+        return ok(null);
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  // Convert temporary paper to permanent (import to library)
+  ipcMain.handle(
+    'papers:importTemporary',
+    async (_, paperId: string): Promise<IpcResult<unknown>> => {
+      try {
+        await new PapersRepository().updateTemporaryStatus(paperId, false);
+        return ok({ success: true });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
   ipcMain.handle('papers:listTags', async (): Promise<IpcResult<unknown>> => {
     try {
       const result = await getPapersService().listAllTags();
@@ -440,28 +476,82 @@ Rules:
     },
   );
 
+  // Match a reference against local papers by arXiv ID, DOI, or title
   ipcMain.handle(
-    'papers:updateReadingProgress',
+    'papers:matchReference',
     async (
       _,
-      id: string,
-      lastReadPage: number,
-      totalPages: number,
+      ref: { arxivId?: string; doi?: string; title?: string },
     ): Promise<IpcResult<unknown>> => {
       try {
-        await new PapersRepository().updateReadingProgress(id, lastReadPage, totalPages);
-        return { success: true, data: null };
-      } catch (err) {
-        return { success: false, error: String(err) };
+        const { getPrismaClient } = await import('@db');
+        const prisma = getPrismaClient();
+
+        // Only match papers that have a local PDF
+        const pdfFilter = { pdfPath: { not: null } };
+
+        // 1. Try matching by arXiv ID (stored as shortId)
+        if (ref.arxivId) {
+          const paper = await prisma.paper.findFirst({
+            where: { shortId: ref.arxivId, ...pdfFilter },
+            include: { tags: { include: { tag: true } } },
+          });
+          if (paper) {
+            return ok({
+              id: paper.id,
+              shortId: paper.shortId,
+              title: paper.title,
+              authors: paper.authorsJson ? JSON.parse(paper.authorsJson) : [],
+              submittedAt: paper.submittedAt?.toISOString(),
+              abstract: paper.abstract,
+              pdfUrl: paper.pdfUrl,
+              pdfPath: paper.pdfPath,
+              sourceUrl: paper.sourceUrl,
+              tagNames: paper.tags.map((pt) => pt.tag.name),
+              year: paper.submittedAt ? paper.submittedAt.getFullYear() : null,
+            });
+          }
+        }
+
+        // 2. Try matching by title (case-insensitive contains)
+        if (ref.title) {
+          const paper = await prisma.paper.findFirst({
+            where: {
+              title: { contains: ref.title },
+              ...pdfFilter,
+            },
+            include: { tags: { include: { tag: true } } },
+          });
+          if (paper) {
+            return ok({
+              id: paper.id,
+              shortId: paper.shortId,
+              title: paper.title,
+              authors: paper.authorsJson ? JSON.parse(paper.authorsJson) : [],
+              submittedAt: paper.submittedAt?.toISOString(),
+              abstract: paper.abstract,
+              pdfUrl: paper.pdfUrl,
+              pdfPath: paper.pdfPath,
+              sourceUrl: paper.sourceUrl,
+              tagNames: paper.tags.map((pt) => pt.tag.name),
+              year: paper.submittedAt ? paper.submittedAt.getFullYear() : null,
+            });
+          }
+        }
+
+        return ok(null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:matchReference] Error:', msg);
+        return err(msg);
       }
     },
   );
 
-
-  // Get cached extracted references
+  // Extracted References - save to database for caching
   ipcMain.handle(
     'papers:getExtractedRefs',
-    async (_, paperId: string): Promise<IpcResult<unknown>> => {
+    async (_, paperId: string): Promise<IpcResult<unknown[]>> => {
       try {
         const { getPrismaClient } = await import('@db');
         const prisma = getPrismaClient();
@@ -469,14 +559,15 @@ Rules:
           where: { paperId },
           orderBy: { refNumber: 'asc' },
         });
-        return { success: true, data: refs };
-      } catch (err) {
-        return { success: false, error: String(err) };
+        return ok(refs);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:getExtractedRefs] Error:', msg);
+        return err(msg);
       }
     },
   );
 
-  // Save extracted references
   ipcMain.handle(
     'papers:saveExtractedRefs',
     async (
@@ -490,61 +581,49 @@ Rules:
         year?: number;
         doi?: string;
         arxivId?: string;
+        url?: string;
         venue?: string;
       }>,
     ): Promise<IpcResult<unknown>> => {
       try {
         const { getPrismaClient } = await import('@db');
         const prisma = getPrismaClient();
-        // Upsert each reference
-        for (const ref of refs) {
-          await prisma.extractedReference.upsert({
-            where: {
-              paperId_refNumber: { paperId, refNumber: ref.refNumber },
-            },
-            create: { paperId, ...ref },
-            update: ref,
+
+        // Delete existing refs for this paper
+        await prisma.extractedReference.deleteMany({
+          where: { paperId },
+        });
+
+        // Insert new refs
+        if (refs.length > 0) {
+          await prisma.extractedReference.createMany({
+            data: refs.map((ref) => ({
+              paperId,
+              refNumber: ref.refNumber,
+              text: ref.text,
+              title: ref.title ?? null,
+              authors: ref.authors ?? null,
+              year: ref.year ?? null,
+              doi: ref.doi ?? null,
+              arxivId: ref.arxivId ?? null,
+              url: ref.url ?? null,
+              venue: ref.venue ?? null,
+            })),
           });
         }
-        return { success: true, data: refs.length };
-      } catch (err) {
-        return { success: false, error: String(err) };
+
+        // Update citationsExtractedAt on paper
+        await prisma.paper.update({
+          where: { id: paperId },
+          data: { citationsExtractedAt: new Date() },
+        });
+
+        return ok({ count: refs.length });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:saveExtractedRefs] Error:', msg);
+        return err(msg);
       }
     },
   );
-
-
-  // Match a reference against local papers by arXiv ID, DOI, or title
-  ipcMain.handle(
-    'papers:matchReference',
-    async (
-      _,
-      ref: { arxivId?: string; doi?: string; title?: string },
-    ): Promise<IpcResult<unknown>> => {
-      try {
-        const { getPrismaClient } = await import('@db');
-        const prisma = getPrismaClient();
-        let paper = null;
-        if (ref.arxivId) {
-          paper = await prisma.paper.findFirst({
-            where: { shortId: ref.arxivId },
-          });
-        }
-        if (!paper && ref.doi) {
-          paper = await prisma.paper.findFirst({
-            where: { sourceUrl: { contains: ref.doi } },
-          });
-        }
-        if (!paper && ref.title) {
-          paper = await prisma.paper.findFirst({
-            where: { title: { contains: ref.title } },
-          });
-        }
-        return { success: true, data: paper };
-      } catch (err) {
-        return { success: false, error: String(err) };
-      }
-    },
-  );
-
 }

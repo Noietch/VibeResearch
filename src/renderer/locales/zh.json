@@ -21,7 +21,8 @@
     "search": "搜索",
     "active": "当前激活",
     "setActive": "设为激活",
-    "restart": "重启"
+    "restart": "重启",
+    "clear": "清除"
   },
   "sidebar": {
     "dashboard": "主页",
@@ -59,6 +60,7 @@
       "general_proxy": "代理",
       "general_editor": "编辑器",
       "general_semantic": "语义搜索",
+      "general_overleaf": "Overleaf",
       "general_dev": "开发者模式"
     },
     "general_language": {
@@ -80,6 +82,105 @@
     "general_dev": {
       "title": "开发者模式",
       "description": "启用开发者模式，每次启动时显示欢迎弹窗。"
+    },
+    "general_overleaf": {
+      "title": "Overleaf",
+      "description": "连接 Overleaf 以导入 LaTeX 项目为 PDF。"
+    },
+    "overleaf": {
+      "description": "连接 Overleaf 以导入您的 LaTeX 项目为 PDF。",
+      "sessionCookie": "会话 Cookie",
+      "cookiePlaceholder": "粘贴您的 overleaf_session2 cookie 值",
+      "cookieHelp": "您的 cookie 会被加密并存储在本地，永远不会离开您的电脑。",
+      "howToGetCookie": "如何获取会话 Cookie",
+      "step1": "在浏览器中登录 overleaf.com",
+      "step2": "打开浏览器开发者工具（F12 或 Cmd+Option+I）",
+      "step3": "前往 Application > Cookies > overleaf.com",
+      "step4": "复制 'overleaf_session2' cookie 的值",
+      "testSuccess": "连接成功！",
+      "testFailed": "连接失败，请检查您的 cookie。",
+      "noSession": "未配置会话 cookie。请前往设置 > Overleaf 进行配置。",
+      "fetchError": "获取项目失败，您的会话可能已过期。",
+      "importSuccess": "成功导入 {{count}} 个项目",
+      "importFailed": "{{count}} 个项目导入失败",
+      "noProjects": "未找到项目",
+      "fetchProjects": "获取项目",
+      "selectProjects": "选择要导入的项目",
+      "projectsFound": "找到 {{count}} 个项目",
+      "importSelected": "导入选中项目",
+      "noPdf": "无编译 PDF",
+      "autoDetect": "自动获取",
+      "detecting": "正在获取…",
+      "autoDetectSuccess": "Cookie 已自动检测并保存！",
+      "autoDetectFailed": "未检测到 Cookie，请先登录 Overleaf。"
+    },
+    "models": {
+      "title": "模型与用量",
+      "description": "配置用于轻量任务和 Embedding 的 AI 模型。"
+    },
+    "agents": {
+      "title": "CLI 代理",
+      "description": "管理用于研究自动化的 CLI 代理工具。"
+    },
+    "storage": {
+      "title": "数据目录",
+      "description": "配置所有应用数据（数据库、论文、配置）的存储位置。"
+    },
+    "language": {
+      "title": "Language / 语言",
+      "description": "选择应用程序的显示语言。",
+      "en": "English",
+      "zh": "中文"
+    },
+    "proxy": {
+      "title": "代理",
+      "description": "为网络请求配置 HTTP/HTTPS/SOCKS 代理。",
+      "label": "代理地址",
+      "placeholder": "例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
+      "enable": "启用代理",
+      "scope": {
+        "label": "代理应用范围",
+        "pdfDownload": "PDF 下载",
+        "aiApi": "AI API 调用",
+        "cliTools": "CLI 工具"
+      },
+      "testConnection": "测试连接",
+      "testing": "测试中…",
+      "success": "连接成功",
+      "failed": "连接失败"
+    },
+    "editor": {
+      "title": "编辑器",
+      "description": "选择用于打开论文文件夹的代码编辑器。",
+      "label": "编辑器",
+      "customCommand": "自定义编辑器命令",
+      "customPlaceholder": "例如 subl、idea、vim",
+      "testSuccess": "测试成功",
+      "testFailed": "测试失败，请检查命令是否可用"
+    },
+    "semantic": {
+      "title": "语义搜索",
+      "description": "配置基于 Embedding 的搜索和论文推荐。"
+    },
+    "embedding": {
+      "rebuildAll": "重建全部索引",
+      "rebuilding": "正在重建索引…",
+      "cancelRebuild": "取消",
+      "rebuildDone": "重建完成：已索引 {{completed}}/{{total}} 篇论文",
+      "rebuildFailed": "篇论文失败",
+      "rebuildDescription": "使用当前 Embedding 模型重新索引所有论文。",
+      "dimensionMatch": "维度匹配（{{dim}}d），现有 Embedding 兼容，无需重建。",
+      "forceRebuild": "强制重建",
+      "rebuildSelected": "选择性重建",
+      "selectPapers": "选择要重建的论文",
+      "selectAll": "全选",
+      "deselectAll": "取消全选",
+      "rebuildCount": "重建 {{count}} 篇论文"
+    },
+    "dev": {
+      "title": "开发者模式",
+      "description": "启用开发者模式，每次启动时显示欢迎弹窗。",
+      "toggleLabel": "每次启动时显示欢迎弹窗"
     },
     "models": {
       "title": "模型与用量",
@@ -144,91 +245,6 @@
       "migrateButton": "迁移并重启",
       "migrating": "迁移中…",
       "saveRestart": "保存并重启"
-    },
-    "language": {
-      "title": "Language / 语言",
-      "description": "选择应用程序的显示语言。",
-      "en": "English",
-      "zh": "中文"
-    },
-    "proxy": {
-      "title": "代理",
-      "description": "为网络请求配置 HTTP/HTTPS/SOCKS 代理。",
-      "label": "代理地址",
-      "placeholder": "例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
-      "enable": "启用代理",
-      "scope": {
-        "label": "代理应用范围",
-        "pdfDownload": "PDF 下载",
-        "aiApi": "AI API 调用",
-        "cliTools": "CLI 工具"
-      },
-      "testConnection": "测试连接",
-      "testing": "测试中…",
-      "success": "连接成功",
-      "failed": "连接失败"
-    },
-    "editor": {
-      "title": "编辑器",
-      "description": "选择用于打开论文文件夹的代码编辑器。",
-      "label": "编辑器",
-      "customCommand": "自定义编辑器命令",
-      "customPlaceholder": "例如 subl、idea、vim",
-      "testSuccess": "测试成功",
-      "testFailed": "测试失败，请检查命令是否可用"
-    },
-    "semantic": {
-      "title": "语义搜索",
-      "description": "配置基于 Embedding 的搜索和论文推荐。"
-    },
-    "embedding": {
-      "rebuildAll": "重建全部索引",
-      "rebuilding": "正在重建索引…",
-      "cancelRebuild": "取消",
-      "rebuildDone": "重建完成：已索引 {{completed}}/{{total}} 篇论文",
-      "rebuildFailed": "篇论文失败",
-      "rebuildDescription": "使用当前 Embedding 模型重新索引所有论文。",
-      "dimensionMatch": "维度匹配（{{dim}}d），现有 Embedding 兼容，无需重建。",
-      "forceRebuild": "强制重建",
-      "rebuildSelected": "选择性重建",
-      "selectPapers": "选择要重建的论文",
-      "selectAll": "全选",
-      "deselectAll": "取消全选",
-      "rebuildCount": "重建 {{count}} 篇论文"
-    },
-    "dev": {
-      "title": "开发者模式",
-      "description": "启用开发者模式，每次启动时显示欢迎弹窗。",
-      "toggleLabel": "每次启动时显示欢迎弹窗"
-    },
-    "general_overleaf": {
-      "title": "Overleaf",
-      "description": "连接到 Overleaf 以将你的 LaTeX 项目导入为 PDF。"
-    },
-    "overleaf": {
-      "description": "连接到 Overleaf 以将你的 LaTeX 项目导入为 PDF。",
-      "sessionCookie": "会话 Cookie",
-      "cookiePlaceholder": "在此粘贴你的 overleaf_session2 cookie 值",
-      "cookieHelp": "你的 cookie 已加密并存储在本地。它永远不会离开你的计算机。",
-      "howToGetCookie": "如何获取你的会话 cookie",
-      "autoDetect": "自动检测",
-      "autoDetectDescription": "打开 Overleaf 登录页面。登录后，cookie 会自动捕获。",
-      "login": "通过浏览器登录",
-      "loginDescription": "打开 Overleaf 登录页面。登录后，cookie 会自动捕获。",
-      "testConnection": "测试连接",
-      "testSuccess": "已成功连接到 Overleaf",
-      "testFail": "连接 Overleaf 失败",
-      "save": "保存 Cookie",
-      "saved": "Cookie 已成功保存",
-      "clear": "清除 Cookie",
-      "cleared": "Cookie 已清除",
-      "instructions": {
-        "step1": "1. 访问 overleaf.com 并登录",
-        "step2": "2. 打开浏览器开发者工具 (F12)",
-        "step3": "3. 前往 Application → Cookies → overleaf.com",
-        "step4": "4. 复制 overleaf_session2 的值",
-        "step5": "5. 粘贴到上方并点击保存"
-      }
     }
   },
   "dashboard": {
@@ -245,6 +261,16 @@
   },
   "papers": {
     "library": "文献库",
+    "tabs": {
+      "library": "文献库",
+      "readingList": "阅读列表"
+    },
+    "readingList": {
+      "empty": "阅读列表为空",
+      "emptyHint": "从引用下载的论文会显示在这里",
+      "count": "篇临时论文",
+      "imported": "已导入文献库"
+    },
     "addedOn": "添加于 {{date}}",
     "submittedOn": "提交于 {{date}}",
     "noPapers": "暂无论文",
@@ -262,24 +288,6 @@
     "completed": "导入完成",
     "cancelled": "导入已取消",
     "failed": "导入失败"
-  },
-  "setupWizard": {
-    "welcome": "欢迎使用 ResearchClaw",
-    "description": "要启用论文分析、智能标签和研究推荐等 AI 功能，请配置您的 AI 服务商。",
-    "configureProvider": "配置 AI 服务商",
-    "chooseProvider": "选择服务商",
-    "chooseProviderDesc": "选择您要使用的 AI 服务商。",
-    "enterApiKey": "输入 API 密钥",
-    "enterApiKeyDesc": "输入您的 {{provider}} API 密钥。它将安全地存储在您的设备上。",
-    "customBaseUrl": "自定义 Base URL（可选）",
-    "baseUrlLabel": "Base URL",
-    "baseUrlPlaceholder": "留空以使用官方端点",
-    "modelLabel": "模型",
-    "modelDefault": "默认：{{model}}",
-    "successMessage": "服务商配置成功！",
-    "failureMessage": "保存失败。请检查您的 API 密钥。",
-    "testAndSave": "测试并保存",
-    "finish": "完成"
   },
   "compare": {
     "title": "论文对比",
@@ -431,6 +439,26 @@
     "baseUrlOptional": "（可选，用于代理）",
     "model": "模型"
   },
+  "setupWizard": {
+    "title": "欢迎使用 ResearchClaw",
+    "skip": "暂时跳过",
+    "welcome": "欢迎使用 ResearchClaw",
+    "description": "要启用论文分析、智能标签和研究推荐等 AI 功能，请配置您的 AI 服务商。",
+    "configureProvider": "配置 AI 服务商",
+    "chooseProvider": "选择服务商",
+    "chooseProviderDesc": "选择您要使用的 AI 服务商。",
+    "enterApiKey": "输入 API 密钥",
+    "enterApiKeyDesc": "输入您的 {{provider}} API 密钥。它将安全地存储在您的设备上。",
+    "customBaseUrl": "自定义 Base URL（可选）",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "留空以使用官方端点",
+    "modelLabel": "模型",
+    "modelDefault": "默认：{{model}}",
+    "successMessage": "服务商配置成功！",
+    "failureMessage": "保存失败。请检查您的 API 密钥。",
+    "testAndSave": "测试并保存",
+    "finish": "完成"
+  },
   "dashboardContent": {
     "todaysPapers": "今日论文",
     "deleteConfirm": "删除「{{title}}」？此操作无法撤销。",
@@ -506,36 +534,42 @@
     "citation": {
       "searchLocal": "搜索文献库",
       "searchOnline": "在线搜索",
-      "hint": "双击引用快速搜索",
-      "title": "引用",
+      "hint": "双击引用可快速搜索",
+      "title": "引用列表",
       "scanAll": "扫描所有页面",
       "currentPage": "第 {{page}} 页",
-      "noCitations": "本页没有引用",
-      "sidebar": {
-        "title": "引用 ({{count}})",
-        "hint": "点击在文献库或在线搜索",
-        "empty": "尚未找到引用",
-        "loading": "正在扫描引用...",
-        "extracting": "正在提取引用...",
-        "matchLocal": "从文献库匹配",
-        "matchOnline": "搜索在线数据库",
-        "cached": "已缓存",
-        "inLibrary": "在文献库中",
-        "open": "打开"
-      }
+      "noCitations": "当前页无引用",
+      "allPages": "所有页面",
+      "page": "第",
+      "hintSidebar": "点击引用搜索论文",
+      "referencesFound": "篇参考文献",
+      "citationsFound": "处引用",
+      "noReference": "未找到参考文献",
+      "referencesList": "参考文献",
+      "searchPaper": "搜索论文",
+      "downloadAndRead": "下载并阅读",
+      "importToLibrary": "导入文献库",
+      "downloading": "下载中...",
+      "importing": "导入中...",
+      "imported": "已导入",
+      "downloaded": "已下载",
+      "read": "阅读",
+      "jumpToRef": "跳转到PDF中的引用",
+      "noPdf": "无开放获取PDF",
+      "openWebsite": "打开出版商网站"
+    },
+    "preview": {
+      "title": "论文预览",
+      "searchFor": "搜索",
+      "noResults": "未找到论文",
+      "authors": "作者",
+      "year": "年份",
+      "citations": "引用数",
+      "abstract": "摘要",
+      "selectPaper": "选择论文查看详情",
+      "keyboardHint": "↑↓ 导航，Enter 下载",
+      "downloadAndRead": "下载并阅读",
+      "downloading": "下载中..."
     }
-  },
-  "paperPreview": {
-    "title": "论文预览",
-    "abstract": "摘要",
-    "authors": "作者",
-    "year": "年份",
-    "venue": "期刊/会议",
-    "doi": "DOI",
-    "download": "下载到文献库",
-    "downloading": "正在下载...",
-    "openInBrowser": "在浏览器中打开",
-    "inLibrary": "已在文献库中",
-    "openPaper": "打开论文"
   }
 }

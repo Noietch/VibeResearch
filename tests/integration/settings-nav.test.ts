@@ -23,9 +23,9 @@ describe('NAV_GROUPS structure', () => {
     expect(ids).toEqual(['general', 'models', 'agents', 'storage']);
   });
 
-  it('general group has 5 items', () => {
+  it('general group has 6 items', () => {
     const general = NAV_GROUPS.find((g) => g.id === 'general')!;
-    expect(general.items).toHaveLength(5);
+    expect(general.items).toHaveLength(6);
   });
 
   it('all items have non-empty keywords arrays', () => {
@@ -42,6 +42,7 @@ describe('NAV_GROUPS structure', () => {
       'general.proxy',
       'general.editor',
       'general.semantic',
+      'general.overleaf',
       'general.dev',
       'models',
       'agents',
@@ -58,9 +59,9 @@ describe('NAV_GROUPS structure', () => {
 // ─── ALL_SECTION_IDS ──────────────────────────────────────────────────────────
 
 describe('ALL_SECTION_IDS', () => {
-  it('contains 8 unique section ids', () => {
-    expect(ALL_SECTION_IDS).toHaveLength(8);
-    expect(new Set(ALL_SECTION_IDS).size).toBe(8);
+  it('contains 9 unique section ids', () => {
+    expect(ALL_SECTION_IDS).toHaveLength(9);
+    expect(new Set(ALL_SECTION_IDS).size).toBe(9);
   });
 
   it('starts with general.language (default active section)', () => {

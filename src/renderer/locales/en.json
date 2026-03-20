@@ -21,7 +21,8 @@
     "search": "Search",
     "active": "Active",
     "setActive": "Set Active",
-    "restart": "Restart"
+    "restart": "Restart",
+    "clear": "Clear"
   },
   "sidebar": {
     "dashboard": "Dashboard",
@@ -59,6 +60,7 @@
       "general_proxy": "Proxy",
       "general_editor": "Editor",
       "general_semantic": "Semantic Search",
+      "general_overleaf": "Overleaf",
       "general_dev": "Developer Mode"
     },
     "general_language": {
@@ -80,6 +82,105 @@
     "general_dev": {
       "title": "Developer Mode",
       "description": "Enable developer mode to show welcome modal on every startup."
+    },
+    "general_overleaf": {
+      "title": "Overleaf",
+      "description": "Connect to Overleaf to import your LaTeX projects as PDFs."
+    },
+    "overleaf": {
+      "description": "Connect to Overleaf to import your LaTeX projects as PDFs.",
+      "sessionCookie": "Session Cookie",
+      "cookiePlaceholder": "Paste your overleaf_session2 cookie value here",
+      "cookieHelp": "Your cookie is encrypted and stored locally. It never leaves your computer.",
+      "howToGetCookie": "How to get your session cookie",
+      "step1": "Log in to overleaf.com in your browser",
+      "step2": "Open browser developer tools (F12 or Cmd+Option+I)",
+      "step3": "Go to Application > Cookies > overleaf.com",
+      "step4": "Copy the value of the 'overleaf_session2' cookie",
+      "testSuccess": "Connection successful!",
+      "testFailed": "Connection failed. Please check your cookie.",
+      "noSession": "No session cookie configured. Go to Settings > Overleaf to set up.",
+      "fetchError": "Failed to fetch projects. Your session may have expired.",
+      "importSuccess": "Successfully imported {{count}} project(s)",
+      "importFailed": "Failed to import {{count}} project(s)",
+      "noProjects": "No projects found",
+      "fetchProjects": "Fetch Projects",
+      "selectProjects": "Select projects to import",
+      "projectsFound": "{{count}} project(s) found",
+      "importSelected": "Import Selected",
+      "noPdf": "No compiled PDF",
+      "autoDetect": "Auto Detect",
+      "detecting": "Detecting…",
+      "autoDetectSuccess": "Cookie detected and saved!",
+      "autoDetectFailed": "No cookie found. Please log in to Overleaf first."
+    },
+    "models": {
+      "title": "Models & Usage",
+      "description": "Configure AI models for lightweight tasks and embeddings."
+    },
+    "agents": {
+      "title": "CLI Agents",
+      "description": "Manage CLI-based agent tools for research automation."
+    },
+    "storage": {
+      "title": "Data Directory",
+      "description": "Configure where all app data (database, papers, config) is stored."
+    },
+    "language": {
+      "title": "Language / 语言",
+      "description": "Choose the display language for the application.",
+      "en": "English",
+      "zh": "中文"
+    },
+    "proxy": {
+      "title": "Proxy",
+      "description": "Configure HTTP/HTTPS/SOCKS proxy for network requests.",
+      "label": "Proxy URL",
+      "placeholder": "e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
+      "enable": "Enable proxy",
+      "scope": {
+        "label": "Apply proxy to",
+        "pdfDownload": "PDF downloads",
+        "aiApi": "AI API calls",
+        "cliTools": "CLI tools"
+      },
+      "testConnection": "Test Connection",
+      "testing": "Testing…",
+      "success": "Connection successful",
+      "failed": "Connection failed"
+    },
+    "editor": {
+      "title": "Editor",
+      "description": "Choose your preferred code editor for opening paper folders.",
+      "label": "Editor",
+      "customCommand": "Custom Editor Command",
+      "customPlaceholder": "e.g. subl, idea, vim",
+      "testSuccess": "Test successful",
+      "testFailed": "Test failed, please check if the command is available"
+    },
+    "semantic": {
+      "title": "Semantic Search",
+      "description": "Configure embedding-based search and paper recommendations."
+    },
+    "embedding": {
+      "rebuildAll": "Rebuild All Index",
+      "rebuilding": "Rebuilding index…",
+      "cancelRebuild": "Cancel",
+      "rebuildDone": "Rebuild complete: {{completed}}/{{total}} papers indexed",
+      "rebuildFailed": "paper(s) failed",
+      "rebuildDescription": "Re-embed all papers with the current embedding model.",
+      "dimensionMatch": "Dimensions match ({{dim}}d). Existing embeddings are compatible — rebuild not needed.",
+      "forceRebuild": "Force Rebuild",
+      "rebuildSelected": "Rebuild Selected",
+      "selectPapers": "Select papers to rebuild",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "rebuildCount": "Rebuild {{count}} paper(s)"
+    },
+    "dev": {
+      "title": "Developer Mode",
+      "description": "Enable developer mode to show welcome modal on every startup.",
+      "toggleLabel": "Show welcome modal on every startup"
     },
     "models": {
       "title": "Models & Usage",
@@ -144,91 +245,6 @@
       "migrateButton": "Migrate & Restart",
       "migrating": "Migrating…",
       "saveRestart": "Save & Restart"
-    },
-    "language": {
-      "title": "Language / 语言",
-      "description": "Choose the display language for the application.",
-      "en": "English",
-      "zh": "中文"
-    },
-    "proxy": {
-      "title": "Proxy",
-      "description": "Configure HTTP/HTTPS/SOCKS proxy for network requests.",
-      "label": "Proxy URL",
-      "placeholder": "e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
-      "enable": "Enable proxy",
-      "scope": {
-        "label": "Apply proxy to",
-        "pdfDownload": "PDF downloads",
-        "aiApi": "AI API calls",
-        "cliTools": "CLI tools"
-      },
-      "testConnection": "Test Connection",
-      "testing": "Testing…",
-      "success": "Connection successful",
-      "failed": "Connection failed"
-    },
-    "editor": {
-      "title": "Editor",
-      "description": "Choose your preferred code editor for opening paper folders.",
-      "label": "Editor",
-      "customCommand": "Custom Editor Command",
-      "customPlaceholder": "e.g. subl, idea, vim",
-      "testSuccess": "Test successful",
-      "testFailed": "Test failed, please check if the command is available"
-    },
-    "semantic": {
-      "title": "Semantic Search",
-      "description": "Configure embedding-based search and paper recommendations."
-    },
-    "embedding": {
-      "rebuildAll": "Rebuild All Index",
-      "rebuilding": "Rebuilding index…",
-      "cancelRebuild": "Cancel",
-      "rebuildDone": "Rebuild complete: {{completed}}/{{total}} papers indexed",
-      "rebuildFailed": "paper(s) failed",
-      "rebuildDescription": "Re-embed all papers with the current embedding model.",
-      "dimensionMatch": "Dimensions match ({{dim}}d). Existing embeddings are compatible — rebuild not needed.",
-      "forceRebuild": "Force Rebuild",
-      "rebuildSelected": "Rebuild Selected",
-      "selectPapers": "Select papers to rebuild",
-      "selectAll": "Select all",
-      "deselectAll": "Deselect all",
-      "rebuildCount": "Rebuild {{count}} paper(s)"
-    },
-    "dev": {
-      "title": "Developer Mode",
-      "description": "Enable developer mode to show welcome modal on every startup.",
-      "toggleLabel": "Show welcome modal on every startup"
-    },
-    "general_overleaf": {
-      "title": "Overleaf",
-      "description": "Connect to Overleaf to import your LaTeX projects as PDFs."
-    },
-    "overleaf": {
-      "description": "Connect to Overleaf to import your LaTeX projects as PDFs.",
-      "sessionCookie": "Session Cookie",
-      "cookiePlaceholder": "Paste your overleaf_session2 cookie value here",
-      "cookieHelp": "Your cookie is encrypted and stored locally. It never leaves your computer.",
-      "howToGetCookie": "How to get your session cookie",
-      "autoDetect": "Auto-Detect",
-      "autoDetectDescription": "Opens Overleaf login page. After you log in, the cookie is captured automatically.",
-      "login": "Login via Browser",
-      "loginDescription": "Opens Overleaf login page. After you log in, the cookie is captured automatically.",
-      "testConnection": "Test Connection",
-      "testSuccess": "Successfully connected to Overleaf",
-      "testFail": "Failed to connect to Overleaf",
-      "save": "Save Cookie",
-      "saved": "Cookie saved successfully",
-      "clear": "Clear Cookie",
-      "cleared": "Cookie cleared",
-      "instructions": {
-        "step1": "1. Go to overleaf.com and log in",
-        "step2": "2. Open browser Developer Tools (F12)",
-        "step3": "3. Go to Application → Cookies → overleaf.com",
-        "step4": "4. Copy the value of overleaf_session2",
-        "step5": "5. Paste it above and click Save"
-      }
     }
   },
   "dashboard": {
@@ -245,6 +261,16 @@
   },
   "papers": {
     "library": "Library",
+    "tabs": {
+      "library": "Library",
+      "readingList": "Reading List"
+    },
+    "readingList": {
+      "empty": "No papers in reading list",
+      "emptyHint": "Papers downloaded from citations will appear here",
+      "count": "temporary papers",
+      "imported": "Imported to library"
+    },
     "addedOn": "Added {{date}}",
     "submittedOn": "Submitted {{date}}",
     "noPapers": "No papers",
@@ -262,24 +288,6 @@
     "completed": "Import complete",
     "cancelled": "Import cancelled",
     "failed": "Import failed"
-  },
-  "setupWizard": {
-    "welcome": "Welcome to ResearchClaw",
-    "description": "To enable AI-powered features like paper analysis, smart tagging, and research recommendations, please configure your AI provider.",
-    "configureProvider": "Configure AI Provider",
-    "chooseProvider": "Choose a Provider",
-    "chooseProviderDesc": "Select the AI provider you want to use.",
-    "enterApiKey": "Enter API Key",
-    "enterApiKeyDesc": "Enter your {{provider}} API key. It will be stored securely on your device.",
-    "customBaseUrl": "Custom Base URL (optional)",
-    "baseUrlLabel": "Base URL",
-    "baseUrlPlaceholder": "Leave empty to use the official endpoint",
-    "modelLabel": "Model",
-    "modelDefault": "Default: {{model}}",
-    "successMessage": "Provider configured successfully!",
-    "failureMessage": "Failed to save. Please check your API key.",
-    "testAndSave": "Test & Save",
-    "finish": "Finish"
   },
   "compare": {
     "title": "Compare Papers",
@@ -431,6 +439,26 @@
     "baseUrlOptional": "(optional, for proxy)",
     "model": "Model"
   },
+  "setupWizard": {
+    "title": "Welcome to ResearchClaw",
+    "skip": "Skip for now",
+    "welcome": "Welcome to ResearchClaw",
+    "description": "To enable AI-powered features like paper analysis, smart tagging, and research recommendations, please configure your AI provider.",
+    "configureProvider": "Configure AI Provider",
+    "chooseProvider": "Choose a Provider",
+    "chooseProviderDesc": "Select the AI provider you want to use.",
+    "enterApiKey": "Enter API Key",
+    "enterApiKeyDesc": "Enter your {{provider}} API key. It will be stored securely on your device.",
+    "customBaseUrl": "Custom Base URL (optional)",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "Leave empty to use the official endpoint",
+    "modelLabel": "Model",
+    "modelDefault": "Default: {{model}}",
+    "successMessage": "Provider configured successfully!",
+    "failureMessage": "Failed to save. Please check your API key.",
+    "testAndSave": "Test & Save",
+    "finish": "Finish"
+  },
   "dashboardContent": {
     "todaysPapers": "Today's Papers",
     "deleteConfirm": "Delete \"{{title}}\"? This action cannot be undone.",
@@ -511,31 +539,37 @@
       "scanAll": "Scan all pages",
       "currentPage": "Page {{page}}",
       "noCitations": "No citations on this page",
-      "sidebar": {
-        "title": "Citations ({{count}})",
-        "hint": "Click to lookup in library or online",
-        "empty": "No citations found yet",
-        "loading": "Scanning references...",
-        "extracting": "Extracting references...",
-        "matchLocal": "Match from library",
-        "matchOnline": "Search online databases",
-        "cached": "Cached",
-        "inLibrary": "In Library",
-        "open": "Open"
-      }
+      "allPages": "All Pages",
+      "page": "Page",
+      "hintSidebar": "Click citation to search paper",
+      "referencesFound": "references",
+      "citationsFound": "citations",
+      "noReference": "Reference not found",
+      "referencesList": "References",
+      "searchPaper": "Search Paper",
+      "downloadAndRead": "Download & Read",
+      "importToLibrary": "Import to Library",
+      "downloading": "Downloading...",
+      "importing": "Importing...",
+      "imported": "Imported",
+      "downloaded": "Downloaded",
+      "read": "Read",
+      "jumpToRef": "Jump to reference in PDF",
+      "noPdf": "No open access PDF available",
+      "openWebsite": "Open publisher website"
+    },
+    "preview": {
+      "title": "Paper Preview",
+      "searchFor": "Searching for",
+      "noResults": "No papers found",
+      "authors": "Authors",
+      "year": "Year",
+      "citations": "Citations",
+      "abstract": "Abstract",
+      "selectPaper": "Select a paper to view details",
+      "keyboardHint": "↑↓ to navigate, Enter to download",
+      "downloadAndRead": "Download & Read",
+      "downloading": "Downloading..."
     }
-  },
-  "paperPreview": {
-    "title": "Paper Preview",
-    "abstract": "Abstract",
-    "authors": "Authors",
-    "year": "Year",
-    "venue": "Venue",
-    "doi": "DOI",
-    "download": "Download to Library",
-    "downloading": "Downloading...",
-    "openInBrowser": "Open in Browser",
-    "inLibrary": "Already in Library",
-    "openPaper": "Open Paper"
   }
 }

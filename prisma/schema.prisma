@@ -106,6 +106,23 @@ model PaperTag {
   @@index([tagId])
 }
 
+model PaperHighlight {
+  id         String   @id @default(cuid())
+  paperId    String
+  pageNumber Int
+  rectsJson  String // [{x, y, w, h}] normalized to 0-1 page coords
+  text       String // selected text content
+  note       String?
+  color      String   @default("yellow") // yellow|green|blue|pink|purple
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@index([paperId])
+  @@index([pageNumber])
+}
+
 model ReadingNote {
   id          String          @id @default(cuid())
   paperId     String?
@@ -198,23 +215,6 @@ model PaperCodeLink {
   @@index([paperId])
   @@index([repoUrl])
 }
-model PaperHighlight {
-  id         String   @id @default(cuid())
-  paperId    String
-  pageNumber Int
-  rectsJson  String // [{x, y, w, h}] normalized to 0-1 page coords
-  text       String // selected text content
-  note       String?
-  color      String   @default("yellow") // yellow|green|blue|pink|purple
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
-
-  @@index([paperId])
-  @@index([paperId, pageNumber])
-}
-
 
 model ProjectPaper {
   id        String   @id @default(cuid())
@@ -361,6 +361,30 @@ model PaperCitation {
   @@index([targetPaperId])
 }
 
+// Extracted reference from PDF (cached)
+model ExtractedReference {
+  id            String   @id @default(cuid())
+  paperId       String
+  refNumber     Int      // Reference number in the paper (1, 2, 3...)
+  text          String   // Full reference text
+  title         String?
+  authors       String?
+  year          Int?
+  doi           String?
+  arxivId       String?
+  url           String?
+  venue         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@unique([paperId, refNumber])
+  @@index([paperId])
+  @@index([doi])
+  @@index([arxivId])
+}
+
 model ExperimentReport {
   id            String   @id @default(cuid())
   projectId     String
@@ -447,27 +471,3 @@ model ChatMessage {
   @@index([sessionId])
   @@index([createdAt])
 }
-
-// Extracted reference from PDF (cached)
-model ExtractedReference {
-  id            String   @id @default(cuid())
-  paperId       String
-  refNumber     Int      // Reference number in the paper (1, 2, 3...)
-  text          String   // Full reference text
-  title         String?
-  authors       String?
-  year          Int?
-  doi           String?
-  arxivId       String?
-  venue         String?
-  matchedPaperId String? // If matched to a paper in library
-  createdAt     DateTime @default(now())
-
-  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
-
-  @@unique([paperId, refNumber])
-  @@index([paperId])
-  @@index([doi])
-  @@index([arxivId])
-}
-

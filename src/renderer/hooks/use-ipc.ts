@@ -95,7 +95,7 @@ export interface ImportStatus {
 }
 
 export interface ScanResult {
-  papers: Array<{ arxivId: string; title: string; url: string }>;
+  papers: Array<{ arxivId: string; title: string; url: string; existing?: boolean }>;
   newCount: number;
   existingCount: number;
 }
@@ -139,15 +139,6 @@ export interface PaperItem {
   lastReadAt?: string | null;
 }
 
-export interface PaperProcessingInfo {
-  paperId: string;
-  processingStatus: string;
-  processingError?: string | null;
-  processedAt?: string | null;
-  indexedAt?: string | null;
-  metadataSource?: string | null;
-}
-
 export interface HighlightItem {
   id: string;
   paperId: string;
@@ -160,6 +151,14 @@ export interface HighlightItem {
   updatedAt: string;
 }
 
+export interface PaperProcessingInfo {
+  paperId: string;
+  processingStatus: string;
+  processingError?: string | null;
+  processedAt?: string | null;
+  indexedAt?: string | null;
+  metadataSource?: string | null;
+}
 
 export interface TaggingStatus {
   active: boolean;
@@ -634,6 +633,31 @@ export interface SshConfigEntry {
   identityFile?: string;
 }
 
+// ── Overleaf Types ─────────────────────────────────────────────────────────────
+
+export interface OverleafProject {
+  id: string;
+  name: string;
+  lastUpdated: string;
+  lastUpdatedBy?: string;
+  owner?: { id: string; email: string };
+  archived: boolean;
+  trashed: boolean;
+  accessLevel?: 'owner' | 'readWrite' | 'readOnly';
+}
+
+export interface OverleafProjectDetail extends OverleafProject {
+  pdfUrl?: string;
+  lastCompiledAt?: string;
+}
+
+export interface OverleafImportPrep {
+  shortId: string;
+  title: string;
+  pdfPath: string;
+  sourceUrl: string;
+}
+
 export const ipc = {
   // Papers
   listPapers: (query?: {
@@ -643,19 +667,19 @@ export const ipc = {
     importedWithin?: 'today' | 'week' | 'month' | 'all';
     temporary?: boolean;
   }) => invoke<PaperItem[]>('papers:list', query ?? {}),
+  listTodayPapers: () => invoke<PaperItem[]>('papers:listToday'),
   importTemporary: (paperId: string) =>
     invoke<{ success: boolean }>('papers:importTemporary', paperId),
-  listTodayPapers: () => invoke<PaperItem[]>('papers:listToday'),
   createPaper: (input: Record<string, unknown>) => invoke<PaperItem>('papers:create', input),
   importLocalPdf: (filePath: string) => invoke<PaperItem>('papers:importLocalPdf', filePath),
   importLocalPdfs: (filePaths: string[]) =>
     invoke<{ total: number; success: number; failed: number }>('papers:importLocalPdfs', filePaths),
-  downloadPaper: (input: string, tags?: string[]) =>
+  downloadPaper: (input: string, tags?: string[], isTemporary?: boolean) =>
     invoke<{
       paper: PaperItem;
       download: { success: boolean; size: number; skipped: boolean };
       existed: boolean;
-    }>('papers:download', input, tags),
+    }>('papers:download', input, tags, isTemporary),
   getPaper: (id: string) => invoke<PaperItem>('papers:getById', id),
   getPaperByShortId: (shortId: string) => invoke<PaperItem>('papers:getByShortId', shortId),
   getPaperProcessingStatus: (paperId: string) =>
@@ -674,37 +698,6 @@ export const ipc = {
   updatePaperTags: (id: string, tags: string[]) => invoke<PaperItem>('papers:updateTags', id, tags),
   updatePaperRating: (id: string, rating: number | null) =>
     invoke<PaperItem>('papers:updateRating', id, rating),
-  getExtractedRefs: (paperId: string) =>
-    invoke<
-      Array<{
-        id: string;
-        paperId: string;
-        refNumber: number;
-        text: string;
-        title: string | null;
-        authors: string | null;
-        year: number | null;
-        doi: string | null;
-        arxivId: string | null;
-        venue: string | null;
-        matchedPaperId: string | null;
-      }>
-    >('papers:getExtractedRefs', paperId),
-  matchReference: (ref: { arxivId?: string; doi?: string; title?: string }) =>
-    invoke<PaperItem | null>('papers:matchReference', ref),
-  saveExtractedRefs: (
-    paperId: string,
-    refs: Array<{
-      refNumber: number;
-      text: string;
-      title?: string;
-      authors?: string;
-      year?: number;
-      doi?: string;
-      arxivId?: string;
-      venue?: string;
-    }>,
-  ) => invoke<number>('papers:saveExtractedRefs', paperId, refs),
   updateReadingProgress: (id: string, lastReadPage: number, totalPages: number) =>
     invoke<void>('papers:updateReadingProgress', id, lastReadPage, totalPages),
   listAllTags: () => invoke<TagInfo[]>('papers:listTags'),
@@ -717,6 +710,34 @@ export const ipc = {
   exportBibtex: (paperIds: string[]) => invoke<string>('papers:exportBibtex', paperIds),
   extractGithubUrl: (input: { title: string; abstract?: string }) =>
     invoke<string | null>('papers:extractGithubUrl', input),
+  matchReference: (ref: { arxivId?: string; doi?: string; title?: string }) =>
+    invoke<PaperItem | null>('papers:matchReference', ref),
+  getExtractedRefs: (paperId: string) =>
+    invoke<
+      Array<{
+        id: string;
+        paperId: string;
+        refNumber: number;
+        text: string;
+        title: string | null;
+        authors: string | null;
+        year: number | null;
+        doi: string | null;
+        arxivId: string | null;
+      }>
+    >('papers:getExtractedRefs', paperId),
+  saveExtractedRefs: (
+    paperId: string,
+    refs: Array<{
+      refNumber: number;
+      text: string;
+      title?: string;
+      authors?: string;
+      year?: number;
+      doi?: string;
+      arxivId?: string;
+    }>,
+  ) => invoke<{ count: number }>('papers:saveExtractedRefs', paperId, refs),
 
   // Tagging
   tagPaper: (paperId: string) =>
@@ -964,6 +985,16 @@ export const ipc = {
   importScannedPapers: (papers: ScanResult['papers']) =>
     invoke<{ started: boolean }>('ingest:importScanned', papers),
   cancelImport: () => invoke<{ cancelled: boolean }>('ingest:cancel'),
+  scanBrowserDownloads: (days?: number) =>
+    invoke<
+      Array<{
+        filePath: string;
+        fileName: string;
+        browser: string;
+        downloadTime: string;
+        fileSize: number;
+      }>
+    >('ingest:scanDownloads', days ?? 7),
 
   // Providers
   listProviders: () => invoke<ProviderConfig[]>('providers:list'),
@@ -1313,33 +1344,6 @@ export const ipc = {
   listTaskResults: (params: { projectId: string }) =>
     invoke<TaskResultItem[]>('reports:listTaskResults', params.projectId),
 
-
-  scanBrowserDownloads: (days?: number) =>
-    invoke<
-      Array<{
-        filePath: string;
-        fileName: string;
-        browser: string;
-        downloadTime: string;
-        fileSize: number;
-      }>
-    >('ingest:scanDownloads', days ?? 7),
-
-  // Highlights
-  createHighlight: (params: {
-    paperId: string;
-    pageNumber: number;
-    rectsJson: string;
-    text: string;
-    note?: string;
-    color?: string;
-  }) => invoke<HighlightItem>('highlights:create', params),
-  updateHighlight: (id: string, updates: { note?: string; color?: string }) =>
-    invoke<HighlightItem>('highlights:update', id, updates),
-  deleteHighlight: (id: string) => invoke<void>('highlights:delete', id),
-  listHighlights: (paperId: string, pageNumber?: number) =>
-    invoke<HighlightItem[]>('highlights:list', paperId, pageNumber),
-
   // Window controls (for Windows title bar)
   windowClose: () => {
     const api = getElectronAPI();
@@ -1357,6 +1361,45 @@ export const ipc = {
     const api = getElectronAPI();
     return api?.windowIsMaximized?.() ?? Promise.resolve(false);
   },
+
+  // Highlights
+  createHighlight: (params: {
+    paperId: string;
+    pageNumber: number;
+    rectsJson: string;
+    text: string;
+    note?: string;
+    color?: string;
+  }) => invoke<HighlightItem>('highlights:create', params),
+  updateHighlight: (id: string, params: { note?: string; color?: string }) =>
+    invoke<HighlightItem>('highlights:update', id, params),
+  deleteHighlight: (id: string) => invoke<void>('highlights:delete', id),
+  listHighlights: (paperId: string) => invoke<HighlightItem[]>('highlights:listByPaper', paperId),
+
+  // Overleaf Integration
+  getOverleafSession: () =>
+    invoke<{ hasCookie: boolean; masked: string | null }>('overleaf:getSession'),
+  setOverleafSession: (cookie: string) =>
+    invoke<{ success: boolean }>('overleaf:setSession', cookie),
+  testOverleafSession: () => invoke<{ valid: boolean }>('overleaf:testSession'),
+  listOverleafProjects: () =>
+    invoke<{
+      projects: OverleafProject[];
+      importedMap: Record<string, { paperId: string; importedAt: string }>;
+    }>('overleaf:listProjects'),
+  getOverleafProjectDetails: (projectId: string) =>
+    invoke<OverleafProjectDetail>('overleaf:getProjectDetails', projectId),
+  prepareOverleafImport: (projectId: string) =>
+    invoke<OverleafImportPrep>('overleaf:prepareImport', projectId),
+  batchOverleafImport: (projectIds: string[]) =>
+    invoke<Array<{ projectId: string; success: boolean; error?: string }>>(
+      'overleaf:batchImport',
+      projectIds,
+    ),
+  openOverleafLoginWindow: () =>
+    invoke<{ success: boolean; autoDetected?: boolean }>('overleaf:openLoginWindow'),
+  autoGetOverleafCookie: () =>
+    invoke<{ success: boolean; found: boolean; legacy?: boolean }>('overleaf:autoGetCookie'),
 };
 
 /** Subscribe to IPC events from main process */

@@ -1,5 +1,152 @@
 # Changelog
 
+## 2026-03-20 (42)
+
+### fix: reference parser bugs (arXiv ID, URL repair, broken URLs)
+
+- **arXiv ID extraction bug**: Fixed `match()` with global regex `/g` flag returning full matches instead of capture groups, causing `arxivId` to always be `undefined`. Now uses non-global regex patterns for correct capture group extraction.
+- **URL repair too aggressive**: Fixed URL fragment joining that consumed `accessed:`, `retrieved:`, and year tokens as URL path segments. Added stop-words for metadata-like fragments.
+- **Broken `https: //` URLs**: Added repair for PDFs that line-wrap after `https:`, producing `https: //` which was not matched by the URL regex.
+- **URL cleanup**: Added stripping of `,accessed...` suffixes that got glued to URLs.
+- **New tests**: Added 16 new test cases covering real PDF edge cases: arXiv IDs, IEEE website/tool references, broken URLs, accented author names, multi-line references, DOI extraction with `[Online]. Available:` prefix, ACM unnumbered style.
+- **Scope**: `src/shared/utils/reference-parser.ts`, `tests/unit/citation-detector.test.ts`
+
+## 2026-03-20 (41)
+
+### feat: DOI support + fix background reference extraction failures
+
+- **DOI Import Support**:
+  - Ported `doi-resolver.service.ts` from `feat/zotero-import` branch — resolves DOI metadata via Crossref API with Semantic Scholar fallback
+  - Updated `download.service.ts` `parseInput` to recognize DOI format (`10.xxxx/yyyy`) and doi.org URLs
+  - Added `importByDoi()`, `importByUrl()`, `createFromMetadata()` methods
+  - Citation sidebar's Download/Import buttons now work for non-arXiv papers with DOI
+- **Fix "Failed to fetch" errors in background extraction**:
+  - Background service now only processes papers with **local PDF files** — no network downloads at startup
+  - Uses `forceRefresh: true` to bypass truncated 8000-char cached `text.txt` files
+  - Added 500ms delay between papers to avoid system overload
+  - `scheduleReferenceExtraction` added to `download.service.ts` after PDF download completes
+- **Scope**: `doi-resolver.service.ts` (new), `download.service.ts`, `reference-extraction-bg.service.ts`
+
+## 2026-03-20 (40)
+
+### feat: Background PDF reference extraction + Import button in citation sidebar
+
+- **Background Reference Extraction**:
+  - New `reference-extraction-bg.service.ts` — automatically extracts references from PDFs in the main process after paper import, without requiring user to open the PDF
+  - Runs at app startup for papers that don't have extracted references yet
+  - Uses shared `parseReferencesFromText()` from `@shared/reference-parser`
+  - Saves results to `ExtractedReference` table — ready when user opens citation sidebar
+  - Integrated into paper creation flow (`papers.service.ts`) and app startup (`index.ts`)
+
+- **Shared Reference Parser** (`src/shared/utils/reference-parser.ts`):
+  - Extracted pure text-based reference parsing from renderer's `citation-detector.ts` into `@shared`
+  - No pdfjs/Node/Electron dependencies — usable in both main process and renderer
+  - Exports: `parseReferencesFromText()`, `findReferenceSection()`, `Reference` type
+  - Refactored `citation-detector.ts` to delegate to shared module
+
+- **Import Button in Citation Sidebar**:
+  - Added "Download & Read" button (temporary, `isTemporary: true`) — opens paper in reader
+  - Added "Import to Library" button (permanent, `isTemporary: false`) — saves to library
+  - Both buttons appear in reference detail panel alongside existing "Search Paper"
+  - i18n: Added translations for both EN and ZH
+
+- **Title Extraction Fix**:
+  - Improved `createReference()` to detect author-to-title boundary using smart period splitting
+  - Old: `split(/\.\s+/)` broke on author initials like "A." "P. R."
+  - New: Splits on `. ` only when followed by a multi-letter word (title start), skipping initials
+  - Extracts venue markers to isolate title from journal/conference info
+  - Auto-extracts authors from text before title
+
+- **Scope**: `reference-parser.ts` (new), `reference-extraction-bg.service.ts` (new), `citation-detector.ts`, `PdfCitationSidebar.tsx`, `papers.service.ts`, `index.ts`, `en.json`, `zh.json`, `shared/index.ts`
+- **Tests**: 25 unit tests + 149 total, all passing
+
+## 2026-03-20 (39)
+
+### fix: Comprehensive citation detection for all common reference formats
+
+- **Problem**: Papers like "SiameseNorm" failed citation detection due to multiple issues: (1) PDF text extraction joined all text items with spaces, losing line structure; (2) reference section header matching required `\n` prefixes; (3) multi-line reference entries were not merged; (4) only line-start numbered patterns were tried, ignoring author-year format.
+- **Solution**:
+  - **PDF text extraction**: Use y-position from pdfjs `transform` matrix to insert proper newlines between text items on different lines
+  - **Reference section finding**: Added 3 new header patterns (page-number separated, sentence-end separated, author-name-following) + broad fallback search in last 40% of document with context validation + inline `[1]` fallback
+  - **Numbered references**: New `parseNumberedReferences()` with multi-line merging — detects `[N]`, `N.`, `(N)`, `N)` entry starts and merges continuation lines until next entry. Also handles inline `[N]` in space-joined text
+  - **Author-year references**: Rewrote `parseAuthorYearReferences()` to join all lines first, then split on year+period+author-name boundaries (avoids false splits on continuation author names like "Subbiah, M.")
+  - **Strategy cascade**: Try numbered first → if < 3 results, also try author-year → keep whichever finds more
+  - Fixed pre-existing TypeScript error with nullable `titleMatch`
+- **Tests**: 25 tests total (7 new), covering: multi-line bracket refs, parenthetical refs, author-year refs, 30-entry numbered refs, space-joined PDF text
+- **Scope**: `citation-detector.ts`, `citation-detector.test.ts`
+
+## 2026-03-20 (38)
+
+### feat: Database caching for PDF citation references
+
+- **Problem**: Citations were re-extracted every time the PDF loaded, causing unnecessary processing and repeated loading.
+- **Solution**:
+  - Added `ExtractedReference` model to Prisma schema for caching extracted references
+  - Added IPC handlers (`getExtractedRefs`, `saveExtractedRefs`) for database operations
+  - Updated `PdfCitationSidebar` to use cached references if available
+  - References are now loaded from database when paper opens (not when clicking sidebar)
+  - Added proper state tracking to prevent duplicate extraction
+  - Props chain: `reader/page.tsx` → `PdfViewer` → `PdfDocument` → `PdfCitationSidebar`
+- **Scope**: `schema.prisma`, `papers.ipc.ts`, `use-ipc.ts`, `PdfCitationSidebar.tsx`, `PdfDocument.tsx`, `pdf-viewer.tsx`, `reader/page.tsx`
+
+### feat: Overleaf integration for importing LaTeX projects
+
+- **Problem**: Users with Overleaf projects wanted to import their compiled PDFs into ResearchClaw.
+- **Solution**:
+  - Created `OverleafService` to communicate with Overleaf's internal API via session cookie
+  - Added settings section for users to configure their Overleaf session cookie (encrypted storage)
+  - Added `overleaf` source type to database schema
+  - Added IPC handlers for session management and project import
+  - Added Overleaf settings component with cookie input, test connection, and help instructions
+- **Scope**: `overleaf.service.ts` (new), `app-settings-store.ts`, `providers.ipc.ts`, `use-ipc.ts`, `settings-nav.ts`, `page.tsx`, `en.json`, `zh.json`, `schema.prisma`, `domain.ts`
+- **Note**: Full import modal tab implementation pending - settings infrastructure is complete
+
+### feat: PDF citation interaction with right-click and double-click
+
+- **Problem**: PDF reference links may be incomplete or non-standard, causing clicks to open in browser instead of app's paper search flow.
+- **Solution**:
+  - Created `PdfCitationPopover` component that detects citation patterns on right-click/double-click
+  - Supports numeric citations `[1]`, `[1-3]`, `[1,2,3]` and author-year `(Author et al., 2023)`
+  - Right-click shows context menu with "Search Library", "Search Online", and "Copy" options
+  - Double-click directly triggers online search
+  - Added i18n translations for menu items
+- **Scope**: `PdfCitationPopover.tsx` (new), `PdfDocument.tsx`, `en.json`, `zh.json`
+
+### feat: Paper preview modal before download
+
+- **Problem**: Searching for cited papers would immediately download PDF without user confirmation.
+- **Solution**:
+  - Created `PaperPreviewModal` component showing search results with title, authors, abstract
+  - User can preview multiple results and select which to download
+  - Keyboard navigation (↑↓ to navigate, Enter to download)
+  - Removed all external browser fallbacks - errors shown in-app instead
+- **Scope**: `PaperPreviewModal.tsx` (new), `reader/page.tsx`, `en.json`, `zh.json`
+
+### feat: Citation sidebar for PDF viewer
+
+- **Problem**: Clicking on PDF citations was not convenient for finding referenced papers.
+- **Solution**:
+  - Created `PdfCitationSidebar` component showing citations on current page
+  - Toggle button in PDF toolbar to show/hide citation sidebar
+  - Click citation to trigger paper search
+  - Scan all pages for citations with refresh button
+  - Added i18n translations for sidebar
+- **Scope**: `PdfCitationSidebar.tsx` (new), `PdfDocument.tsx`, `PdfToolbar.tsx`, `pdf-viewer.tsx`, `reader/page.tsx`
+
+### fix: PDF reference links now open in app instead of browser
+
+- **Problem**: Clicking reference links in PDF opened them in browser instead of handling through app's paper import flow.
+- **Solution**: pdf.js stores some links in `unsafeUrl` (raw URL) instead of `url` (sanitized). Now check both properties to capture all external links.
+- **Scope**: `PdfPage.tsx`
+
+### fix: reading position cache lost when switching papers
+
+- **Problem**: When switching between papers, the reading position cache was lost because React reused the component instance without resetting key refs (`initialPageScrolled`, `savesEnabled`) and state (`restoredState`, `currentPage`).
+- **Solution**: Added `useEffect` to detect `path` changes and properly reset all state, then re-read from `sessionStorage` for the new paper.
+- **Problem 2**: Position had offset because restore used `page` (page number) instead of saved `scrollTop` (pixel-precise).
+- **Solution 2**: Restore now prefers `scrollTop` for exact position, falls back to page-based calculation.
+- **Scope**: `PdfDocument.tsx`
+
 ## 2026-03-17 (36)
 
 ### feat: batch embedding rebuild after model switch
