@@ -862,7 +862,7 @@ export function PapersByTag({
         <div className="flex items-center gap-2">
           {/* Batch Auto Tag */}
           {untaggedCount > 0 && (
-            <div className="flex flex-col gap-1">
+            <div className="relative">
               <motion.button
                 onClick={handleBatchAutoTag}
                 disabled={batchTagProgress !== null || !canAutoTag}
@@ -873,15 +873,15 @@ export function PapersByTag({
                 <Wand2 size={14} />
                 Auto Tag {untaggedCount}
               </motion.button>
-              {/* Batch Tag Progress */}
+              {/* Batch Tag Progress - absolute positioned below button */}
               {batchTagProgress && (
-                <div className="w-full">
-                  <div className="flex items-center justify-between text-[10px] text-notion-text-tertiary mb-0.5">
+                <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-white rounded-lg border border-notion-border shadow-notion p-2">
+                  <div className="flex items-center justify-between text-[10px] text-notion-text-tertiary mb-1">
                     <span>
                       {batchTagProgress.current}/{batchTagProgress.total}
                     </span>
                   </div>
-                  <div className="relative h-1 w-full overflow-hidden rounded-full bg-blue-100">
+                  <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
                     <div
                       className="absolute left-0 top-0 h-full rounded-full bg-blue-500 transition-[width] duration-150 ease-out"
                       style={{
