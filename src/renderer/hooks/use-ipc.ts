@@ -641,7 +641,10 @@ export const ipc = {
     year?: number;
     tag?: string;
     importedWithin?: 'today' | 'week' | 'month' | 'all';
+    temporary?: boolean;
   }) => invoke<PaperItem[]>('papers:list', query ?? {}),
+  importTemporary: (paperId: string) =>
+    invoke<{ success: boolean }>('papers:importTemporary', paperId),
   listTodayPapers: () => invoke<PaperItem[]>('papers:listToday'),
   createPaper: (input: Record<string, unknown>) => invoke<PaperItem>('papers:create', input),
   importLocalPdf: (filePath: string) => invoke<PaperItem>('papers:importLocalPdf', filePath),
@@ -1310,6 +1313,17 @@ export const ipc = {
   listTaskResults: (params: { projectId: string }) =>
     invoke<TaskResultItem[]>('reports:listTaskResults', params.projectId),
 
+
+  scanBrowserDownloads: (days?: number) =>
+    invoke<
+      Array<{
+        filePath: string;
+        fileName: string;
+        browser: string;
+        downloadTime: string;
+        fileSize: number;
+      }>
+    >('ingest:scanDownloads', days ?? 7),
 
   // Highlights
   createHighlight: (params: {
