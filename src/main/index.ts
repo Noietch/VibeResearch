@@ -32,6 +32,7 @@ import {
 import { PapersRepository } from '@db';
 import { resumeAutomaticPaperProcessing } from './services/paper-processing.service';
 import { resumeAutomaticCitationExtraction } from './services/citation-processing.service';
+import { resumeAutomaticReferenceExtraction } from './services/reference-extraction-bg.service';
 import { stopOllamaService, warmupOllamaService } from './services/ollama.service';
 import { closeVecStore } from '../db/vec-store';
 import * as vecIndex from './services/vec-index.service';
@@ -552,6 +553,11 @@ app.whenReady().then(async () => {
   // Start automatic citation extraction (background, after paper processing)
   resumeAutomaticCitationExtraction().catch((err) =>
     console.error('[startup] Failed to resume citation extraction:', err),
+  );
+
+  // Start automatic PDF reference extraction (background)
+  resumeAutomaticReferenceExtraction().catch((err) =>
+    console.error('[startup] Failed to resume reference extraction:', err),
   );
 
   const win = createWindow();
