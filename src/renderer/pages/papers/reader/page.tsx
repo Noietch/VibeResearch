@@ -35,6 +35,8 @@ import {
   X,
   Zap,
   History,
+  Maximize2,
+  Minimize2,
   StickyNote,
 } from 'lucide-react';
 import type { AgentConfigItem } from '@shared';
@@ -373,6 +375,9 @@ export function ReaderPage() {
   const [showCitationSidebar, setShowCitationSidebar] = useState(
     cachedState?.showCitationSidebar ?? false,
   );
+
+  // Focus mode: hide top toolbar for distraction-free reading
+  const [focusMode, setFocusMode] = useState(false);
 
   // Annotation sidebar: show highlights grouped by page
   const [showAnnotationSidebar, setShowAnnotationSidebar] = useState(false);
@@ -1026,6 +1031,44 @@ export function ReaderPage() {
     setIsDragging(true);
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable)
+        return;
+
+      switch (e.key) {
+        case 'f':
+          // F = toggle focus mode
+          e.preventDefault();
+          setFocusMode((v) => !v);
+          break;
+        case '1':
+          // 1 = chat only
+          setLayoutMode('chat-only');
+          break;
+        case '2':
+          // 2 = split
+          setLayoutMode('split');
+          break;
+        case '3':
+          // 3 = pdf only
+          setLayoutMode('pdf-only');
+          break;
+        case 'Escape':
+          // ESC exits focus mode
+          if (focusMode) {
+            setFocusMode(false);
+          }
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [focusMode]);
+
   // Rating change handler
   const handleRatingChange = useCallback(
     async (newRating: number) => {
@@ -1096,60 +1139,97 @@ export function ReaderPage() {
   const pdfPath = paper.pdfPath;
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar */}
-      <div className="relative flex flex-shrink-0 items-center border-b border-notion-border px-4 py-2">
-        {/* Left: back + star */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate(`/papers/${paper.shortId}`)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div className="ml-1 flex items-center gap-1">
-            <StarRating rating={rating} onChange={handleRatingChange} size={16} />
+      {/* Toolbar - hidden in focus mode */}
+      {!focusMode && (
+        <div className="relative flex flex-shrink-0 items-center border-b border-notion-border px-4 py-2">
+          {/* Left: back + star */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/papers/${paper.shortId}`)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="ml-1 flex items-center gap-1">
+              <StarRating rating={rating} onChange={handleRatingChange} size={16} />
+            </div>
           </div>
-        </div>
 
-        {/* Center: layout toggle buttons (absolutely centered) */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className="flex items-center gap-0.5 rounded-lg border border-notion-border bg-notion-sidebar p-0.5">
+          {/* Center: layout toggle buttons (absolutely centered) */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="flex items-center gap-0.5 rounded-lg border border-notion-border bg-notion-sidebar p-0.5">
+              <button
+                onClick={() => setLayoutMode('chat-only')}
+                title="Chat only (1)"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  layoutMode === 'chat-only'
+                    ? 'bg-white text-notion-accent shadow-sm'
+                    : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+                }`}
+              >
+                <MessageSquare size={14} />
+              </button>
+              <button
+                onClick={() => setLayoutMode('split')}
+                title="Split view (2)"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  layoutMode === 'split'
+                    ? 'bg-white text-notion-accent shadow-sm'
+                    : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+                }`}
+              >
+                <Columns2 size={14} />
+              </button>
+              <button
+                onClick={() => setLayoutMode('pdf-only')}
+                title="PDF only (3)"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  layoutMode === 'pdf-only'
+                    ? 'bg-white text-notion-accent shadow-sm'
+                    : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+                }`}
+              >
+                <FileText size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Right: annotations + focus mode + shortcuts hint */}
+          <div className="ml-auto flex items-center gap-1">
             <button
-              onClick={() => setLayoutMode('chat-only')}
-              title="Chat only"
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                layoutMode === 'chat-only'
-                  ? 'bg-white text-notion-accent shadow-sm'
-                  : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+              onClick={() => setShowAnnotationSidebar((v) => !v)}
+              title={t('reader.annotations')}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                showAnnotationSidebar
+                  ? 'bg-notion-accent-light text-notion-accent'
+                  : 'text-notion-text-secondary hover:bg-notion-sidebar/50'
               }`}
             >
-              <MessageSquare size={14} />
+              <StickyNote size={14} />
             </button>
             <button
-              onClick={() => setLayoutMode('split')}
-              title="Split view"
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                layoutMode === 'split'
-                  ? 'bg-white text-notion-accent shadow-sm'
-                  : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
-              }`}
+              onClick={() => setFocusMode(true)}
+              title={t('reader.focusMode') + ' (F)'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
             >
-              <Columns2 size={14} />
-            </button>
-            <button
-              onClick={() => setLayoutMode('pdf-only')}
-              title="PDF only"
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                layoutMode === 'pdf-only'
-                  ? 'bg-white text-notion-accent shadow-sm'
-                  : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
-              }`}
-            >
-              <FileText size={14} />
+              <Maximize2 size={14} />
             </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Focus mode: minimal floating controls */}
+      {focusMode && (
+        <div className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-lg border border-notion-border/50 bg-white/80 p-1 shadow-sm backdrop-blur-sm">
+          <button
+            onClick={() => setFocusMode(false)}
+            title={t('reader.exitFocusMode') + ' (Esc)'}
+            className="inline-flex h-6 w-6 items-center justify-center rounded text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
+          >
+            <Minimize2 size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Split pane */}
       <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
