@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { ipc, type ScanResult, type ImportStatus, type SearchResultItem } from '../hooks/use-ipc';
+import {
+  ipc,
+  type ScanResult,
+  type ImportStatus,
+  type SearchResultItem,
+  type OverleafProject,
+} from '../hooks/use-ipc';
 import { onIpc } from '../hooks/use-ipc';
 import { cleanArxivTitle } from '@shared';
 import {
@@ -18,6 +24,8 @@ import {
   Square,
   Trash2,
   Search,
+  Leaf,
+  RefreshCw,
 } from 'lucide-react';
 
 // Animation variants
@@ -53,7 +61,7 @@ const modalVariants = {
   },
 };
 
-type Tab = 'chrome' | 'local' | 'search';
+type Tab = 'chrome' | 'local' | 'search' | 'overleaf';
 type Step = 'initial' | 'scanning' | 'preview' | 'importing' | 'done';
 
 interface BatchProgress {
@@ -66,6 +74,22 @@ interface BatchProgress {
 
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() ?? filePath;
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffHr = Math.floor(diffMs / 3_600_000);
+  const diffDay = Math.floor(diffMs / 86_400_000);
+
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffDay < 30) return `${Math.floor(diffDay / 7)}w ago`;
+  return new Date(dateStr).toLocaleDateString();
 }
 
 export function ImportModal({
@@ -93,6 +117,18 @@ export function ImportModal({
   const [localInput, setLocalInput] = useState('');
   const [localPdfFiles, setLocalPdfFiles] = useState<string[]>([]);
   const [localDoneMessage, setLocalDoneMessage] = useState('');
+
+  // Browser downloads state
+  interface DownloadedPdfItem {
+    filePath: string;
+    fileName: string;
+    browser: string;
+    downloadTime: string;
+    fileSize: number;
+  }
+  const [recentDownloads, setRecentDownloads] = useState<DownloadedPdfItem[]>([]);
+  const [downloadsLoading, setDownloadsLoading] = useState(false);
+  const [downloadsLoaded, setDownloadsLoaded] = useState(false);
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState('');
@@ -106,6 +142,22 @@ export function ImportModal({
   const [selectedSearchIds, setSelectedSearchIds] = useState<Set<string>>(new Set());
   const [searchError, setSearchError] = useState('');
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Overleaf tab state
+  const [overleafProjects, setOverleafProjects] = useState<OverleafProject[]>([]);
+  const [overleafImportedMap, setOverleafImportedMap] = useState<
+    Record<string, { paperId: string; importedAt: string }>
+  >({});
+  const [overleafLoading, setOverleafLoading] = useState(false);
+  const [overleafImporting, setOverleafImporting] = useState<string | null>(null);
+  const [overleafBatchImporting, setOverleafBatchImporting] = useState(false);
+  const [overleafBatchProgress, setOverleafBatchProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [overleafSelected, setOverleafSelected] = useState<Set<string>>(new Set());
+  const [overleafSearch, setOverleafSearch] = useState('');
+  const [overleafError, setOverleafError] = useState('');
 
   // Handle ESC key to close
   useEffect(() => {
@@ -134,6 +186,15 @@ export function ImportModal({
       onClose();
     }
   }, [isVisible, onClose]);
+
+  // Subscribe to Overleaf batch import progress
+  useEffect(() => {
+    const unsubscribe = onIpc('overleaf:importProgress', (...args: unknown[]) => {
+      const progress = args[1] as { current: number; total: number };
+      setOverleafBatchProgress(progress);
+    });
+    return unsubscribe;
+  }, []);
 
   // Subscribe to import status updates (Chrome history)
   useEffect(() => {
@@ -166,8 +227,8 @@ export function ImportModal({
     try {
       const result = await ipc.scanChromeHistory(days);
       setScanResult(result);
-      // Select all papers by default
-      setSelectedIds(new Set(result.papers.map((p) => p.arxivId)));
+      // Select only new papers by default (not ones already in library)
+      setSelectedIds(new Set(result.papers.filter((p) => !p.existing).map((p) => p.arxivId)));
       setStep('preview');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to scan Chrome history');
@@ -207,10 +268,11 @@ export function ImportModal({
   // Toggle all papers
   const toggleAll = useCallback(() => {
     if (!scanResult) return;
-    if (selectedIds.size === scanResult.papers.length) {
+    const newPapers = scanResult.papers.filter((p) => !p.existing);
+    if (selectedIds.size >= newPapers.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(scanResult.papers.map((p) => p.arxivId)));
+      setSelectedIds(new Set(newPapers.map((p) => p.arxivId)));
     }
   }, [scanResult, selectedIds.size]);
 
@@ -433,16 +495,126 @@ export function ImportModal({
   const canImportLocal = localPdfFiles.length > 0 || localInput.trim().length > 0;
 
   // Reset state when switching tabs
-  const handleTabChange = useCallback((newTab: Tab) => {
-    setTab(newTab);
-    setStep('initial');
-    setScanResult(null);
-    setError('');
-    setLocalInput('');
-    setLocalPdfFiles([]);
-    setLocalDoneMessage('');
-    setBatchProgress(null);
+  const loadOverleafProjects = useCallback(async () => {
+    setOverleafLoading(true);
+    setOverleafError('');
+    try {
+      const { projects, importedMap } = await ipc.listOverleafProjects();
+      setOverleafProjects(projects);
+      setOverleafImportedMap(importedMap);
+    } catch (err) {
+      setOverleafError(err instanceof Error ? err.message : 'Failed to load Overleaf projects');
+    } finally {
+      setOverleafLoading(false);
+    }
   }, []);
+
+  const [overleafSuccess, setOverleafSuccess] = useState('');
+
+  const toggleOverleafSelect = useCallback((projectId: string) => {
+    setOverleafSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }, []);
+
+  const handleOverleafImport = useCallback(
+    async (projectId: string) => {
+      setOverleafImporting(projectId);
+      setOverleafError('');
+      setOverleafSuccess('');
+      try {
+        const project = overleafProjects.find((p) => p.id === projectId);
+        await ipc.prepareOverleafImport(projectId);
+        setOverleafImportedMap((prev) => ({
+          ...prev,
+          [projectId]: { paperId: projectId, importedAt: new Date().toISOString() },
+        }));
+        setOverleafSuccess(
+          `"${project?.name ?? 'Project'}" imported. Auto-tag & index running in background.`,
+        );
+        onImported();
+        setTimeout(() => setOverleafSuccess(''), 5000);
+      } catch (err) {
+        setOverleafError(err instanceof Error ? err.message : 'Failed to import project');
+      } finally {
+        setOverleafImporting(null);
+      }
+    },
+    [onImported, overleafProjects],
+  );
+
+  const handleOverleafBatchImport = useCallback(async () => {
+    if (overleafSelected.size === 0) return;
+    setOverleafBatchImporting(true);
+    setOverleafError('');
+    setOverleafSuccess('');
+    setOverleafBatchProgress({ current: 0, total: overleafSelected.size });
+
+    try {
+      const projectIds = Array.from(overleafSelected);
+      const results = await ipc.batchOverleafImport(projectIds);
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      // Update imported map
+      const now = new Date().toISOString();
+      setOverleafImportedMap((prev) => {
+        const next = { ...prev };
+        for (const r of results) {
+          if (r.success) next[r.projectId] = { paperId: r.projectId, importedAt: now };
+        }
+        return next;
+      });
+      setOverleafSelected(new Set());
+
+      setOverleafSuccess(
+        `Imported ${succeeded} project${succeeded !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}. Auto-tag & index running in background.`,
+      );
+      if (succeeded > 0) onImported();
+      setTimeout(() => setOverleafSuccess(''), 5000);
+    } catch (err) {
+      setOverleafError(err instanceof Error ? err.message : 'Batch import failed');
+    } finally {
+      setOverleafBatchImporting(false);
+      setOverleafBatchProgress(null);
+    }
+  }, [overleafSelected, onImported]);
+
+  const loadRecentDownloads = useCallback(async () => {
+    setDownloadsLoading(true);
+    try {
+      const downloads = await ipc.scanBrowserDownloads(7);
+      setRecentDownloads(downloads);
+      setDownloadsLoaded(true);
+    } catch {
+      // Silent fail
+    } finally {
+      setDownloadsLoading(false);
+    }
+  }, []);
+
+  const handleTabChange = useCallback(
+    (newTab: Tab) => {
+      setTab(newTab);
+      setStep('initial');
+      setScanResult(null);
+      setError('');
+      setLocalInput('');
+      setLocalPdfFiles([]);
+      setLocalDoneMessage('');
+      setBatchProgress(null);
+      if (newTab === 'overleaf' && overleafProjects.length === 0) {
+        loadOverleafProjects();
+      }
+      if (newTab === 'local' && !downloadsLoaded) {
+        loadRecentDownloads();
+      }
+    },
+    [overleafProjects.length, loadOverleafProjects, downloadsLoaded, loadRecentDownloads],
+  );
 
   // Reset to initial state
   const handleReset = useCallback(() => {
@@ -517,7 +689,7 @@ export function ImportModal({
                   }`}
                 >
                   <Chrome size={16} />
-                  Chrome
+                  Browser
                 </button>
                 <button
                   onClick={() => handleTabChange('local')}
@@ -529,6 +701,17 @@ export function ImportModal({
                 >
                   <FileText size={16} />
                   Local
+                </button>
+                <button
+                  onClick={() => handleTabChange('overleaf')}
+                  className={`flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                    tab === 'overleaf'
+                      ? 'border-b-2 border-blue-500 text-notion-text'
+                      : 'text-notion-text-secondary hover:text-notion-text'
+                  }`}
+                >
+                  <Leaf size={16} />
+                  Overleaf
                 </button>
               </div>
             )}
@@ -655,7 +838,7 @@ export function ImportModal({
                   {step === 'initial' && (
                     <div className="space-y-4">
                       <p className="text-sm text-notion-text-secondary">
-                        Scan your Chrome browsing history for arXiv papers.
+                        Scan browser history (Chrome, Edge, Brave, etc.) for arXiv papers.
                       </p>
                       <div>
                         <label className="mb-2 block text-xs font-medium text-notion-text-secondary">
@@ -684,7 +867,7 @@ export function ImportModal({
                     <div className="flex flex-col items-center py-8">
                       <Loader2 size={24} className="animate-spin text-blue-500" />
                       <p className="mt-3 text-sm text-notion-text-secondary">
-                        Scanning Chrome history...
+                        Scanning browser history...
                       </p>
                     </div>
                   )}
@@ -732,25 +915,39 @@ export function ImportModal({
                           <div className="max-h-64 overflow-y-auto rounded-lg border border-notion-border">
                             {scanResult.papers.map((paper) => {
                               const isSelected = selectedIds.has(paper.arxivId);
+                              const isExisting = !!paper.existing;
                               return (
                                 <div
                                   key={paper.arxivId}
-                                  onClick={() => togglePaper(paper.arxivId)}
-                                  className={`flex cursor-pointer items-start gap-3 border-b border-notion-border px-3 py-2 last:border-b-0 transition-colors ${
-                                    isSelected ? 'bg-blue-50' : 'hover:bg-notion-sidebar'
+                                  onClick={() => !isExisting && togglePaper(paper.arxivId)}
+                                  className={`flex items-start gap-3 border-b border-notion-border px-3 py-2 last:border-b-0 transition-colors ${
+                                    isExisting
+                                      ? 'bg-notion-sidebar opacity-60 cursor-default'
+                                      : isSelected
+                                        ? 'bg-blue-50 cursor-pointer'
+                                        : 'hover:bg-notion-sidebar cursor-pointer'
                                   }`}
                                 >
                                   <div className="mt-0.5 flex-shrink-0">
-                                    {isSelected ? (
+                                    {isExisting ? (
+                                      <Check size={16} className="text-green-500" />
+                                    ) : isSelected ? (
                                       <CheckSquare size={16} className="text-blue-600" />
                                     ) : (
                                       <Square size={16} className="text-notion-text-tertiary" />
                                     )}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="line-clamp-2 text-sm text-notion-text">
-                                      {cleanArxivTitle(paper.title)}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="line-clamp-2 text-sm text-notion-text">
+                                        {cleanArxivTitle(paper.title)}
+                                      </p>
+                                      {isExisting && (
+                                        <span className="flex-shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                          In Library
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="mt-0.5 text-xs text-notion-text-tertiary">
                                       {paper.arxivId}
                                     </p>
@@ -852,6 +1049,59 @@ export function ImportModal({
                 <div className="space-y-4">
                   {step === 'initial' && (
                     <>
+                      {/* Recent browser downloads */}
+                      {downloadsLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-notion-text-tertiary">
+                          <Loader2 size={12} className="animate-spin" />
+                          Scanning browser downloads...
+                        </div>
+                      ) : recentDownloads.length > 0 ? (
+                        <div>
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <span className="text-xs font-medium text-notion-text-secondary">
+                              Recent PDF downloads
+                            </span>
+                            <button
+                              onClick={loadRecentDownloads}
+                              className="text-[10px] text-notion-text-tertiary hover:text-notion-text"
+                            >
+                              Refresh
+                            </button>
+                          </div>
+                          <div className="max-h-32 overflow-y-auto rounded-lg border border-notion-border">
+                            {recentDownloads.map((dl) => (
+                              <div
+                                key={dl.filePath}
+                                className="group flex items-center gap-2 border-b border-notion-border px-3 py-1.5 last:border-b-0 hover:bg-notion-accent-light cursor-pointer"
+                                onClick={() => {
+                                  setLocalPdfFiles((prev) =>
+                                    prev.includes(dl.filePath) ? prev : [...prev, dl.filePath],
+                                  );
+                                }}
+                              >
+                                <FileText size={14} className="flex-shrink-0 text-red-400" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm text-notion-text">{dl.fileName}</p>
+                                  <p className="text-[10px] text-notion-text-tertiary">
+                                    {dl.browser} · {formatRelativeTime(dl.downloadTime)}
+                                    {dl.fileSize > 0 &&
+                                      ` · ${(dl.fileSize / 1024 / 1024).toFixed(1)} MB`}
+                                  </p>
+                                </div>
+                                {localPdfFiles.includes(dl.filePath) ? (
+                                  <Check size={14} className="flex-shrink-0 text-green-500" />
+                                ) : (
+                                  <Download
+                                    size={14}
+                                    className="flex-shrink-0 text-notion-text-tertiary opacity-0 group-hover:opacity-100"
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
                       {/* Drag & drop zone */}
                       <div
                         onDragOver={handleDragOver}
@@ -992,6 +1242,228 @@ export function ImportModal({
                       </div>
                       <p className="mt-1 text-xs text-green-700/80">{localDoneMessage}</p>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Overleaf Tab */}
+              {tab === 'overleaf' && (
+                <div className="space-y-4">
+                  {overleafSuccess && (
+                    <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                      <Check size={14} />
+                      {overleafSuccess}
+                    </div>
+                  )}
+                  {overleafError && (
+                    <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                      <AlertCircle size={14} />
+                      {overleafError}
+                    </div>
+                  )}
+
+                  {overleafLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 size={24} className="animate-spin text-notion-text-tertiary" />
+                      <span className="ml-2 text-sm text-notion-text-secondary">
+                        Loading Overleaf projects...
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {overleafProjects.length === 0 && !overleafError ? (
+                        <div className="py-8 text-center text-sm text-notion-text-tertiary">
+                          No projects found. Please configure your Overleaf cookie in Settings
+                          first.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                value={overleafSearch}
+                                onChange={(e) => setOverleafSearch(e.target.value)}
+                                placeholder="Filter projects..."
+                                className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 pr-10 text-sm text-notion-text placeholder-notion-text-tertiary focus:border-blue-500 focus:outline-none"
+                              />
+                              <Search
+                                size={16}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-notion-text-tertiary"
+                              />
+                            </div>
+                            <button
+                              onClick={loadOverleafProjects}
+                              disabled={overleafLoading}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-notion-border text-notion-text-tertiary hover:bg-notion-sidebar-hover hover:text-notion-text"
+                              title="Refresh"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-notion-text-tertiary">
+                              {overleafProjects.length} projects
+                              {overleafSelected.size > 0 && (
+                                <span className="ml-1 text-notion-accent">
+                                  · {overleafSelected.size} selected
+                                </span>
+                              )}
+                            </p>
+                            {overleafSelected.size > 0 && (
+                              <button
+                                onClick={handleOverleafBatchImport}
+                                disabled={overleafBatchImporting || overleafImporting !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-notion-accent px-3 py-1 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
+                              >
+                                {overleafBatchImporting ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Download size={12} />
+                                )}
+                                {overleafBatchImporting
+                                  ? `Importing ${overleafBatchProgress?.current ?? 0}/${overleafBatchProgress?.total ?? 0}...`
+                                  : `Import ${overleafSelected.size}`}
+                              </button>
+                            )}
+                          </div>
+                          <div className="max-h-96 space-y-1.5 overflow-y-auto">
+                            {overleafProjects
+                              .filter(
+                                (p) =>
+                                  !overleafSearch ||
+                                  p.name.toLowerCase().includes(overleafSearch.toLowerCase()),
+                              )
+                              .map((project) => {
+                                const imported = overleafImportedMap[project.id];
+                                const remoteTime = project.lastUpdated
+                                  ? new Date(project.lastUpdated).getTime()
+                                  : 0;
+                                const importedTime = imported
+                                  ? new Date(imported.importedAt).getTime()
+                                  : 0;
+                                const hasRemoteUpdate =
+                                  imported &&
+                                  remoteTime > 0 &&
+                                  importedTime > 0 &&
+                                  remoteTime > importedTime;
+                                const isSelected = overleafSelected.has(project.id);
+                                return (
+                                  <div
+                                    key={project.id}
+                                    onClick={() => toggleOverleafSelect(project.id)}
+                                    className={`group flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? 'border-notion-accent/50 bg-notion-accent-light'
+                                        : hasRemoteUpdate
+                                          ? 'border-orange-200 bg-orange-50/30 hover:bg-orange-50/60'
+                                          : imported
+                                            ? 'border-green-200 bg-green-50/30 hover:bg-green-50/60'
+                                            : 'border-notion-border bg-white hover:bg-notion-accent-light hover:border-notion-accent/30'
+                                    }`}
+                                  >
+                                    <div className="flex-shrink-0">
+                                      {isSelected ? (
+                                        <CheckSquare size={16} className="text-notion-accent" />
+                                      ) : (
+                                        <Square size={16} className="text-notion-text-tertiary" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="truncate text-sm font-medium text-notion-text">
+                                          {project.name}
+                                        </h4>
+                                        {imported && !hasRemoteUpdate && (
+                                          <span className="flex-shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                            Imported
+                                          </span>
+                                        )}
+                                        {hasRemoteUpdate && (
+                                          <span className="flex-shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                                            Has Updates
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mt-0.5 text-xs text-notion-text-tertiary">
+                                        {project.lastUpdated
+                                          ? formatRelativeTime(project.lastUpdated)
+                                          : ''}
+                                        {project.accessLevel && (
+                                          <span className="ml-2 rounded bg-notion-tag-blue px-1.5 py-0.5">
+                                            {project.accessLevel}
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                    {hasRemoteUpdate ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOverleafImport(project.id);
+                                        }}
+                                        disabled={
+                                          overleafImporting !== null || overleafBatchImporting
+                                        }
+                                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
+                                      >
+                                        {overleafImporting === project.id ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : (
+                                          <RefreshCw size={12} />
+                                        )}
+                                        {overleafImporting === project.id
+                                          ? 'Updating...'
+                                          : 'Update'}
+                                      </button>
+                                    ) : imported ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOverleafImport(project.id);
+                                        }}
+                                        disabled={
+                                          overleafImporting !== null || overleafBatchImporting
+                                        }
+                                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-notion-border bg-white px-3 py-1.5 text-xs font-medium text-notion-text-secondary hover:bg-notion-sidebar-hover disabled:opacity-50"
+                                      >
+                                        {overleafImporting === project.id ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : (
+                                          <RefreshCw size={12} />
+                                        )}
+                                        {overleafImporting === project.id
+                                          ? 'Importing...'
+                                          : 'Re-import'}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOverleafImport(project.id);
+                                        }}
+                                        disabled={
+                                          overleafImporting !== null || overleafBatchImporting
+                                        }
+                                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-notion-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
+                                      >
+                                        {overleafImporting === project.id ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : (
+                                          <Download size={12} />
+                                        )}
+                                        {overleafImporting === project.id
+                                          ? 'Compiling...'
+                                          : 'Import'}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               )}
