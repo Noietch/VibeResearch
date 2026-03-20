@@ -37,7 +37,7 @@ export function ToolCallGroup({ tools }: ToolCallGroupProps) {
   );
   const [expanded, setExpanded] = useState(hasPending);
 
-  const summary = buildSummary(tools, t);
+  const summary = buildSummary(tools, t as (key: string, options?: any) => string);
 
   if (!expanded) {
     return (

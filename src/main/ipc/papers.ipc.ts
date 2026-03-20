@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import path from 'path';
+import { PapersRepository } from '@db';
 import { PapersService } from '../services/papers.service';
 import { DownloadService } from '../services/download.service';
 import { AgenticSearchService, type AgenticSearchStep } from '../services/agentic-search.service';
@@ -85,6 +86,7 @@ export function setupPapersIpc() {
         year?: number;
         tag?: string;
         importedWithin?: 'today' | 'week' | 'month' | 'all';
+        temporary?: boolean;
       } = {},
     ): Promise<IpcResult<unknown>> => {
       try {
@@ -124,9 +126,9 @@ export function setupPapersIpc() {
 
   ipcMain.handle(
     'papers:importLocalPdf',
-    async (_, filePath: string): Promise<IpcResult<unknown>> => {
+    async (_, filePath: string, isTemporary?: boolean): Promise<IpcResult<unknown>> => {
       try {
-        const result = await getPapersService().importLocalPdf(filePath);
+        const result = await getPapersService().importLocalPdf(filePath, { isTemporary });
         return ok(result);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -286,6 +288,36 @@ export function setupPapersIpc() {
         const msg = e instanceof Error ? e.message : String(e);
         console.error('[papers:updateRating] Error:', msg);
         return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'papers:updateReadingProgress',
+    async (
+      _,
+      id: string,
+      lastReadPage: number,
+      totalPages: number,
+    ): Promise<IpcResult<unknown>> => {
+      try {
+        await new PapersRepository().updateReadingProgress(id, lastReadPage, totalPages);
+        return ok(null);
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  // Convert temporary paper to permanent (import to library)
+  ipcMain.handle(
+    'papers:importTemporary',
+    async (_, paperId: string): Promise<IpcResult<unknown>> => {
+      try {
+        await new PapersRepository().updateTemporaryStatus(paperId, false);
+        return ok({ success: true });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
       }
     },
   );
@@ -585,6 +617,157 @@ Rules:
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error('[papers:getAlphaXivData] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  // Match a reference against local papers by arXiv ID, DOI, or title
+  ipcMain.handle(
+    'papers:matchReference',
+    async (
+      _,
+      ref: { arxivId?: string; doi?: string; title?: string },
+    ): Promise<IpcResult<unknown>> => {
+      try {
+        const { getPrismaClient } = await import('@db');
+        const prisma = getPrismaClient();
+
+        // Only match papers that have a local PDF
+        const pdfFilter = { pdfPath: { not: null } };
+
+        // 1. Try matching by arXiv ID (stored as shortId)
+        if (ref.arxivId) {
+          const paper = await prisma.paper.findFirst({
+            where: { shortId: ref.arxivId, ...pdfFilter },
+            include: { tags: { include: { tag: true } } },
+          });
+          if (paper) {
+            return ok({
+              id: paper.id,
+              shortId: paper.shortId,
+              title: paper.title,
+              authors: paper.authorsJson ? JSON.parse(paper.authorsJson) : [],
+              submittedAt: paper.submittedAt?.toISOString(),
+              abstract: paper.abstract,
+              pdfUrl: paper.pdfUrl,
+              pdfPath: paper.pdfPath,
+              sourceUrl: paper.sourceUrl,
+              tagNames: paper.tags.map((pt) => pt.tag.name),
+              year: paper.submittedAt ? paper.submittedAt.getFullYear() : null,
+            });
+          }
+        }
+
+        // 2. Try matching by title (case-insensitive contains)
+        if (ref.title) {
+          const paper = await prisma.paper.findFirst({
+            where: {
+              title: { contains: ref.title },
+              ...pdfFilter,
+            },
+            include: { tags: { include: { tag: true } } },
+          });
+          if (paper) {
+            return ok({
+              id: paper.id,
+              shortId: paper.shortId,
+              title: paper.title,
+              authors: paper.authorsJson ? JSON.parse(paper.authorsJson) : [],
+              submittedAt: paper.submittedAt?.toISOString(),
+              abstract: paper.abstract,
+              pdfUrl: paper.pdfUrl,
+              pdfPath: paper.pdfPath,
+              sourceUrl: paper.sourceUrl,
+              tagNames: paper.tags.map((pt) => pt.tag.name),
+              year: paper.submittedAt ? paper.submittedAt.getFullYear() : null,
+            });
+          }
+        }
+
+        return ok(null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:matchReference] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  // Extracted References - save to database for caching
+  ipcMain.handle(
+    'papers:getExtractedRefs',
+    async (_, paperId: string): Promise<IpcResult<unknown[]>> => {
+      try {
+        const { getPrismaClient } = await import('@db');
+        const prisma = getPrismaClient();
+        const refs = await prisma.extractedReference.findMany({
+          where: { paperId },
+          orderBy: { refNumber: 'asc' },
+        });
+        return ok(refs);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:getExtractedRefs] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'papers:saveExtractedRefs',
+    async (
+      _,
+      paperId: string,
+      refs: Array<{
+        refNumber: number;
+        text: string;
+        title?: string;
+        authors?: string;
+        year?: number;
+        doi?: string;
+        arxivId?: string;
+        url?: string;
+        venue?: string;
+      }>,
+    ): Promise<IpcResult<unknown>> => {
+      try {
+        const { getPrismaClient } = await import('@db');
+        const prisma = getPrismaClient();
+
+        // Delete existing refs for this paper
+        await prisma.extractedReference.deleteMany({
+          where: { paperId },
+        });
+
+        // Insert new refs
+        if (refs.length > 0) {
+          await prisma.extractedReference.createMany({
+            data: refs.map((ref) => ({
+              paperId,
+              refNumber: ref.refNumber,
+              text: ref.text,
+              title: ref.title ?? null,
+              authors: ref.authors ?? null,
+              year: ref.year ?? null,
+              doi: ref.doi ?? null,
+              arxivId: ref.arxivId ?? null,
+              url: ref.url ?? null,
+              venue: ref.venue ?? null,
+            })),
+          });
+        }
+
+        // Update citationsExtractedAt on paper
+        await prisma.paper.update({
+          where: { id: paperId },
+          data: { citationsExtractedAt: new Date() },
+        });
+
+        return ok({ count: refs.length });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:saveExtractedRefs] Error:', msg);
         return err(msg);
       }
     },

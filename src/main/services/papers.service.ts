@@ -4,12 +4,14 @@ import { BrowserWindow } from 'electron';
 import { PapersRepository, SourceEventsRepository } from '@db';
 import { extractArxivId, type CategorizedTag } from '@shared';
 import { getPapersDir } from '../store/app-settings-store';
-import { schedulePaperProcessing } from './paper-processing.service';
+import { retryPaperProcessing, schedulePaperProcessing } from './paper-processing.service';
 import { scheduleCitationExtraction } from './citation-processing.service';
 import { scheduleAutoPaperEnrichment } from './auto-paper-enrichment.service';
+import { scheduleReferenceExtraction } from './reference-extraction-bg.service';
 import * as paperEmbeddingService from './paper-embedding.service';
 import { getPaperText } from './paper-text.service';
 import { extractPaperMetadata } from './paper-metadata.service';
+import { tagPaper } from './tagging.service';
 
 export interface CreatePaperInput {
   title: string;
@@ -90,6 +92,7 @@ export class PapersService {
     }
     scheduleCitationExtraction(created.id);
     scheduleAutoPaperEnrichment(created.id);
+    scheduleReferenceExtraction(created.id);
 
     return created;
   }
@@ -155,7 +158,7 @@ export class PapersService {
     return this.papersRepository.findByShortId(shortId);
   }
 
-  async importLocalPdf(filePath: string) {
+  async importLocalPdf(filePath: string, options?: { isTemporary?: boolean }) {
     const resolvedPath = path.resolve(filePath);
     const extension = path.extname(resolvedPath).toLowerCase();
     if (extension !== '.pdf') {
@@ -187,6 +190,10 @@ export class PapersService {
       tags: ['pdf'],
     });
 
+    if (options?.isTemporary) {
+      await this.papersRepository.updateTemporaryStatus(created.id, true);
+    }
+
     await this.eventsRepository.create({
       paperId: created.id,
       source: 'manual',
@@ -198,6 +205,62 @@ export class PapersService {
     void this.extractAndUpdateMetadata(created.id, created.shortId, importedPdfPath);
 
     scheduleCitationExtraction(created.id);
+    scheduleReferenceExtraction(created.id);
+
+    return created;
+  }
+
+  /**
+   * Import a PDF from Overleaf with a specific shortId and title.
+   * If already imported (same shortId), updates the PDF and re-extracts metadata.
+   */
+  async importOverleafPdf(shortId: string, title: string, pdfPath: string, sourceUrl: string) {
+    const resolvedPath = path.resolve(pdfPath);
+    const sourceStats = await fs.stat(resolvedPath).catch(() => null);
+    if (!sourceStats?.isFile()) {
+      throw new Error('PDF file was not found');
+    }
+
+    // Check if already imported
+    const existing = await this.papersRepository.findByShortId(shortId);
+    if (existing) {
+      // Update PDF
+      const folder = this.getPaperFolder(shortId);
+      const importedPdfPath = path.join(folder, 'paper.pdf');
+      await fs.copyFile(resolvedPath, importedPdfPath);
+      // Touch the DB record so updatedAt is bumped (used for "Has Updates" detection)
+      const updated = await this.papersRepository.update(existing.id, { title });
+      // Re-extract metadata
+      void this.extractAndUpdateMetadata(existing.id, shortId, importedPdfPath);
+      scheduleCitationExtraction(existing.id);
+      scheduleReferenceExtraction(existing.id);
+      return updated;
+    }
+
+    const folder = await this.ensurePaperFolder(shortId);
+    const importedPdfPath = path.join(folder, 'paper.pdf');
+    await fs.copyFile(resolvedPath, importedPdfPath);
+
+    const created = await this.papersRepository.create({
+      shortId,
+      title,
+      authors: [],
+      source: 'overleaf',
+      pdfPath: importedPdfPath,
+      sourceUrl,
+      tags: ['pdf'],
+    });
+
+    await this.eventsRepository.create({
+      paperId: created.id,
+      source: 'overleaf',
+      rawTitle: title,
+      rawUrl: sourceUrl,
+    });
+
+    void this.extractAndUpdateMetadata(created.id, shortId, importedPdfPath);
+    scheduleCitationExtraction(created.id);
+    scheduleReferenceExtraction(created.id);
 
     return created;
   }
@@ -232,8 +295,25 @@ export class PapersService {
         win.webContents.send('papers:metadataUpdated', { paperId });
       }
 
-      // Now that we have an abstract, trigger processing and enrichment
-      schedulePaperProcessing(paperId);
+      // Auto-tag and index after metadata extraction
+      try {
+        await tagPaper(paperId);
+        console.log(`[papers] Auto-tagged ${shortId}`);
+      } catch (tagErr) {
+        console.warn(
+          `[papers] Auto-tag failed for ${shortId}:`,
+          tagErr instanceof Error ? tagErr.message : String(tagErr),
+        );
+      }
+      try {
+        await retryPaperProcessing(paperId);
+        console.log(`[papers] Indexed ${shortId}`);
+      } catch (idxErr) {
+        console.warn(
+          `[papers] Index failed for ${shortId}:`,
+          idxErr instanceof Error ? idxErr.message : String(idxErr),
+        );
+      }
       scheduleAutoPaperEnrichment(paperId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

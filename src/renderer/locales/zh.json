@@ -21,7 +21,8 @@
     "search": "搜索",
     "active": "当前激活",
     "setActive": "设为激活",
-    "restart": "重启"
+    "restart": "重启",
+    "clear": "清除"
   },
   "sidebar": {
     "dashboard": "主页",
@@ -60,6 +61,7 @@
       "general_proxy": "代理",
       "general_editor": "编辑器",
       "general_semantic": "语义搜索",
+      "general_overleaf": "Overleaf",
       "general_dev": "开发者模式"
     },
     "general_language": {
@@ -81,6 +83,37 @@
     "general_dev": {
       "title": "开发者模式",
       "description": "启用开发者模式，每次启动时显示欢迎弹窗。"
+    },
+    "general_overleaf": {
+      "title": "Overleaf",
+      "description": "连接 Overleaf 以导入 LaTeX 项目为 PDF。"
+    },
+    "overleaf": {
+      "description": "连接 Overleaf 以导入您的 LaTeX 项目为 PDF。",
+      "sessionCookie": "会话 Cookie",
+      "cookiePlaceholder": "粘贴您的 overleaf_session2 cookie 值",
+      "cookieHelp": "您的 cookie 会被加密并存储在本地，永远不会离开您的电脑。",
+      "howToGetCookie": "如何获取会话 Cookie",
+      "step1": "在浏览器中登录 overleaf.com",
+      "step2": "打开浏览器开发者工具（F12 或 Cmd+Option+I）",
+      "step3": "前往 Application > Cookies > overleaf.com",
+      "step4": "复制 'overleaf_session2' cookie 的值",
+      "testSuccess": "连接成功！",
+      "testFailed": "连接失败，请检查您的 cookie。",
+      "noSession": "未配置会话 cookie。请前往设置 > Overleaf 进行配置。",
+      "fetchError": "获取项目失败，您的会话可能已过期。",
+      "importSuccess": "成功导入 {{count}} 个项目",
+      "importFailed": "{{count}} 个项目导入失败",
+      "noProjects": "未找到项目",
+      "fetchProjects": "获取项目",
+      "selectProjects": "选择要导入的项目",
+      "projectsFound": "找到 {{count}} 个项目",
+      "importSelected": "导入选中项目",
+      "noPdf": "无编译 PDF",
+      "autoDetect": "自动获取",
+      "detecting": "正在获取…",
+      "autoDetectSuccess": "Cookie 已自动检测并保存！",
+      "autoDetectFailed": "未检测到 Cookie，请先登录 Overleaf。"
     },
     "models": {
       "title": "模型与用量",
@@ -229,6 +262,16 @@
   },
   "papers": {
     "library": "文献库",
+    "tabs": {
+      "library": "文献库",
+      "readingList": "阅读列表"
+    },
+    "readingList": {
+      "empty": "阅读列表为空",
+      "emptyHint": "从引用下载的论文会显示在这里",
+      "count": "篇临时论文",
+      "imported": "已导入文献库"
+    },
     "addedOn": "添加于 {{date}}",
     "submittedOn": "提交于 {{date}}",
     "noPapers": "暂无论文",
@@ -277,6 +320,7 @@
     "selectAll": "全选",
     "deselectAll": "取消全选",
     "clearAll": "清除全部",
+    "recentDownloads": "最近下载的 PDF",
     "noPapersSelected": "未选择论文",
     "importSuccess": "篇论文导入成功",
     "zotero": {
@@ -600,5 +644,54 @@
     "alphaXivNoData": "该论文暂无 AI 解读",
     "alphaXivError": "获取 AI 解读失败",
     "alphaXivLoading": "正在加载 AI 解读..."
+  },
+  "reader": {
+    "annotations": "批注",
+    "noAnnotations": "暂无高亮。在 PDF 中选择文本以创建高亮。",
+    "page": "第",
+    "focusMode": "专注模式",
+    "exitFocusMode": "退出专注模式"
+  },
+  "pdf": {
+    "citation": {
+      "searchLocal": "搜索文献库",
+      "searchOnline": "在线搜索",
+      "hint": "双击引用可快速搜索",
+      "title": "引用列表",
+      "scanAll": "扫描所有页面",
+      "currentPage": "第 {{page}} 页",
+      "noCitations": "当前页无引用",
+      "allPages": "所有页面",
+      "page": "第",
+      "hintSidebar": "点击引用搜索论文",
+      "referencesFound": "篇参考文献",
+      "citationsFound": "处引用",
+      "noReference": "未找到参考文献",
+      "referencesList": "参考文献",
+      "searchPaper": "搜索论文",
+      "downloadAndRead": "下载并阅读",
+      "importToLibrary": "导入文献库",
+      "downloading": "下载中...",
+      "importing": "导入中...",
+      "imported": "已导入",
+      "downloaded": "已下载",
+      "read": "阅读",
+      "jumpToRef": "跳转到PDF中的引用",
+      "noPdf": "无开放获取PDF",
+      "openWebsite": "打开出版商网站"
+    },
+    "preview": {
+      "title": "论文预览",
+      "searchFor": "搜索",
+      "noResults": "未找到论文",
+      "authors": "作者",
+      "year": "年份",
+      "citations": "引用数",
+      "abstract": "摘要",
+      "selectPaper": "选择论文查看详情",
+      "keyboardHint": "↑↓ 导航，Enter 下载",
+      "downloadAndRead": "下载并阅读",
+      "downloading": "下载中..."
+    }
   }
 }

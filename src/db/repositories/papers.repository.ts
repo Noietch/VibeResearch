@@ -106,12 +106,16 @@ export class PapersRepository {
     year?: number;
     tag?: string;
     importedWithin?: 'today' | 'week' | 'month' | 'all';
-    includeTemporary?: boolean;
+    temporary?: boolean;
   }) {
     const conditions: Record<string, unknown>[] = [];
 
-    // By default, exclude temporary papers from Discovery
-    if (!query?.includeTemporary) {
+    // Filter by temporary status
+    if (query?.temporary === true) {
+      conditions.push({ isTemporary: true });
+      // Reading List only shows papers with downloaded PDFs
+      conditions.push({ pdfPath: { not: null } });
+    } else {
       conditions.push({ isTemporary: false });
     }
 
@@ -290,6 +294,24 @@ export class PapersRepository {
     return this.prisma.paper.update({
       where: { id },
       data: { lastReadAt: new Date() },
+    });
+  }
+
+  async updateReadingProgress(id: string, lastReadPage: number, totalPages: number) {
+    return this.prisma.paper.update({
+      where: { id },
+      data: { lastReadPage, totalPages, lastReadAt: new Date() },
+    });
+  }
+
+  async updateTemporaryStatus(id: string, isTemporary: boolean, temporaryImportedAt?: Date | null) {
+    return this.prisma.paper.update({
+      where: { id },
+      data: {
+        isTemporary,
+        temporaryImportedAt:
+          temporaryImportedAt !== undefined ? temporaryImportedAt : isTemporary ? new Date() : null,
+      },
     });
   }
 
@@ -833,16 +855,6 @@ export class PapersRepository {
   // ── Temporary papers management ──────────────────────────────────────
 
   /**
-   * Update paper's temporary status
-   */
-  async updateTemporaryStatus(id: string, isTemporary: boolean, temporaryImportedAt: Date | null) {
-    return this.prisma.paper.update({
-      where: { id },
-      data: { isTemporary, temporaryImportedAt },
-    });
-  }
-
-  /**
    * List expired temporary papers (for cleanup)
    */
   async listExpiredTemporaryPapers(cutoffDate: Date) {
@@ -866,6 +878,7 @@ export class PapersRepository {
   async update(
     id: string,
     data: {
+      title?: string;
       isTemporary?: boolean;
       temporaryImportedAt?: Date | null;
     },

@@ -4,11 +4,12 @@ import {
   importChromeHistoryAuto,
   scanLocalPapersDir,
   scanChromeHistory,
+  scanBrowserDownloads,
   importScannedPapers,
   cancelImport,
   getImportStatus,
 } from '../services/ingest.service';
-import type { ScanResult } from '../services/ingest.service';
+import type { ScanResult, DownloadedPdf } from '../services/ingest.service';
 import { FilePathSchema, validate } from './validate';
 import { type IpcResult, ok, err } from '@shared';
 
@@ -102,4 +103,18 @@ export function setupIngestIpc() {
       return err(msg);
     }
   });
+
+  ipcMain.handle(
+    'ingest:scanDownloads',
+    async (_, days: number = 7): Promise<IpcResult<DownloadedPdf[]>> => {
+      try {
+        const result = await scanBrowserDownloads(days);
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[ingest:scanDownloads] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
 }

@@ -6,6 +6,7 @@ import { setupPapersIpc } from './ipc/papers.ipc';
 import { setupReadingIpc } from './ipc/reading.ipc';
 import { setupIngestIpc } from './ipc/ingest.ipc';
 import { setupProjectsIpc } from './ipc/projects.ipc';
+import { setupHighlightsIpc } from './ipc/highlights.ipc';
 import { appendLog, getLogFilePath } from './services/app-log.service';
 import { setupProvidersIpc } from './ipc/providers.ipc';
 import { setupCliToolsIpc } from './ipc/cli-tools.ipc';
@@ -33,6 +34,7 @@ import {
 import { PapersRepository } from '@db';
 import { resumeAutomaticPaperProcessing } from './services/paper-processing.service';
 import { resumeAutomaticCitationExtraction } from './services/citation-processing.service';
+import { resumeAutomaticReferenceExtraction } from './services/reference-extraction-bg.service';
 import { stopOllamaService, warmupOllamaService } from './services/ollama.service';
 import { closeVecStore } from '../db/vec-store';
 import * as vecIndex from './services/vec-index.service';
@@ -330,6 +332,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // needed for preload to use Node.js APIs
+      webviewTag: true, // needed for in-app browser (publisher websites)
     },
   });
 
@@ -387,6 +390,12 @@ function setupWindowControls(win: BrowserWindow) {
     }
   });
   ipcMain.handle('window:isMaximized', () => win.isMaximized());
+
+  // Open URL in system default browser
+  ipcMain.handle('browser:open', (_event, url: string, _title?: string) => {
+    shell.openExternal(url);
+    return true;
+  });
 }
 
 function setupFileIpc() {
@@ -470,6 +479,7 @@ app.whenReady().then(async () => {
   setupReadingIpc();
   setupIngestIpc();
   setupProjectsIpc();
+  setupHighlightsIpc();
   setupProvidersIpc();
   setupCliToolsIpc();
   setupModelsIpc();
@@ -562,6 +572,11 @@ app.whenReady().then(async () => {
   // resumeAutomaticCitationExtraction().catch((err) =>
   //   console.error('[startup] Failed to resume citation extraction:', err),
   // );
+
+  // Start automatic PDF reference extraction (background)
+  resumeAutomaticReferenceExtraction().catch((err) =>
+    console.error('[startup] Failed to resume reference extraction:', err),
+  );
 
   const win = createWindow();
   setupWindowControls(win);

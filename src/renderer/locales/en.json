@@ -21,7 +21,8 @@
     "search": "Search",
     "active": "Active",
     "setActive": "Set Active",
-    "restart": "Restart"
+    "restart": "Restart",
+    "clear": "Clear"
   },
   "sidebar": {
     "dashboard": "Dashboard",
@@ -60,6 +61,7 @@
       "general_proxy": "Proxy",
       "general_editor": "Editor",
       "general_semantic": "Semantic Search",
+      "general_overleaf": "Overleaf",
       "general_dev": "Developer Mode"
     },
     "general_language": {
@@ -81,6 +83,37 @@
     "general_dev": {
       "title": "Developer Mode",
       "description": "Enable developer mode to show welcome modal on every startup."
+    },
+    "general_overleaf": {
+      "title": "Overleaf",
+      "description": "Connect to Overleaf to import your LaTeX projects as PDFs."
+    },
+    "overleaf": {
+      "description": "Connect to Overleaf to import your LaTeX projects as PDFs.",
+      "sessionCookie": "Session Cookie",
+      "cookiePlaceholder": "Paste your overleaf_session2 cookie value here",
+      "cookieHelp": "Your cookie is encrypted and stored locally. It never leaves your computer.",
+      "howToGetCookie": "How to get your session cookie",
+      "step1": "Log in to overleaf.com in your browser",
+      "step2": "Open browser developer tools (F12 or Cmd+Option+I)",
+      "step3": "Go to Application > Cookies > overleaf.com",
+      "step4": "Copy the value of the 'overleaf_session2' cookie",
+      "testSuccess": "Connection successful!",
+      "testFailed": "Connection failed. Please check your cookie.",
+      "noSession": "No session cookie configured. Go to Settings > Overleaf to set up.",
+      "fetchError": "Failed to fetch projects. Your session may have expired.",
+      "importSuccess": "Successfully imported {{count}} project(s)",
+      "importFailed": "Failed to import {{count}} project(s)",
+      "noProjects": "No projects found",
+      "fetchProjects": "Fetch Projects",
+      "selectProjects": "Select projects to import",
+      "projectsFound": "{{count}} project(s) found",
+      "importSelected": "Import Selected",
+      "noPdf": "No compiled PDF",
+      "autoDetect": "Auto Detect",
+      "detecting": "Detecting…",
+      "autoDetectSuccess": "Cookie detected and saved!",
+      "autoDetectFailed": "No cookie found. Please log in to Overleaf first."
     },
     "models": {
       "title": "Models & Usage",
@@ -229,6 +262,16 @@
   },
   "papers": {
     "library": "Library",
+    "tabs": {
+      "library": "Library",
+      "readingList": "Reading List"
+    },
+    "readingList": {
+      "empty": "No papers in reading list",
+      "emptyHint": "Papers downloaded from citations will appear here",
+      "count": "temporary papers",
+      "imported": "Imported to library"
+    },
     "addedOn": "Added {{date}}",
     "submittedOn": "Submitted {{date}}",
     "noPapers": "No papers",
@@ -277,6 +320,7 @@
     "selectAll": "Select all",
     "deselectAll": "Deselect all",
     "clearAll": "Clear all",
+    "recentDownloads": "Recent PDF downloads",
     "noPapersSelected": "No papers selected",
     "importSuccess": "papers imported successfully",
     "zotero": {
@@ -600,5 +644,54 @@
     "alphaXivNoData": "No AI summary available for this paper",
     "alphaXivError": "Failed to fetch AI summary",
     "alphaXivLoading": "Loading AI summary..."
+  },
+  "reader": {
+    "annotations": "Annotations",
+    "noAnnotations": "No highlights yet. Select text in the PDF to create one.",
+    "page": "Page",
+    "focusMode": "Focus mode",
+    "exitFocusMode": "Exit focus mode"
+  },
+  "pdf": {
+    "citation": {
+      "searchLocal": "Search Library",
+      "searchOnline": "Search Online",
+      "hint": "Double-click citation to quick search",
+      "title": "Citations",
+      "scanAll": "Scan all pages",
+      "currentPage": "Page {{page}}",
+      "noCitations": "No citations on this page",
+      "allPages": "All Pages",
+      "page": "Page",
+      "hintSidebar": "Click citation to search paper",
+      "referencesFound": "references",
+      "citationsFound": "citations",
+      "noReference": "Reference not found",
+      "referencesList": "References",
+      "searchPaper": "Search Paper",
+      "downloadAndRead": "Download & Read",
+      "importToLibrary": "Import to Library",
+      "downloading": "Downloading...",
+      "importing": "Importing...",
+      "imported": "Imported",
+      "downloaded": "Downloaded",
+      "read": "Read",
+      "jumpToRef": "Jump to reference in PDF",
+      "noPdf": "No open access PDF available",
+      "openWebsite": "Open publisher website"
+    },
+    "preview": {
+      "title": "Paper Preview",
+      "searchFor": "Searching for",
+      "noResults": "No papers found",
+      "authors": "Authors",
+      "year": "Year",
+      "citations": "Citations",
+      "abstract": "Abstract",
+      "selectPaper": "Select a paper to view details",
+      "keyboardHint": "↑↓ to navigate, Enter to download",
+      "downloadAndRead": "Download & Read",
+      "downloading": "Downloading..."
+    }
   }
 }

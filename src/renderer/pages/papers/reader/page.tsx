@@ -1,14 +1,23 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTabs } from '../../../hooks/use-tabs';
 import { PdfViewer } from '../../../components/pdf-viewer';
-import { ipc, onIpc, type PaperItem, type ModelConfig } from '../../../hooks/use-ipc';
+import type { CachedReference } from '../../../components/pdf/PdfDocument';
+import {
+  ipc,
+  onIpc,
+  type PaperItem,
+  type ModelConfig,
+  type HighlightItem,
+} from '../../../hooks/use-ipc';
 import { useAgentStream } from '../../../hooks/use-agent-stream';
 import { MessageStream } from '../../../components/agent-todo/MessageStream';
 import { AgentLogo } from '../../../components/agent-todo/AgentLogo';
-import { arxivPdfUrl } from '@shared';
+import { arxivPdfUrl, cleanCitationSearchQuery } from '@shared';
 import { useToast } from '../../../components/toast';
+import { PaperPreviewModal, type SearchResult } from '../../../components/PaperPreviewModal';
+import { saveReaderState, loadReaderState } from '../../../utils/reader-state-cache';
 import {
   ArrowLeft,
   Loader2,
@@ -26,6 +35,9 @@ import {
   X,
   Zap,
   History,
+  Maximize2,
+  Minimize2,
+  StickyNote,
 } from 'lucide-react';
 import type { AgentConfigItem } from '@shared';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -155,6 +167,95 @@ function RatingPromptModal({
   );
 }
 
+// ─── Annotation Card ────────────────────────────────────────────────────────
+
+const HIGHLIGHT_COLOR_BG: Record<string, string> = {
+  yellow: 'bg-yellow-100 border-yellow-300',
+  green: 'bg-green-100 border-green-300',
+  blue: 'bg-blue-100 border-blue-300',
+  pink: 'bg-pink-100 border-pink-300',
+  purple: 'bg-purple-100 border-purple-300',
+};
+
+function AnnotationCard({
+  highlight,
+  onUpdateNote,
+  onDelete,
+  onJumpToPage,
+}: {
+  highlight: HighlightItem;
+  onUpdateNote: (note: string) => void;
+  onDelete: () => void;
+  onJumpToPage?: (page: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [noteText, setNoteText] = useState(highlight.note ?? '');
+  const colorClass = HIGHLIGHT_COLOR_BG[highlight.color] ?? 'bg-yellow-100 border-yellow-300';
+
+  return (
+    <div
+      className={`group mx-2 my-1.5 cursor-pointer rounded-md border-l-2 px-2.5 py-2 transition-colors hover:brightness-95 ${colorClass}`}
+      onClick={() => onJumpToPage?.(highlight.pageNumber)}
+    >
+      <p className="line-clamp-3 text-xs leading-relaxed text-notion-text">
+        &ldquo;{highlight.text}&rdquo;
+      </p>
+      {editing ? (
+        <div className="mt-1.5">
+          <textarea
+            autoFocus
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                onUpdateNote(noteText);
+                setEditing(false);
+              }
+              if (e.key === 'Escape') {
+                setNoteText(highlight.note ?? '');
+                setEditing(false);
+              }
+            }}
+            onBlur={() => {
+              onUpdateNote(noteText);
+              setEditing(false);
+            }}
+            placeholder="Add a note…"
+            className="w-full resize-none rounded border border-notion-border bg-white px-2 py-1 text-xs text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-accent"
+            rows={2}
+          />
+        </div>
+      ) : (
+        <div className="mt-1 flex items-center gap-1">
+          {highlight.note ? (
+            <button
+              onClick={() => setEditing(true)}
+              className="text-left text-[10px] italic text-notion-text-secondary hover:text-notion-text"
+            >
+              {highlight.note}
+            </button>
+          ) : (
+            <button
+              onClick={() => setEditing(true)}
+              className="text-[10px] text-notion-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+            >
+              + note
+            </button>
+          )}
+          <button
+            onClick={onDelete}
+            className="ml-auto rounded p-0.5 text-notion-text-tertiary opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+          >
+            <X size={10} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function inferPdfUrl(paper: PaperItem): string | null {
@@ -177,10 +278,16 @@ export function ReaderPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { updateTabLabel } = useTabs();
-  const { error: showError, warning: showWarning } = useToast();
+  const { updateTabLabel, openTab } = useTabs();
+  const {
+    error: showError,
+    warning: showWarning,
+    info: showInfo,
+    success: showSuccess,
+  } = useToast();
 
   const [paper, setPaper] = useState<PaperItem | null>(null);
+  const [highlights, setHighlights] = useState<HighlightItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{
@@ -188,16 +295,21 @@ export function ReaderPage() {
     total: number;
   } | null>(null);
 
+  // Restore cached state for this reader tab
+  const cachedState = shortId ? loadReaderState(shortId) : null;
+
   // Layout mode: 'split' = chat+pdf side by side, 'chat-only' = chat full, 'pdf-only' = pdf full
-  const [layoutMode, setLayoutMode] = useState<'split' | 'chat-only' | 'pdf-only'>('pdf-only');
-  const [leftWidth, setLeftWidth] = useState(38);
+  const [layoutMode, setLayoutMode] = useState<'split' | 'chat-only' | 'pdf-only'>(
+    cachedState?.layoutMode ?? 'pdf-only',
+  );
+  const [leftWidth, setLeftWidth] = useState(cachedState?.leftWidth ?? 38);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(38);
 
   // Chat input state
-  const [chatInput, setChatInput] = useState('');
+  const [chatInput, setChatInput] = useState(cachedState?.chatInput ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [paperDir, setPaperDir] = useState<string | null>(null);
   const [chatModel, setChatModel] = useState<ModelConfig | null>(null);
@@ -246,6 +358,67 @@ export function ReaderPage() {
   const [localUserMessages, setLocalUserMessages] = useState<
     { id: string; msgId: string; type: string; role: string; content: unknown; status: null }[]
   >([]);
+
+  // Paper preview modal state
+  const [previewModalOpen, setPreviewModalOpen] = useState(cachedState?.previewModalOpen ?? false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>(
+    (cachedState?.searchResults as SearchResult[]) ?? [],
+  );
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(cachedState?.searchQuery ?? '');
+  const [previewDownloading, setPreviewDownloading] = useState(false);
+  const [previewNoPdfUrl, setPreviewNoPdfUrl] = useState<string | null>(
+    cachedState?.previewNoPdfUrl ?? null,
+  );
+
+  // Citation sidebar state
+  const [showCitationSidebar, setShowCitationSidebar] = useState(
+    cachedState?.showCitationSidebar ?? false,
+  );
+
+  // Focus mode: hide top toolbar for distraction-free reading
+  const [focusMode, setFocusMode] = useState(false);
+
+  // Annotation sidebar: show highlights grouped by page
+  const [showAnnotationSidebar, setShowAnnotationSidebar] = useState(false);
+
+  // Ref to call goToPage on the PDF viewer from outside (e.g. annotation sidebar)
+  const goToPageRef = useRef<((page: number) => void) | null>(null);
+
+  // Save reader state to cache on unmount (preserve state across tab switches)
+  const stateRef = useRef({
+    layoutMode,
+    leftWidth,
+    showCitationSidebar,
+    chatInput,
+    previewModalOpen,
+    searchResults: searchResults as unknown[],
+    searchQuery,
+    previewNoPdfUrl,
+  });
+  // Keep ref in sync without triggering effect
+  stateRef.current = {
+    layoutMode,
+    leftWidth,
+    showCitationSidebar,
+    chatInput,
+    previewModalOpen,
+    searchResults: searchResults as unknown[],
+    searchQuery,
+    previewNoPdfUrl,
+  };
+  useEffect(() => {
+    return () => {
+      if (shortId) {
+        saveReaderState(shortId, stateRef.current);
+      }
+    };
+  }, [shortId]);
+  const [selectedCitation, setSelectedCitation] = useState<{
+    marker: any;
+    reference: any;
+  } | null>(null);
+  const [cachedReferences, setCachedReferences] = useState<CachedReference[]>([]);
 
   // Agent stream (uses MessageStream, same as task detail page)
   const {
@@ -461,6 +634,31 @@ export function ReaderPage() {
         const shortTitle = p.title.replace(/^\[\d{4}\.\d{4,5}\]\s*/, '').slice(0, 30) || p.shortId;
         updateTabLabel(location.pathname, shortTitle);
         ipc.touchPaper(p.id).catch(() => undefined);
+        // Load highlights
+        ipc
+          .listHighlights(p.id)
+          .then(setHighlights)
+          .catch(() => undefined);
+        // Load cached references
+        ipc
+          .getExtractedRefs(p.id)
+          .then((refs) => {
+            setCachedReferences(
+              refs.map((r) => ({
+                id: r.id,
+                refNumber: r.refNumber,
+                text: r.text,
+                title: r.title,
+                authors: r.authors,
+                year: r.year,
+                doi: r.doi,
+                arxivId: r.arxivId,
+                url: (r as any).url ?? null,
+                venue: (r as any).venue ?? null,
+              })),
+            );
+          })
+          .catch(() => undefined);
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
@@ -833,6 +1031,44 @@ export function ReaderPage() {
     setIsDragging(true);
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable)
+        return;
+
+      switch (e.key) {
+        case 'f':
+          // F = toggle focus mode
+          e.preventDefault();
+          setFocusMode((v) => !v);
+          break;
+        case '1':
+          // 1 = chat only
+          setLayoutMode('chat-only');
+          break;
+        case '2':
+          // 2 = split
+          setLayoutMode('split');
+          break;
+        case '3':
+          // 3 = pdf only
+          setLayoutMode('pdf-only');
+          break;
+        case 'Escape':
+          // ESC exits focus mode
+          if (focusMode) {
+            setFocusMode(false);
+          }
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [focusMode]);
+
   // Rating change handler
   const handleRatingChange = useCallback(
     async (newRating: number) => {
@@ -903,67 +1139,104 @@ export function ReaderPage() {
   const pdfPath = paper.pdfPath;
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar */}
-      <div className="relative flex flex-shrink-0 items-center border-b border-notion-border px-4 py-2">
-        {/* Left: back + star */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const from = (location.state as { from?: string })?.from;
-              if (from === '/discovery' || from === '/discovery/preview') {
-                navigate(from);
-              } else {
-                navigate(`/papers/${paper.shortId}`);
-              }
-            }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div className="ml-1 flex items-center gap-1">
-            <StarRating rating={rating} onChange={handleRatingChange} size={16} />
+      {/* Toolbar - hidden in focus mode */}
+      {!focusMode && (
+        <div className="relative flex flex-shrink-0 items-center border-b border-notion-border px-4 py-2">
+          {/* Left: back + star */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const from = (location.state as { from?: string })?.from;
+                if (from === '/discovery' || from === '/discovery/preview') {
+                  navigate(from);
+                } else {
+                  navigate(`/papers/${paper.shortId}`);
+                }
+              }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="ml-1 flex items-center gap-1">
+              <StarRating rating={rating} onChange={handleRatingChange} size={16} />
+            </div>
           </div>
-        </div>
 
-        {/* Center: layout toggle buttons (absolutely centered) */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className="flex items-center gap-0.5 rounded-lg border border-notion-border bg-notion-sidebar p-0.5">
+          {/* Center: layout toggle buttons (absolutely centered) */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="flex items-center gap-0.5 rounded-lg border border-notion-border bg-notion-sidebar p-0.5">
+              <button
+                onClick={() => setLayoutMode('chat-only')}
+                title="Chat only (1)"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  layoutMode === 'chat-only'
+                    ? 'bg-white text-notion-accent shadow-sm'
+                    : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+                }`}
+              >
+                <MessageSquare size={14} />
+              </button>
+              <button
+                onClick={() => setLayoutMode('split')}
+                title="Split view (2)"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  layoutMode === 'split'
+                    ? 'bg-white text-notion-accent shadow-sm'
+                    : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+                }`}
+              >
+                <Columns2 size={14} />
+              </button>
+              <button
+                onClick={() => setLayoutMode('pdf-only')}
+                title="PDF only (3)"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  layoutMode === 'pdf-only'
+                    ? 'bg-white text-notion-accent shadow-sm'
+                    : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+                }`}
+              >
+                <FileText size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Right: annotations + focus mode + shortcuts hint */}
+          <div className="ml-auto flex items-center gap-1">
             <button
-              onClick={() => setLayoutMode('chat-only')}
-              title="Chat only"
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                layoutMode === 'chat-only'
-                  ? 'bg-white text-notion-accent shadow-sm'
-                  : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
+              onClick={() => setShowAnnotationSidebar((v) => !v)}
+              title={t('reader.annotations')}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                showAnnotationSidebar
+                  ? 'bg-notion-accent-light text-notion-accent'
+                  : 'text-notion-text-secondary hover:bg-notion-sidebar/50'
               }`}
             >
-              <MessageSquare size={14} />
+              <StickyNote size={14} />
             </button>
             <button
-              onClick={() => setLayoutMode('split')}
-              title="Split view"
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                layoutMode === 'split'
-                  ? 'bg-white text-notion-accent shadow-sm'
-                  : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
-              }`}
+              onClick={() => setFocusMode(true)}
+              title={t('reader.focusMode') + ' (F)'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
             >
-              <Columns2 size={14} />
-            </button>
-            <button
-              onClick={() => setLayoutMode('pdf-only')}
-              title="PDF only"
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                layoutMode === 'pdf-only'
-                  ? 'bg-white text-notion-accent shadow-sm'
-                  : 'text-notion-text-secondary hover:bg-white/60 hover:text-notion-text'
-              }`}
-            >
-              <FileText size={14} />
+              <Maximize2 size={14} />
             </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Focus mode: minimal floating controls */}
+      {focusMode && (
+        <div className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-lg border border-notion-border/50 bg-white/80 p-1 shadow-sm backdrop-blur-sm">
+          <button
+            onClick={() => setFocusMode(false)}
+            title={t('reader.exitFocusMode') + ' (Esc)'}
+            className="inline-flex h-6 w-6 items-center justify-center rounded text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
+          >
+            <Minimize2 size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Split pane */}
       <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
@@ -1340,15 +1613,207 @@ export function ReaderPage() {
         {/* Right: PDF */}
         {layoutMode !== 'chat-only' && (
           <div
-            className="relative flex flex-col"
+            className="relative flex flex-col overflow-x-clip"
             style={{ width: layoutMode === 'pdf-only' ? '100%' : `${100 - leftWidth}%` }}
           >
             {pdfPath ? (
               <PdfViewer
                 path={pdfPath}
+                paperId={paper?.id}
+                cachedReferences={cachedReferences}
+                onReferencesExtracted={(refs) => setCachedReferences(refs)}
+                initialPage={paper?.lastReadPage ?? undefined}
                 onFileNotFound={() =>
                   setPaper((prev) => (prev ? { ...prev, pdfPath: undefined } : prev))
                 }
+                onPageChange={(page, total) => {
+                  if (paper) {
+                    ipc.updateReadingProgress(paper.id, page, total).catch(() => undefined);
+                  }
+                }}
+                onAskAI={(text) => {
+                  setChatInput(`Explain this passage:\n\n"${text}"`);
+                  if (layoutMode === 'pdf-only') setLayoutMode('split');
+                  setTimeout(() => textareaRef.current?.focus(), 100);
+                }}
+                highlights={highlights}
+                onCreateHighlight={
+                  paper
+                    ? (params) => {
+                        ipc
+                          .createHighlight({ ...params, paperId: paper.id })
+                          .then((h) => {
+                            setHighlights((prev) => [...prev, h]);
+                            // Auto-open annotation sidebar so user can add a note
+                            setShowAnnotationSidebar(true);
+                          })
+                          .catch(() => undefined);
+                      }
+                    : undefined
+                }
+                onDeleteHighlight={(id) => {
+                  ipc
+                    .deleteHighlight(id)
+                    .then(() => setHighlights((prev) => prev.filter((x) => x.id !== id)))
+                    .catch(() => undefined);
+                }}
+                onOpenUrl={(url) => {
+                  // Try to detect arXiv ID from various URL patterns
+                  const arxivMatch = url.match(
+                    /(?:arxiv\.org\/(?:abs|pdf)|alphaxiv\.org\/(?:abs|overview))\/(\d{4}\.\d{4,5})/,
+                  );
+                  if (arxivMatch) {
+                    const arxivId = arxivMatch[1];
+                    ipc
+                      .getPaperByShortId(arxivId)
+                      .then((existing) => {
+                        if (existing) {
+                          openTab(`/papers/${existing.shortId}/reader`);
+                        } else {
+                          showInfo(`Downloading ${arxivId}...`);
+                          ipc
+                            .downloadPaper(arxivId, [], true)
+                            .then((result) => {
+                              if (result?.paper) {
+                                showSuccess('Paper ready');
+                                openTab(`/papers/${result.paper.shortId}/reader`);
+                              }
+                            })
+                            .catch(() => {
+                              showError('Download failed');
+                            });
+                        }
+                      })
+                      .catch(() => showError('Failed to check paper'));
+                  } else {
+                    // For DOI and other URLs, try to import via the download service
+                    // which can resolve DOIs and direct PDF URLs
+                    showInfo('Opening paper...');
+                    ipc
+                      .downloadPaper(url, [], true)
+                      .then((result) => {
+                        if (result?.paper) {
+                          showSuccess('Paper ready');
+                          openTab(`/papers/${result.paper.shortId}/reader`);
+                        } else {
+                          showError('Could not import paper');
+                        }
+                      })
+                      .catch(() => {
+                        showError('Failed to import paper');
+                      });
+                  }
+                }}
+                onSearchPaper={(query) => {
+                  // Search for paper by selected text (title/reference)
+                  // Use smart cleaning to strip venue info, author prefixes, etc.
+                  const cleanQuery = cleanCitationSearchQuery(query);
+
+                  // Detect input type
+                  const arxivMatch = cleanQuery.match(/(\d{4}\.\d{4,5})/);
+                  const arxivId = arxivMatch ? arxivMatch[1] : undefined;
+                  const isDoi = /^10\.\d{4,}\/\S+$/.test(cleanQuery);
+
+                  // Show preview modal with search results
+                  setSearchQuery(cleanQuery);
+                  setSearchLoading(true);
+                  setSearchResults([]);
+                  setPreviewNoPdfUrl(null);
+                  setPreviewModalOpen(true);
+
+                  // If DOI, try to download/import directly instead of text search
+                  if (isDoi) {
+                    ipc
+                      .downloadPaper(cleanQuery, [], true)
+                      .then((result) => {
+                        if (result?.paper) {
+                          const p = result.paper;
+                          setSearchResults([
+                            {
+                              paperId: p.id,
+                              title: p.title,
+                              authors: (p.authors ?? []).map((name: string) => ({ name })),
+                              year: p.submittedAt ? new Date(p.submittedAt).getFullYear() : null,
+                              abstract: p.abstract ?? null,
+                              citationCount: 0,
+                              externalIds: { ArXiv: p.shortId || undefined },
+                              url: p.sourceUrl ?? null,
+                            },
+                          ]);
+                        } else {
+                          showInfo(t('pdf.preview.noResults'));
+                        }
+                      })
+                      .catch(() => {
+                        // DOI resolve failed, fall back to text search
+                        return ipc.searchPapers(cleanQuery, 10).then((response) => {
+                          setSearchResults(response.results);
+                          if (response.results.length === 0) {
+                            showInfo(t('pdf.preview.noResults'));
+                          }
+                        });
+                      })
+                      .finally(() => setSearchLoading(false));
+                    return;
+                  }
+
+                  // First try local DB match, then fall back to OpenAlex search
+                  ipc
+                    .matchReference({ arxivId, title: cleanQuery })
+                    .then((localPaper) => {
+                      if (localPaper) {
+                        // Convert PaperItem to SearchResult format
+                        const localResult: SearchResult = {
+                          paperId: localPaper.id,
+                          title: localPaper.title,
+                          authors: (localPaper.authors ?? []).map((name) => ({ name })),
+                          year:
+                            localPaper.year ??
+                            (localPaper.submittedAt
+                              ? new Date(localPaper.submittedAt).getFullYear()
+                              : null),
+                          abstract: localPaper.abstract ?? null,
+                          citationCount: 0,
+                          externalIds: {
+                            ArXiv: localPaper.shortId || undefined,
+                          },
+                          url: localPaper.sourceUrl ?? null,
+                        };
+                        setSearchResults([localResult]);
+                        setSearchLoading(false);
+                        return;
+                      }
+
+                      // No local match, fall back to OpenAlex search
+                      return ipc.searchPapers(cleanQuery, 10).then((response) => {
+                        setSearchResults(response.results);
+                        if (response.results.length === 0) {
+                          showInfo(t('pdf.preview.noResults'));
+                        }
+                      });
+                    })
+                    .catch((err) => {
+                      // Show error in modal instead of opening browser
+                      setPreviewModalOpen(false);
+                      showError(
+                        `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                      );
+                    })
+                    .finally(() => {
+                      setSearchLoading(false);
+                    });
+                }}
+                onUpdateHighlight={(id, params) => {
+                  ipc
+                    .updateHighlight(id, params)
+                    .then((updated) =>
+                      setHighlights((prev) => prev.map((x) => (x.id === id ? updated : x))),
+                    )
+                    .catch(() => undefined);
+                }}
+                showCitationSidebar={showCitationSidebar}
+                onToggleCitationSidebar={() => setShowCitationSidebar((v) => !v)}
+                goToPageRef={goToPageRef}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-4">
@@ -1408,6 +1873,74 @@ export function ReaderPage() {
           </div>
         )}
 
+        {/* Annotation sidebar */}
+        {showAnnotationSidebar && (
+          <div className="flex w-72 flex-shrink-0 flex-col border-l border-notion-border bg-white">
+            <div className="flex items-center justify-between border-b border-notion-border px-3 py-2">
+              <span className="text-xs font-medium text-notion-text">
+                {t('reader.annotations')} ({highlights.length})
+              </span>
+              <button
+                onClick={() => setShowAnnotationSidebar(false)}
+                className="rounded p-1 text-notion-text-tertiary hover:bg-notion-sidebar"
+              >
+                <X size={12} />
+              </button>
+            </div>
+            <div className="notion-scrollbar flex-1 overflow-y-auto">
+              {highlights.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-notion-text-tertiary">
+                  {t('reader.noAnnotations')}
+                </div>
+              ) : (
+                (() => {
+                  // Group highlights by page
+                  const byPage = new Map<number, typeof highlights>();
+                  for (const h of [...highlights].sort((a, b) => a.pageNumber - b.pageNumber)) {
+                    const arr = byPage.get(h.pageNumber) ?? [];
+                    arr.push(h);
+                    byPage.set(h.pageNumber, arr);
+                  }
+                  return Array.from(byPage.entries()).map(([page, items]) => (
+                    <div key={page} className="border-b border-notion-border/50">
+                      <div className="sticky top-0 bg-notion-sidebar/50 px-3 py-1">
+                        <span className="text-[10px] font-medium text-notion-text-tertiary">
+                          {t('reader.page')} {page}
+                        </span>
+                      </div>
+                      {items.map((h) => (
+                        <AnnotationCard
+                          key={h.id}
+                          highlight={h}
+                          onJumpToPage={(page) => goToPageRef.current?.(page)}
+                          onUpdateNote={(note) => {
+                            ipc
+                              .updateHighlight(h.id, { note })
+                              .then((updated) =>
+                                setHighlights((prev) =>
+                                  prev.map((x) => (x.id === h.id ? updated : x)),
+                                ),
+                              )
+                              .catch(() => undefined);
+                          }}
+                          onDelete={() => {
+                            ipc
+                              .deleteHighlight(h.id)
+                              .then(() =>
+                                setHighlights((prev) => prev.filter((x) => x.id !== h.id)),
+                              )
+                              .catch(() => undefined);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ));
+                })()
+              )}
+            </div>
+          </div>
+        )}
+
         {isDragging && <div className="absolute inset-0 z-50 cursor-col-resize" />}
       </div>
 
@@ -1416,6 +1949,51 @@ export function ReaderPage() {
         isOpen={showRatingPrompt}
         onRate={handleRatingPromptRate}
         onSkip={handleRatingPromptSkip}
+      />
+
+      {/* Paper Preview Modal */}
+      <PaperPreviewModal
+        isOpen={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        results={searchResults}
+        isLoading={searchLoading}
+        query={searchQuery}
+        isDownloading={previewDownloading}
+        noPdfUrl={previewNoPdfUrl}
+        onOpenWebsite={(url) => {
+          window.electronAPI?.openBrowser(url);
+        }}
+        onDownload={async (result) => {
+          setPreviewDownloading(true);
+          setPreviewNoPdfUrl(null);
+          try {
+            // Prefer arXiv ID, then DOI, then title as last resort
+            const downloadInput = result.externalIds.ArXiv
+              ? result.externalIds.ArXiv
+              : result.externalIds.DOI
+                ? result.externalIds.DOI
+                : result.title;
+
+            const downloadResult = await ipc.downloadPaper(downloadInput, [], true);
+            if (downloadResult?.paper) {
+              if (downloadResult.download?.success) {
+                showSuccess(t('pdf.citation.downloaded'));
+                setPreviewModalOpen(false);
+                openTab(`/papers/${downloadResult.paper.shortId}/reader`);
+              } else {
+                // No PDF — stay in modal, show "Open website" option
+                const doi = result.externalIds.DOI;
+                setPreviewNoPdfUrl(doi ? `https://doi.org/${doi}` : (result.url ?? null));
+              }
+            } else {
+              showError('Download failed - paper not found');
+            }
+          } catch (err) {
+            showError(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          } finally {
+            setPreviewDownloading(false);
+          }
+        }}
       />
     </div>
   );

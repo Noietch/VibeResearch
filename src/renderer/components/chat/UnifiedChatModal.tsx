@@ -236,7 +236,7 @@ export function UnifiedChatModal({
 
         // Generate title from first message
         void ipc.generateAcpChatTitle(text).then((title) => {
-          void ipc.updateAcpChatSessionTitle(sessionId, title);
+          void ipc.updateAcpChatSessionTitle(sessionId!, title);
           setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title } : s)));
         });
       } catch (err) {

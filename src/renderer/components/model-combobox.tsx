@@ -213,7 +213,7 @@ export function ModelCombobox({
       if (!descKey) return model;
       return {
         ...model,
-        description: t(`modelCombobox.descriptions.${descKey}`),
+        description: (t as any)(`modelCombobox.descriptions.${descKey}`) as string,
       };
     });
   }, [t]);
@@ -226,7 +226,7 @@ export function ModelCombobox({
       (m) =>
         m.id.toLowerCase().includes(q) ||
         m.provider.toLowerCase().includes(q) ||
-        m.description?.toLowerCase().includes(q),
+        (m.description as string | undefined)?.toLowerCase().includes(q),
     );
   }, [search, MODEL_OPTIONS]);
 

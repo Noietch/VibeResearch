@@ -28,6 +28,9 @@ const electronAPI = {
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowIsMaximized: () => ipcRenderer.invoke('window:isMaximized'),
 
+  /** Open URL in a new browser window */
+  openBrowser: (url: string, title?: string) => ipcRenderer.invoke('browser:open', url, title),
+
   /** Read local file as base64 */
   readLocalFile: (path: string) => ipcRenderer.invoke('file:read', path),
 };

@@ -1,12 +1,27 @@
 /**
  * Citation extraction service.
- * Fetches references and citations from Semantic Scholar API,
- * then matches them to local papers in the library.
+ * Uses PDF-extracted references (from ExtractedReference table) as the source,
+ * then searches OpenAlex to enrich with metadata and match to local papers.
  */
 import { proxyFetch } from './proxy-fetch';
 import { CitationsRepository, type CreateCitationParams } from '@db';
+import { getPrismaClient } from '@db';
+import { getProxy, getProxyEnabled, getProxyScope } from '../store/app-settings-store';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import type { Agent } from 'node:http';
 
-const S2_API_BASE = 'https://api.semanticscholar.org/graph/v1';
+const OPENALEX_BASE = 'https://api.openalex.org';
+const OPENALEX_HEADERS = {
+  'User-Agent': 'ResearchClaw/1.0 (mailto:researchclaw@example.com)',
+};
+
+function getProxyAgent(): Agent | undefined {
+  const proxy = getProxy();
+  const proxyEnabled = getProxyEnabled();
+  const scope = getProxyScope();
+  if (!proxyEnabled || !proxy || !scope.pdfDownload) return undefined;
+  return new HttpsProxyAgent(proxy);
+}
 
 export class CitationExtractionError extends Error {
   retryable: boolean;
@@ -18,31 +33,6 @@ export class CitationExtractionError extends Error {
     this.retryable = options?.retryable ?? false;
     this.status = options?.status;
   }
-}
-
-interface S2Reference {
-  paperId: string | null;
-  title: string;
-  authors?: Array<{ name: string }>;
-  year?: number;
-  externalIds?: Record<string, string>;
-  contexts?: string[];
-}
-
-interface S2PaperCitations {
-  references: S2Reference[];
-  citations: S2Reference[];
-}
-
-function extractArxivId(paper: { shortId?: string; sourceUrl?: string | null }): string | null {
-  if (paper.shortId && /^\d{4}\.\d{4,5}$/.test(paper.shortId)) {
-    return paper.shortId;
-  }
-  if (paper.sourceUrl) {
-    const match = paper.sourceUrl.match(/arxiv\.org\/(?:abs|pdf)\/([^/?]+?)(?:\.pdf)?$/);
-    if (match) return match[1].replace(/v\d+$/, '');
-  }
-  return null;
 }
 
 function isTitleSimilar(a: string, b: string): boolean {
@@ -62,124 +52,72 @@ function isTitleSimilar(a: string, b: string): boolean {
   return unionSize > 0 && intersection.length / unionSize > 0.6;
 }
 
-async function fetchS2Citations(s2PaperId: string): Promise<S2PaperCitations | null> {
+/**
+ * Search OpenAlex for a reference by title, returning arXiv ID and DOI if found.
+ */
+async function searchOpenAlexByTitle(
+  title: string,
+): Promise<{ arxivId?: string; doi?: string; openAlexId?: string } | null> {
   try {
-    const fields = 'title,authors,year,externalIds,contexts';
+    const agent = getProxyAgent();
     const res = await proxyFetch(
-      `${S2_API_BASE}/paper/${s2PaperId}?fields=references,citations,references.${fields},citations.${fields}`,
-      { timeoutMs: 15_000 },
+      `${OPENALEX_BASE}/works?search=${encodeURIComponent(title)}&per_page=3&select=id,title,ids,primary_location,doi`,
+      { agent, timeoutMs: 10_000, headers: OPENALEX_HEADERS },
     );
-    if (!res.ok) {
-      const retryable = res.status === 429 || res.status >= 500;
-      throw new CitationExtractionError(
-        `Semantic Scholar request failed with status ${res.status}`,
-        { retryable, status: res.status },
-      );
-    }
-    const json = JSON.parse(res.text());
-    return {
-      references: json.references ?? [],
-      citations: json.citations ?? [],
-    };
-  } catch (error) {
-    if (error instanceof CitationExtractionError) throw error;
-    throw new CitationExtractionError('Semantic Scholar request failed', { retryable: true });
-  }
-}
-
-function isRetryableStatus(status: number): boolean {
-  return status === 408 || status === 425 || status === 429 || status >= 500;
-}
-
-function shouldFallbackToTitleSearch(error: unknown): boolean {
-  return error instanceof CitationExtractionError && error.status === 404;
-}
-
-async function searchS2PaperIdByTitle(title: string): Promise<string | null> {
-  try {
-    const query = encodeURIComponent(title);
-    const res = await proxyFetch(
-      `${S2_API_BASE}/paper/search?query=${query}&limit=1&fields=title`,
-      { timeoutMs: 10_000 },
-    );
-    if (!res.ok) {
-      throw new CitationExtractionError(
-        `Semantic Scholar title search failed with status ${res.status}`,
-        { retryable: isRetryableStatus(res.status), status: res.status },
-      );
-    }
+    if (!res.ok) return null;
 
     const json = JSON.parse(res.text());
-    const first = json?.data?.[0];
-    if (!first?.paperId) return null;
-
-    if (!isTitleSimilar(title, first.title)) return null;
-    return first.paperId;
-  } catch (error) {
-    if (error instanceof CitationExtractionError) throw error;
-    throw new CitationExtractionError('Semantic Scholar title search failed', { retryable: true });
+    for (const work of json?.results ?? []) {
+      if (work?.title && isTitleSimilar(work.title, title)) {
+        const arxivId = extractArxivIdFromUrl(work.primary_location?.landing_page_url);
+        const doi = work.doi?.replace('https://doi.org/', '');
+        return { arxivId, doi, openAlexId: work.id };
+      }
+    }
+  } catch {
+    // Silently fail — non-critical
   }
+  return null;
 }
 
-async function resolveS2PaperId(paper: {
-  shortId: string;
-  title: string;
-  sourceUrl?: string | null;
-}): Promise<string | null> {
-  const arxivId = extractArxivId(paper);
-  if (arxivId) {
-    return `ArXiv:${arxivId}`;
-  }
-
-  return searchS2PaperIdByTitle(paper.title);
-}
-
-async function fetchPaperCitationsWithFallback(paper: {
-  shortId: string;
-  title: string;
-  sourceUrl?: string | null;
-}): Promise<{ s2Id: string | null; data: S2PaperCitations | null }> {
-  const primaryS2Id = await resolveS2PaperId(paper);
-  if (!primaryS2Id) {
-    return { s2Id: null, data: null };
-  }
-
-  try {
-    const data = await fetchS2Citations(primaryS2Id);
-    return { s2Id: primaryS2Id, data };
-  } catch (error) {
-    if (!extractArxivId(paper) || !shouldFallbackToTitleSearch(error)) {
-      throw error;
-    }
-
-    const titleS2Id = await searchS2PaperIdByTitle(paper.title);
-    if (!titleS2Id || titleS2Id === primaryS2Id) {
-      throw error;
-    }
-
-    const data = await fetchS2Citations(titleS2Id);
-    return { s2Id: titleS2Id, data };
-  }
+function extractArxivIdFromUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  const match = url.match(/arxiv\.org\/abs\/(\d{4}\.\d{4,5})/);
+  return match ? match[1] : undefined;
 }
 
 export class CitationExtractionService {
   private citationsRepo = new CitationsRepository();
 
+  /**
+   * Extract citations for a paper using its PDF-extracted references.
+   * 1. Read ExtractedReference entries from DB (populated by reference-extraction-bg)
+   * 2. Match each reference against local library (by arXiv ID, DOI, title)
+   * 3. For unmatched refs, optionally search OpenAlex for metadata enrichment
+   * 4. Store matches in PaperCitation table
+   */
   async extractForPaper(paper: {
     id: string;
     shortId: string;
     title: string;
     sourceUrl?: string | null;
   }): Promise<{ referencesFound: number; citationsFound: number; matched: number }> {
-    const result = await fetchPaperCitationsWithFallback(paper);
-    if (!result?.s2Id) {
+    const prisma = getPrismaClient();
+
+    // Get PDF-extracted references
+    const extractedRefs = await prisma.extractedReference.findMany({
+      where: { paperId: paper.id },
+      orderBy: { refNumber: 'asc' },
+    });
+
+    if (extractedRefs.length === 0) {
+      console.log(`[citation-extraction] No extracted references for "${paper.title}", skipping`);
       return { referencesFound: 0, citationsFound: 0, matched: 0 };
     }
 
-    const data = result.data;
-    if (!data) {
-      return { referencesFound: 0, citationsFound: 0, matched: 0 };
-    }
+    console.log(
+      `[citation-extraction] Processing ${extractedRefs.length} extracted references for "${paper.title}"`,
+    );
 
     // Get all local papers for matching
     const localPapers = await this.citationsRepo.getAllLocalPaperTitles();
@@ -187,52 +125,61 @@ export class CitationExtractionService {
     const citations: CreateCitationParams[] = [];
     let matched = 0;
 
-    // Process references (papers this paper cites)
-    for (const ref of data.references) {
-      if (!ref.paperId && !ref.title) continue;
+    for (const ref of extractedRefs) {
+      // Try local match first (by arXiv ID, then title)
+      let localMatch = this.findLocalMatch(
+        { title: ref.title ?? '', arxivId: ref.arxivId ?? undefined, doi: ref.doi ?? undefined },
+        localPapers,
+      );
 
-      const localMatch = this.findLocalMatch(ref, localPapers);
+      // If no local match and has title, try OpenAlex to get arXiv ID / DOI
+      if (!localMatch && ref.title && !ref.arxivId && !ref.doi) {
+        const enriched = await searchOpenAlexByTitle(ref.title);
+        if (enriched) {
+          // Update the extracted reference with enriched data
+          await prisma.extractedReference.update({
+            where: { id: ref.id },
+            data: {
+              arxivId: enriched.arxivId ?? ref.arxivId,
+              doi: enriched.doi ?? ref.doi,
+            },
+          });
+
+          // Try local match again with enriched data
+          localMatch = this.findLocalMatch(
+            { title: ref.title, arxivId: enriched.arxivId, doi: enriched.doi },
+            localPapers,
+          );
+        }
+
+        // Small delay between OpenAlex calls
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
       if (localMatch) matched++;
 
       citations.push({
         sourcePaperId: paper.id,
         targetPaperId: localMatch?.id ?? null,
-        externalTitle: ref.title,
-        externalId: ref.paperId ?? `title:${ref.title}`,
+        externalTitle: ref.title ?? ref.text.slice(0, 200),
+        externalId: ref.arxivId ?? ref.doi ?? `ref:${ref.refNumber}`,
         citationType: 'reference',
-        context: ref.contexts?.[0] ?? null,
+        context: null,
         confidence: localMatch ? 1.0 : 0.5,
       });
-    }
-
-    // Process citations (papers that cite this paper)
-    for (const cit of data.citations) {
-      if (!cit.paperId && !cit.title) continue;
-
-      const localMatch = this.findLocalMatch(cit, localPapers);
-      if (localMatch) matched++;
-
-      // For citations, the citing paper is the source
-      if (localMatch) {
-        citations.push({
-          sourcePaperId: localMatch.id,
-          targetPaperId: paper.id,
-          externalTitle: cit.title,
-          externalId: cit.paperId ?? `title:${cit.title}`,
-          citationType: 'reference',
-          context: cit.contexts?.[0] ?? null,
-          confidence: 1.0,
-        });
-      }
     }
 
     if (citations.length > 0) {
       await this.citationsRepo.createMany(citations);
     }
 
+    console.log(
+      `[citation-extraction] Done: ${extractedRefs.length} refs, ${matched} matched locally`,
+    );
+
     return {
-      referencesFound: data.references.length,
-      citationsFound: data.citations.length,
+      referencesFound: extractedRefs.length,
+      citationsFound: 0,
       matched,
     };
   }
@@ -255,15 +202,21 @@ export class CitationExtractionService {
   }
 
   private findLocalMatch(
-    ref: S2Reference,
+    ref: { title: string; arxivId?: string; doi?: string },
     localPapers: Array<{ id: string; title: string; shortId: string; sourceUrl: string | null }>,
   ): { id: string } | null {
     // Try matching by arXiv ID first
-    const refArxivId = ref.externalIds?.ArXiv;
-    if (refArxivId) {
+    if (ref.arxivId) {
       const match = localPapers.find(
-        (p) => p.shortId === refArxivId || p.sourceUrl?.includes(refArxivId),
+        (p) => p.shortId === ref.arxivId || p.sourceUrl?.includes(ref.arxivId!),
       );
+      if (match) return { id: match.id };
+    }
+
+    // Try DOI match
+    if (ref.doi) {
+      const doiShortId = `doi-${ref.doi.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 80)}`;
+      const match = localPapers.find((p) => p.shortId === doiShortId);
       if (match) return { id: match.id };
     }
 

@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { existsSync, copyFileSync, readFileSync } from 'fs';
+import { existsSync, copyFileSync, readFileSync, unlinkSync } from 'fs';
 import path from 'path';
 import os from 'os';
 import { BrowserWindow } from 'electron';
@@ -38,9 +38,17 @@ export interface ImportStatus {
 }
 
 export interface ScanResult {
-  papers: Array<{ arxivId: string; title: string; url: string }>;
+  papers: Array<{ arxivId: string; title: string; url: string; existing?: boolean }>;
   newCount: number;
   existingCount: number;
+}
+
+export interface DownloadedPdf {
+  filePath: string;
+  fileName: string;
+  browser: string;
+  downloadTime: string; // ISO string
+  fileSize: number; // bytes
 }
 
 let currentStatus: ImportStatus = {
@@ -77,11 +85,20 @@ export function getImportStatus(): ImportStatus {
   return { ...currentStatus };
 }
 
-function getChromeHistoryPath(): string {
+interface BrowserInfo {
+  name: string;
+  path: string;
+}
+
+function getAvailableBrowsers(): BrowserInfo[] {
   const home = os.homedir();
-  switch (os.platform()) {
-    case 'darwin':
-      return path.join(
+  const platform = os.platform();
+  const browsers: BrowserInfo[] = [];
+
+  const candidates: Array<{ name: string; darwin: string; win32: string; linux: string }> = [
+    {
+      name: 'Chrome',
+      darwin: path.join(
         home,
         'Library',
         'Application Support',
@@ -89,9 +106,8 @@ function getChromeHistoryPath(): string {
         'Chrome',
         'Default',
         'History',
-      );
-    case 'win32':
-      return path.join(
+      ),
+      win32: path.join(
         home,
         'AppData',
         'Local',
@@ -100,12 +116,92 @@ function getChromeHistoryPath(): string {
         'User Data',
         'Default',
         'History',
-      );
-    case 'linux':
-      return path.join(home, '.config', 'google-chrome', 'Default', 'History');
-    default:
-      throw new Error(`Unsupported platform: ${os.platform()}`);
+      ),
+      linux: path.join(home, '.config', 'google-chrome', 'Default', 'History'),
+    },
+    {
+      name: 'Edge',
+      darwin: path.join(
+        home,
+        'Library',
+        'Application Support',
+        'Microsoft Edge',
+        'Default',
+        'History',
+      ),
+      win32: path.join(
+        home,
+        'AppData',
+        'Local',
+        'Microsoft',
+        'Edge',
+        'User Data',
+        'Default',
+        'History',
+      ),
+      linux: path.join(home, '.config', 'microsoft-edge', 'Default', 'History'),
+    },
+    {
+      name: 'Brave',
+      darwin: path.join(
+        home,
+        'Library',
+        'Application Support',
+        'BraveSoftware',
+        'Brave-Browser',
+        'Default',
+        'History',
+      ),
+      win32: path.join(
+        home,
+        'AppData',
+        'Local',
+        'BraveSoftware',
+        'Brave-Browser',
+        'User Data',
+        'Default',
+        'History',
+      ),
+      linux: path.join(home, '.config', 'BraveSoftware', 'Brave-Browser', 'Default', 'History'),
+    },
+    {
+      name: 'Vivaldi',
+      darwin: path.join(home, 'Library', 'Application Support', 'Vivaldi', 'Default', 'History'),
+      win32: path.join(home, 'AppData', 'Local', 'Vivaldi', 'User Data', 'Default', 'History'),
+      linux: path.join(home, '.config', 'vivaldi', 'Default', 'History'),
+    },
+    {
+      name: 'Arc',
+      darwin: path.join(
+        home,
+        'Library',
+        'Application Support',
+        'Arc',
+        'User Data',
+        'Default',
+        'History',
+      ),
+      win32: '',
+      linux: '',
+    },
+  ];
+
+  for (const c of candidates) {
+    const p = c[platform as 'darwin' | 'win32' | 'linux'];
+    if (p && existsSync(p)) {
+      browsers.push({ name: c.name, path: p });
+    }
   }
+
+  return browsers;
+}
+
+function getChromeHistoryPath(): string {
+  const browsers = getAvailableBrowsers();
+  if (browsers.length === 0) {
+    throw new Error('No supported browser found (Chrome, Edge, Brave, Vivaldi, Arc)');
+  }
+  return browsers[0].path;
 }
 
 /**
@@ -131,107 +227,210 @@ export async function scanChromeHistory(days: number | null = 1): Promise<ScanRe
     skipped: 0,
     pdfFailed: 0,
     phase: 'scanning',
-    message: 'Scanning Chrome history...',
+    message: 'Scanning browser history...',
     lastImportAt: null,
     lastImportCount: 0,
   };
   broadcastStatus();
 
   try {
-    const historyPath = getChromeHistoryPath();
-    if (!existsSync(historyPath)) {
-      throw new Error(`Chrome History not found at: ${historyPath}`);
+    const browsers = getAvailableBrowsers();
+    if (browsers.length === 0) {
+      throw new Error('No supported browser found (Chrome, Edge, Brave, Vivaldi, Arc)');
     }
-    // Copy DB first (Chrome locks it while running)
-    const tmpPath = path.join(os.tmpdir(), `chrome-history-${Date.now()}.db`);
-    copyFileSync(historyPath, tmpPath);
 
-    try {
-      let whereClause = `url LIKE '%arxiv.org%'`;
-      if (days !== null) {
-        const since = daysToSince(days);
-        whereClause += ` AND last_visit_time >= ${toChromeTime(since)}`;
-      }
-      const sql = `SELECT title, url FROM urls WHERE ${whereClause} ORDER BY last_visit_time DESC LIMIT 500;`;
+    const SQL = await initSqlJs({
+      locateFile: (file: string) => require.resolve(`sql.js/dist/${file}`),
+    });
 
-      // Use sql.js (pure JS SQLite) instead of system sqlite3 CLI
-      // In Node.js, sql.js can load WASM synchronously from its package location
-      const SQL = await initSqlJs({
-        locateFile: (file: string) => require.resolve(`sql.js/dist/${file}`),
-      });
-      const dbBuffer = readFileSync(tmpPath);
-      const db = new SQL.Database(dbBuffer);
-      const result = db.exec(sql);
-      db.close();
+    const entries: Array<{ title: string; url: string }> = [];
+    const seenUrls = new Set<string>();
 
-      const entries: Array<{ title: string; url: string }> = [];
-      if (result.length > 0 && result[0].values) {
-        for (const row of result[0].values) {
-          const title = String(row[0] || '');
-          const url = String(row[1] || '');
-          if (url.includes('arxiv.org')) {
-            entries.push({ title: title.trim() || url.trim(), url: url.trim() });
+    for (const browser of browsers) {
+      try {
+        console.log(`[ingest] Scanning ${browser.name} history...`);
+        const tmpPath = path.join(os.tmpdir(), `browser-history-${Date.now()}.db`);
+        copyFileSync(browser.path, tmpPath);
+
+        try {
+          let whereClause = `url LIKE '%arxiv.org%'`;
+          if (days !== null) {
+            const since = daysToSince(days);
+            whereClause += ` AND last_visit_time >= ${toChromeTime(since)}`;
           }
-        }
-      }
+          const sql = `SELECT title, url FROM urls WHERE ${whereClause} ORDER BY last_visit_time DESC LIMIT 500;`;
 
-      // Check which arxiv IDs already exist
-      const existingShortIds = await papersService.listAllShortIds();
-      const papers: ScanResult['papers'] = [];
-      let newCount = 0;
-      let existingCount = 0;
-      const seen = new Set<string>();
+          const dbBuffer = readFileSync(tmpPath);
+          const db = new SQL.Database(dbBuffer);
+          const result = db.exec(sql);
+          db.close();
 
-      for (const entry of entries) {
-        const arxivMatch = entry.url.match(/arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}(?:v\d+)?)/i);
-        const arxivId = arxivMatch ? arxivMatch[1].replace(/v\d+$/, '') : null;
-        if (!arxivId || seen.has(arxivId)) continue;
-        seen.add(arxivId);
-
-        // Fetch title if needed
-        let rawTitle = entry.title.trim();
-        if (isInvalidTitle(rawTitle)) {
-          try {
-            const res = await fetch(`https://arxiv.org/abs/${arxivId}`, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ResearchClaw/1.0)' },
-              signal: AbortSignal.timeout(8000),
-            });
-            if (res.ok) {
-              const html = await res.text();
-              const m = html.match(/<title>([^<]+)<\/title>/i);
-              if (m) rawTitle = m[1].replace(/^\[[\w./-]+\]\s*/, '').trim();
+          if (result.length > 0 && result[0].values) {
+            for (const row of result[0].values) {
+              const title = String(row[0] || '');
+              const url = String(row[1] || '');
+              if (url.includes('arxiv.org') && !seenUrls.has(url)) {
+                seenUrls.add(url);
+                entries.push({ title: title.trim() || url.trim(), url: url.trim() });
+              }
             }
+          }
+        } finally {
+          try {
+            unlinkSync(tmpPath);
           } catch {
-            rawTitle = arxivId;
+            /* ignore */
           }
         }
+      } catch (browserErr) {
+        console.warn(
+          `[ingest] Failed to scan ${browser.name}:`,
+          browserErr instanceof Error ? browserErr.message : String(browserErr),
+        );
+      }
+    }
 
-        const exists = existingShortIds.has(arxivId);
-        if (exists) {
-          existingCount++;
-        } else {
-          newCount++;
+    console.log(
+      `[ingest] Found ${entries.length} arXiv entries from ${browsers.map((b) => b.name).join(', ')}`,
+    );
+
+    // Check which arxiv IDs already exist
+    const existingShortIds = await papersService.listAllShortIds();
+    const papers: ScanResult['papers'] = [];
+    let newCount = 0;
+    let existingCount = 0;
+    const seen = new Set<string>();
+
+    for (const entry of entries) {
+      const arxivMatch = entry.url.match(/arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}(?:v\d+)?)/i);
+      const arxivId = arxivMatch ? arxivMatch[1].replace(/v\d+$/, '') : null;
+      if (!arxivId || seen.has(arxivId)) continue;
+      seen.add(arxivId);
+
+      let rawTitle = entry.title.trim();
+      if (isInvalidTitle(rawTitle)) {
+        try {
+          const res = await fetch(`https://arxiv.org/abs/${arxivId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ResearchClaw/1.0)' },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (res.ok) {
+            const html = await res.text();
+            const m = html.match(/<title>([^<]+)<\/title>/i);
+            if (m) rawTitle = m[1].replace(/^\[[\w./-]+\]\s*/, '').trim();
+          }
+        } catch {
+          rawTitle = arxivId;
         }
-        papers.push({ arxivId, title: rawTitle, url: entry.url });
       }
 
-      currentStatus = {
-        ...currentStatus,
-        active: false,
-        phase: 'completed',
-        message: `Found ${papers.length} papers (${newCount} new, ${existingCount} existing)`,
-      };
-      broadcastStatus();
-
-      return { papers, newCount, existingCount };
-    } finally {
-      await fs.unlink(tmpPath).catch(() => undefined);
+      const exists = existingShortIds.has(arxivId);
+      if (exists) existingCount++;
+      else newCount++;
+      papers.push({ arxivId, title: rawTitle, url: entry.url, existing: exists });
     }
+
+    currentStatus = {
+      ...currentStatus,
+      active: false,
+      phase: 'completed',
+      message: `Found ${papers.length} papers (${newCount} new, ${existingCount} existing)`,
+    };
+    broadcastStatus();
+
+    return { papers, newCount, existingCount };
   } catch (err) {
     currentStatus = { ...currentStatus, active: false, phase: 'failed', message: String(err) };
     broadcastStatus();
     throw err;
   }
+}
+
+// Chrome timestamp epoch: 1601-01-01 in microseconds
+const CHROME_EPOCH_OFFSET = 11644473600000000n;
+
+/**
+ * Scan browser download history for recently downloaded PDF files.
+ * Searches all available Chromium browsers (Chrome, Edge, Brave, etc.)
+ */
+export async function scanBrowserDownloads(days: number = 7): Promise<DownloadedPdf[]> {
+  const browsers = getAvailableBrowsers();
+  if (browsers.length === 0) return [];
+
+  const SQL = await initSqlJs({
+    locateFile: (file: string) => require.resolve(`sql.js/dist/${file}`),
+  });
+
+  const results: DownloadedPdf[] = [];
+  const seenPaths = new Set<string>();
+
+  // Calculate cutoff time in Chrome timestamp format (microseconds since 1601-01-01)
+  const cutoffMs = Date.now() - days * 86_400_000;
+  const cutoffChrome = (BigInt(cutoffMs) * 1000n + CHROME_EPOCH_OFFSET).toString();
+
+  for (const browser of browsers) {
+    try {
+      const tmpPath = path.join(os.tmpdir(), `browser-downloads-${Date.now()}.db`);
+      copyFileSync(browser.path, tmpPath);
+
+      try {
+        const sql = `SELECT target_path, start_time, total_bytes FROM downloads
+          WHERE state = 1
+            AND target_path LIKE '%.pdf'
+            AND start_time >= ${cutoffChrome}
+          ORDER BY start_time DESC
+          LIMIT 50;`;
+
+        const dbBuffer = readFileSync(tmpPath);
+        const db = new SQL.Database(dbBuffer);
+        const result = db.exec(sql);
+        db.close();
+
+        if (result.length > 0 && result[0].values) {
+          for (const row of result[0].values) {
+            const filePath = String(row[0] || '');
+            const startTime = BigInt(String(row[1] || '0'));
+            const totalBytes = Number(row[2] || 0);
+
+            if (!filePath || seenPaths.has(filePath)) continue;
+            // Check file still exists
+            if (!existsSync(filePath)) continue;
+
+            seenPaths.add(filePath);
+
+            // Convert Chrome timestamp to JS Date
+            const jsMs = Number((startTime - CHROME_EPOCH_OFFSET) / 1000n);
+
+            results.push({
+              filePath,
+              fileName: path.basename(filePath),
+              browser: browser.name,
+              downloadTime: new Date(jsMs).toISOString(),
+              fileSize: totalBytes,
+            });
+          }
+        }
+      } finally {
+        try {
+          unlinkSync(tmpPath);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[ingest] Failed to scan ${browser.name} downloads:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  // Sort by download time descending
+  results.sort((a, b) => new Date(b.downloadTime).getTime() - new Date(a.downloadTime).getTime());
+  console.log(
+    `[ingest] Found ${results.length} PDF downloads from ${browsers.map((b) => b.name).join(', ')}`,
+  );
+  return results;
 }
 
 /**

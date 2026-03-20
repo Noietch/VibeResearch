@@ -8,6 +8,8 @@ import {
   type ZoteroScannedItem,
   type ZoteroImportStatus,
   type ParsedPaperEntry,
+  type SearchResultItem,
+  type OverleafProject,
 } from '../hooks/use-ipc';
 import { onIpc } from '../hooks/use-ipc';
 import { cleanArxivTitle } from '@shared';
@@ -29,6 +31,10 @@ import {
   FileCode,
   FolderSearch,
   FileUp,
+  Search,
+  Leaf,
+  RefreshCw,
+  ChevronDown,
 } from 'lucide-react';
 
 // Animation variants
@@ -64,7 +70,7 @@ const modalVariants = {
   },
 };
 
-type Tab = 'chrome' | 'local' | 'zotero' | 'bibtex';
+type Tab = 'chrome' | 'local' | 'zotero' | 'bibtex' | 'search' | 'overleaf';
 type Step = 'initial' | 'scanning' | 'preview' | 'importing' | 'done';
 
 interface BatchProgress {
@@ -86,6 +92,22 @@ function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() ?? filePath;
 }
 
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffHr = Math.floor(diffMs / 3_600_000);
+  const diffDay = Math.floor(diffMs / 86_400_000);
+
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffDay < 30) return `${Math.floor(diffDay / 7)}w ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
 export function ImportModal({
   onClose,
   onImported,
@@ -103,6 +125,20 @@ export function ImportModal({
   const [localInput, setLocalInput] = useState('');
   const [localPdfFiles, setLocalPdfFiles] = useState<string[]>([]);
   const [localDoneMessage, setLocalDoneMessage] = useState('');
+
+  // Browser downloads state
+  interface DownloadedPdfItem {
+    filePath: string;
+    fileName: string;
+    browser: string;
+    downloadTime: string;
+    fileSize: number;
+  }
+  const [recentDownloads, setRecentDownloads] = useState<DownloadedPdfItem[]>([]);
+  const [downloadsLoading, setDownloadsLoading] = useState(false);
+  const [downloadsLoaded, setDownloadsLoaded] = useState(false);
+  const [downloadsDropdownOpen, setDownloadsDropdownOpen] = useState(false);
+  const downloadsDropdownRef = useRef<HTMLDivElement>(null);
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +157,27 @@ export function ImportModal({
   const [bibtexEntries, setBibtexEntries] = useState<ParsedPaperEntry[]>([]);
   const [bibtexSelectedIdx, setBibtexSelectedIdx] = useState<Set<number>>(new Set());
   const [bibtexDoneMessage, setBibtexDoneMessage] = useState('');
+
+  // Search tab state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchDone, setSearchDone] = useState('');
+
+  // Overleaf tab state
+  const [overleafProjects, setOverleafProjects] = useState<OverleafProject[]>([]);
+  const [overleafImportedMap, setOverleafImportedMap] = useState<
+    Record<string, { paperId: string; importedAt: string }>
+  >({});
+  const [overleafLoading, setOverleafLoading] = useState(false);
+  const [overleafImporting, setOverleafImporting] = useState<string | null>(null);
+  const [overleafBatchImporting, setOverleafBatchImporting] = useState(false);
+  const [overleafBatchProgress, setOverleafBatchProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [overleafSelected, setOverleafSelected] = useState<Set<string>>(new Set());
+  const [overleafSearch, setOverleafSearch] = useState('');
+  const [overleafError, setOverleafError] = useState('');
 
   // Handle ESC key to close
   useEffect(() => {
@@ -149,6 +206,15 @@ export function ImportModal({
       onClose();
     }
   }, [isVisible, onClose]);
+
+  // Subscribe to Overleaf batch import progress
+  useEffect(() => {
+    const unsubscribe = onIpc('overleaf:importProgress', (...args: unknown[]) => {
+      const progress = args[1] as { current: number; total: number };
+      setOverleafBatchProgress(progress);
+    });
+    return unsubscribe;
+  }, []);
 
   // Subscribe to import status updates (Chrome history)
   useEffect(() => {
@@ -209,7 +275,8 @@ export function ImportModal({
     try {
       const result = await ipc.scanChromeHistory(days);
       setScanResult(result);
-      setSelectedIds(new Set(result.papers.map((p) => p.arxivId)));
+      // Select only new papers by default (not ones already in library)
+      setSelectedIds(new Set(result.papers.filter((p) => !p.existing).map((p) => p.arxivId)));
       setStep('preview');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to scan Chrome history');
@@ -246,10 +313,11 @@ export function ImportModal({
   // Toggle all papers
   const toggleAll = useCallback(() => {
     if (!scanResult) return;
-    if (selectedIds.size === scanResult.papers.length) {
+    const newPapers = scanResult.papers.filter((p) => !p.existing);
+    if (selectedIds.size >= newPapers.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(scanResult.papers.map((p) => p.arxivId)));
+      setSelectedIds(new Set(newPapers.map((p) => p.arxivId)));
     }
   }, [scanResult, selectedIds.size]);
 
@@ -334,6 +402,29 @@ export function ImportModal({
     },
     [addPdfFiles, tab, t],
   );
+
+  // Handle search import
+  const handleSearchImport = useCallback(async () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    setSearchLoading(true);
+    setError('');
+    setSearchDone('');
+    try {
+      const result = await ipc.downloadPaper(query);
+      if (result.existed) {
+        setSearchDone(`"${result.paper.title}" is already in your library`);
+      } else {
+        setSearchDone(`Imported "${result.paper.title}" successfully`);
+        onImported();
+      }
+      setSearchQuery('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [searchQuery, onImported]);
 
   // Handle local PDF / arXiv / DOI import
   const handleLocalImport = useCallback(async () => {
@@ -518,21 +609,148 @@ export function ImportModal({
   const canImportLocal = localPdfFiles.length > 0 || localInput.trim().length > 0;
 
   // Reset state when switching tabs
-  const handleTabChange = useCallback((newTab: Tab) => {
-    setTab(newTab);
-    setStep('initial');
-    setScanResult(null);
-    setError('');
-    setLocalInput('');
-    setLocalPdfFiles([]);
-    setLocalDoneMessage('');
-    setBatchProgress(null);
-    setZoteroScanResult(null);
-    setZoteroSelectedKeys(new Set());
-    setBibtexEntries([]);
-    setBibtexSelectedIdx(new Set());
-    setBibtexDoneMessage('');
+  const loadOverleafProjects = useCallback(async () => {
+    setOverleafLoading(true);
+    setOverleafError('');
+    try {
+      const { projects, importedMap } = await ipc.listOverleafProjects();
+      setOverleafProjects(projects);
+      setOverleafImportedMap(importedMap);
+    } catch (err) {
+      setOverleafError(err instanceof Error ? err.message : 'Failed to load Overleaf projects');
+    } finally {
+      setOverleafLoading(false);
+    }
   }, []);
+
+  const [overleafSuccess, setOverleafSuccess] = useState('');
+
+  const toggleOverleafSelect = useCallback((projectId: string) => {
+    setOverleafSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }, []);
+
+  const handleOverleafImport = useCallback(
+    async (projectId: string) => {
+      setOverleafImporting(projectId);
+      setOverleafError('');
+      setOverleafSuccess('');
+      try {
+        const project = overleafProjects.find((p) => p.id === projectId);
+        await ipc.prepareOverleafImport(projectId);
+        setOverleafImportedMap((prev) => ({
+          ...prev,
+          [projectId]: { paperId: projectId, importedAt: new Date().toISOString() },
+        }));
+        setOverleafSuccess(
+          `"${project?.name ?? 'Project'}" imported. Auto-tag & index running in background.`,
+        );
+        onImported();
+        setTimeout(() => setOverleafSuccess(''), 5000);
+      } catch (err) {
+        setOverleafError(err instanceof Error ? err.message : 'Failed to import project');
+      } finally {
+        setOverleafImporting(null);
+      }
+    },
+    [onImported, overleafProjects],
+  );
+
+  const handleOverleafBatchImport = useCallback(async () => {
+    if (overleafSelected.size === 0) return;
+    setOverleafBatchImporting(true);
+    setOverleafError('');
+    setOverleafSuccess('');
+    setOverleafBatchProgress({ current: 0, total: overleafSelected.size });
+
+    try {
+      const projectIds = Array.from(overleafSelected);
+      const results = await ipc.batchOverleafImport(projectIds);
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      // Update imported map
+      const now = new Date().toISOString();
+      setOverleafImportedMap((prev) => {
+        const next = { ...prev };
+        for (const r of results) {
+          if (r.success) next[r.projectId] = { paperId: r.projectId, importedAt: now };
+        }
+        return next;
+      });
+      setOverleafSelected(new Set());
+
+      setOverleafSuccess(
+        `Imported ${succeeded} project${succeeded !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}. Auto-tag & index running in background.`,
+      );
+      if (succeeded > 0) onImported();
+      setTimeout(() => setOverleafSuccess(''), 5000);
+    } catch (err) {
+      setOverleafError(err instanceof Error ? err.message : 'Batch import failed');
+    } finally {
+      setOverleafBatchImporting(false);
+      setOverleafBatchProgress(null);
+    }
+  }, [overleafSelected, onImported]);
+
+  // Close downloads dropdown when clicking outside
+  useEffect(() => {
+    if (!downloadsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        downloadsDropdownRef.current &&
+        !downloadsDropdownRef.current.contains(e.target as Node)
+      ) {
+        setDownloadsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [downloadsDropdownOpen]);
+
+  const loadRecentDownloads = useCallback(async () => {
+    setDownloadsLoading(true);
+    try {
+      const downloads = await ipc.scanBrowserDownloads(7);
+      setRecentDownloads(downloads);
+      setDownloadsLoaded(true);
+    } catch {
+      // Silent fail
+    } finally {
+      setDownloadsLoading(false);
+    }
+  }, []);
+
+  const handleTabChange = useCallback(
+    (newTab: Tab) => {
+      setTab(newTab);
+      setStep('initial');
+      setScanResult(null);
+      setError('');
+      setLocalInput('');
+      setLocalPdfFiles([]);
+      setLocalDoneMessage('');
+      setBatchProgress(null);
+      setZoteroScanResult(null);
+      setZoteroSelectedKeys(new Set());
+      setBibtexEntries([]);
+      setBibtexSelectedIdx(new Set());
+      setBibtexDoneMessage('');
+      setSearchQuery('');
+      setSearchDone('');
+      if (newTab === 'overleaf' && overleafProjects.length === 0) {
+        loadOverleafProjects();
+      }
+      if (newTab === 'local' && !downloadsLoaded) {
+        loadRecentDownloads();
+      }
+    },
+    [overleafProjects.length, loadOverleafProjects, downloadsLoaded, loadRecentDownloads],
+  );
 
   // Reset to initial state
   const handleReset = useCallback(() => {
@@ -717,16 +935,18 @@ export function ImportModal({
               <div className="flex border-b border-notion-border">
                 {(
                   [
-                    { key: 'chrome' as Tab, icon: Chrome, label: t('importModal.tabs.chrome') },
-                    { key: 'local' as Tab, icon: FileText, label: t('importModal.tabs.local') },
+                    { key: 'search' as Tab, icon: Search, label: 'Search' },
+                    { key: 'chrome' as Tab, icon: Chrome, label: 'Browser' },
+                    { key: 'local' as Tab, icon: FileText, label: 'PDF' },
                     { key: 'zotero' as Tab, icon: BookOpen, label: 'Zotero' },
                     { key: 'bibtex' as Tab, icon: FileCode, label: 'BibTeX' },
+                    { key: 'overleaf' as Tab, icon: Leaf, label: 'Overleaf' },
                   ] as const
                 ).map(({ key, icon: Icon, label }) => (
                   <button
                     key={key}
                     onClick={() => handleTabChange(key)}
-                    className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors ${
+                    className={`flex flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium whitespace-nowrap transition-colors ${
                       tab === key
                         ? 'border-b-2 border-blue-500 text-notion-text'
                         : 'text-notion-text-secondary hover:text-notion-text'
@@ -751,6 +971,48 @@ export function ImportModal({
                   <AlertCircle size={14} />
                   {error}
                 </motion.div>
+              )}
+
+              {/* Search Tab */}
+              {tab === 'search' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-notion-text-secondary">
+                    Search by paper title, arXiv ID, or DOI to import
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return;
+                        if (e.key === 'Enter' && searchQuery.trim()) {
+                          handleSearchImport();
+                        }
+                      }}
+                      placeholder="e.g. Attention Is All You Need, 2301.12345, 10.1234/..."
+                      className="flex-1 rounded-lg border border-notion-border px-3 py-2 text-sm focus:border-notion-accent focus:outline-none"
+                    />
+                    <button
+                      onClick={handleSearchImport}
+                      disabled={!searchQuery.trim() || searchLoading}
+                      className="inline-flex items-center gap-2 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:opacity-80 disabled:opacity-50"
+                    >
+                      {searchLoading ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                      Import
+                    </button>
+                  </div>
+                  {searchDone && (
+                    <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                      <Check size={14} />
+                      {searchDone}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Chrome History Tab */}
@@ -836,25 +1098,39 @@ export function ImportModal({
                           <div className="max-h-64 overflow-y-auto rounded-lg border border-notion-border">
                             {scanResult.papers.map((paper) => {
                               const isSelected = selectedIds.has(paper.arxivId);
+                              const isExisting = !!paper.existing;
                               return (
                                 <div
                                   key={paper.arxivId}
-                                  onClick={() => togglePaper(paper.arxivId)}
-                                  className={`flex cursor-pointer items-start gap-3 border-b border-notion-border px-3 py-2 last:border-b-0 transition-colors ${
-                                    isSelected ? 'bg-blue-50' : 'hover:bg-notion-sidebar'
+                                  onClick={() => !isExisting && togglePaper(paper.arxivId)}
+                                  className={`flex items-start gap-3 border-b border-notion-border px-3 py-2 last:border-b-0 transition-colors ${
+                                    isExisting
+                                      ? 'bg-notion-sidebar opacity-60 cursor-default'
+                                      : isSelected
+                                        ? 'bg-blue-50 cursor-pointer'
+                                        : 'hover:bg-notion-sidebar cursor-pointer'
                                   }`}
                                 >
                                   <div className="mt-0.5 flex-shrink-0">
-                                    {isSelected ? (
+                                    {isExisting ? (
+                                      <Check size={16} className="text-green-500" />
+                                    ) : isSelected ? (
                                       <CheckSquare size={16} className="text-blue-600" />
                                     ) : (
                                       <Square size={16} className="text-notion-text-tertiary" />
                                     )}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="line-clamp-2 text-sm text-notion-text">
-                                      {cleanArxivTitle(paper.title)}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="line-clamp-2 text-sm text-notion-text">
+                                        {cleanArxivTitle(paper.title)}
+                                      </p>
+                                      {isExisting && (
+                                        <span className="flex-shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                          In Library
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="mt-0.5 text-xs text-notion-text-tertiary">
                                       {paper.arxivId}
                                     </p>
@@ -933,6 +1209,102 @@ export function ImportModal({
                 <div className="space-y-4">
                   {step === 'initial' && (
                     <>
+                      {/* Recent browser downloads — dropdown */}
+                      {(downloadsLoading || recentDownloads.length > 0) && (
+                        <div ref={downloadsDropdownRef} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setDownloadsDropdownOpen((v) => !v)}
+                            className="flex w-full items-center justify-between rounded-lg border border-notion-border bg-white px-3 py-2 text-sm text-notion-text hover:border-notion-accent/30 transition-colors"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Clock size={14} className="text-notion-text-tertiary" />
+                              <span className="font-medium">
+                                {t('importModal.recentDownloads', 'Recent PDF downloads')}
+                              </span>
+                              {recentDownloads.length > 0 && (
+                                <span className="rounded-full bg-notion-sidebar px-1.5 py-0.5 text-[10px] text-notion-text-tertiary">
+                                  {recentDownloads.length}
+                                </span>
+                              )}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              {downloadsLoading && (
+                                <Loader2
+                                  size={12}
+                                  className="animate-spin text-notion-text-tertiary"
+                                />
+                              )}
+                              <ChevronDown
+                                size={14}
+                                className={`text-notion-text-tertiary transition-transform duration-150 ${downloadsDropdownOpen ? 'rotate-180' : ''}`}
+                              />
+                            </span>
+                          </button>
+                          <AnimatePresence>
+                            {downloadsDropdownOpen &&
+                              !downloadsLoading &&
+                              recentDownloads.length > 0 && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: -4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -4 }}
+                                  transition={{ duration: 0.12 }}
+                                  className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-notion-border bg-white shadow-lg"
+                                >
+                                  <div className="flex items-center justify-end border-b border-notion-border px-3 py-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        loadRecentDownloads();
+                                      }}
+                                      className="flex items-center gap-1 text-[10px] text-notion-text-tertiary hover:text-notion-text"
+                                    >
+                                      <RefreshCw size={10} />
+                                      {t('common.refresh', 'Refresh')}
+                                    </button>
+                                  </div>
+                                  {recentDownloads.map((dl) => (
+                                    <div
+                                      key={dl.filePath}
+                                      className="group flex items-center gap-2 border-b border-notion-border px-3 py-1.5 last:border-b-0 hover:bg-notion-accent-light cursor-pointer"
+                                      onClick={() => {
+                                        setLocalPdfFiles((prev) =>
+                                          prev.includes(dl.filePath)
+                                            ? prev
+                                            : [...prev, dl.filePath],
+                                        );
+                                        setDownloadsDropdownOpen(false);
+                                      }}
+                                    >
+                                      <FileText size={14} className="flex-shrink-0 text-red-400" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm text-notion-text">
+                                          {dl.fileName}
+                                        </p>
+                                        <p className="text-[10px] text-notion-text-tertiary">
+                                          {dl.browser} · {formatRelativeTime(dl.downloadTime)}
+                                          {dl.fileSize > 0 &&
+                                            ` · ${(dl.fileSize / 1024 / 1024).toFixed(1)} MB`}
+                                        </p>
+                                      </div>
+                                      {localPdfFiles.includes(dl.filePath) ? (
+                                        <Check size={14} className="flex-shrink-0 text-green-500" />
+                                      ) : (
+                                        <Download
+                                          size={14}
+                                          className="flex-shrink-0 text-notion-text-tertiary opacity-0 group-hover:opacity-100"
+                                        />
+                                      )}
+                                    </div>
+                                  ))}
+                                </motion.div>
+                              )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+
+                      {/* Drag & drop zone */}
                       <div
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
@@ -1435,6 +1807,228 @@ export function ImportModal({
                       </div>
                       <p className="mt-1 text-xs text-green-700/80">{bibtexDoneMessage}</p>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Overleaf Tab */}
+              {tab === 'overleaf' && (
+                <div className="space-y-4">
+                  {overleafSuccess && (
+                    <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                      <Check size={14} />
+                      {overleafSuccess}
+                    </div>
+                  )}
+                  {overleafError && (
+                    <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                      <AlertCircle size={14} />
+                      {overleafError}
+                    </div>
+                  )}
+
+                  {overleafLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 size={24} className="animate-spin text-notion-text-tertiary" />
+                      <span className="ml-2 text-sm text-notion-text-secondary">
+                        Loading Overleaf projects...
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {overleafProjects.length === 0 && !overleafError ? (
+                        <div className="py-8 text-center text-sm text-notion-text-tertiary">
+                          No projects found. Please configure your Overleaf cookie in Settings
+                          first.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                value={overleafSearch}
+                                onChange={(e) => setOverleafSearch(e.target.value)}
+                                placeholder="Filter projects..."
+                                className="w-full rounded-lg border border-notion-border bg-white px-3 py-2 pr-10 text-sm text-notion-text placeholder-notion-text-tertiary focus:border-blue-500 focus:outline-none"
+                              />
+                              <Search
+                                size={16}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-notion-text-tertiary"
+                              />
+                            </div>
+                            <button
+                              onClick={loadOverleafProjects}
+                              disabled={overleafLoading}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-notion-border text-notion-text-tertiary hover:bg-notion-sidebar-hover hover:text-notion-text"
+                              title="Refresh"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-notion-text-tertiary">
+                              {overleafProjects.length} projects
+                              {overleafSelected.size > 0 && (
+                                <span className="ml-1 text-notion-accent">
+                                  · {overleafSelected.size} selected
+                                </span>
+                              )}
+                            </p>
+                            {overleafSelected.size > 0 && (
+                              <button
+                                onClick={handleOverleafBatchImport}
+                                disabled={overleafBatchImporting || overleafImporting !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-notion-accent px-3 py-1 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
+                              >
+                                {overleafBatchImporting ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Download size={12} />
+                                )}
+                                {overleafBatchImporting
+                                  ? `Importing ${overleafBatchProgress?.current ?? 0}/${overleafBatchProgress?.total ?? 0}...`
+                                  : `Import ${overleafSelected.size}`}
+                              </button>
+                            )}
+                          </div>
+                          <div className="max-h-96 space-y-1.5 overflow-y-auto">
+                            {overleafProjects
+                              .filter(
+                                (p) =>
+                                  !overleafSearch ||
+                                  p.name.toLowerCase().includes(overleafSearch.toLowerCase()),
+                              )
+                              .map((project) => {
+                                const imported = overleafImportedMap[project.id];
+                                const remoteTime = project.lastUpdated
+                                  ? new Date(project.lastUpdated).getTime()
+                                  : 0;
+                                const importedTime = imported
+                                  ? new Date(imported.importedAt).getTime()
+                                  : 0;
+                                const hasRemoteUpdate =
+                                  imported &&
+                                  remoteTime > 0 &&
+                                  importedTime > 0 &&
+                                  remoteTime > importedTime;
+                                const isSelected = overleafSelected.has(project.id);
+                                return (
+                                  <div
+                                    key={project.id}
+                                    onClick={() => toggleOverleafSelect(project.id)}
+                                    className={`group flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? 'border-notion-accent/50 bg-notion-accent-light'
+                                        : hasRemoteUpdate
+                                          ? 'border-orange-200 bg-orange-50/30 hover:bg-orange-50/60'
+                                          : imported
+                                            ? 'border-green-200 bg-green-50/30 hover:bg-green-50/60'
+                                            : 'border-notion-border bg-white hover:bg-notion-accent-light hover:border-notion-accent/30'
+                                    }`}
+                                  >
+                                    <div className="flex-shrink-0">
+                                      {isSelected ? (
+                                        <CheckSquare size={16} className="text-notion-accent" />
+                                      ) : (
+                                        <Square size={16} className="text-notion-text-tertiary" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="truncate text-sm font-medium text-notion-text">
+                                          {project.name}
+                                        </h4>
+                                        {imported && !hasRemoteUpdate && (
+                                          <span className="flex-shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                            Imported
+                                          </span>
+                                        )}
+                                        {hasRemoteUpdate && (
+                                          <span className="flex-shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                                            Has Updates
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mt-0.5 text-xs text-notion-text-tertiary">
+                                        {project.lastUpdated
+                                          ? formatRelativeTime(project.lastUpdated)
+                                          : ''}
+                                        {project.accessLevel && (
+                                          <span className="ml-2 rounded bg-notion-tag-blue px-1.5 py-0.5">
+                                            {project.accessLevel}
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                    {hasRemoteUpdate ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOverleafImport(project.id);
+                                        }}
+                                        disabled={
+                                          overleafImporting !== null || overleafBatchImporting
+                                        }
+                                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
+                                      >
+                                        {overleafImporting === project.id ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : (
+                                          <RefreshCw size={12} />
+                                        )}
+                                        {overleafImporting === project.id
+                                          ? 'Updating...'
+                                          : 'Update'}
+                                      </button>
+                                    ) : imported ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOverleafImport(project.id);
+                                        }}
+                                        disabled={
+                                          overleafImporting !== null || overleafBatchImporting
+                                        }
+                                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-notion-border bg-white px-3 py-1.5 text-xs font-medium text-notion-text-secondary hover:bg-notion-sidebar-hover disabled:opacity-50"
+                                      >
+                                        {overleafImporting === project.id ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : (
+                                          <RefreshCw size={12} />
+                                        )}
+                                        {overleafImporting === project.id
+                                          ? 'Importing...'
+                                          : 'Re-import'}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOverleafImport(project.id);
+                                        }}
+                                        disabled={
+                                          overleafImporting !== null || overleafBatchImporting
+                                        }
+                                        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-notion-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50"
+                                      >
+                                        {overleafImporting === project.id ? (
+                                          <Loader2 size={12} className="animate-spin" />
+                                        ) : (
+                                          <Download size={12} />
+                                        )}
+                                        {overleafImporting === project.id
+                                          ? 'Compiling...'
+                                          : 'Import'}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               )}

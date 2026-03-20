@@ -11,3 +11,4 @@ export * from './types/agent-todo';
 export * from './utils/search-match';
 export * from './utils/bibtex';
 export * from './utils/bibtex-parser';
+export * from './utils/reference-parser';
