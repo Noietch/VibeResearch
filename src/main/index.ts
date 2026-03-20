@@ -6,6 +6,7 @@ import { setupPapersIpc } from './ipc/papers.ipc';
 import { setupReadingIpc } from './ipc/reading.ipc';
 import { setupIngestIpc } from './ipc/ingest.ipc';
 import { setupProjectsIpc } from './ipc/projects.ipc';
+import { setupHighlightsIpc } from './ipc/highlights.ipc';
 import { appendLog, getLogFilePath } from './services/app-log.service';
 import { setupProvidersIpc } from './ipc/providers.ipc';
 import { setupCliToolsIpc } from './ipc/cli-tools.ipc';
@@ -456,6 +457,7 @@ app.whenReady().then(async () => {
   setupReadingIpc();
   setupIngestIpc();
   setupProjectsIpc();
+  setupHighlightsIpc();
   setupProvidersIpc();
   setupCliToolsIpc();
   setupModelsIpc();

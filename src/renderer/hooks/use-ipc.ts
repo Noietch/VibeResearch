@@ -31,6 +31,7 @@ declare global {
       off: (channel: string, listener: (...args: unknown[]) => void) => void;
       once: (channel: string, listener: (...args: unknown[]) => void) => void;
       readLocalFile: (path: string) => Promise<string>;
+      openBrowser: (url: string, title?: string) => Promise<boolean>;
       // Window controls
       windowClose: () => Promise<void>;
       windowMinimize: () => Promise<void>;
@@ -144,6 +145,19 @@ export interface PaperProcessingInfo {
   indexedAt?: string | null;
   metadataSource?: string | null;
 }
+
+export interface HighlightItem {
+  id: string;
+  paperId: string;
+  pageNumber: number;
+  rectsJson: string;
+  text: string;
+  note?: string | null;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 export interface TaggingStatus {
   active: boolean;
@@ -1260,6 +1274,22 @@ export const ipc = {
   }) => invoke<void>('reports:generate', params),
   listTaskResults: (params: { projectId: string }) =>
     invoke<TaskResultItem[]>('reports:listTaskResults', params.projectId),
+
+
+  // Highlights
+  createHighlight: (params: {
+    paperId: string;
+    pageNumber: number;
+    rectsJson: string;
+    text: string;
+    note?: string;
+    color?: string;
+  }) => invoke<HighlightItem>('highlights:create', params),
+  updateHighlight: (id: string, updates: { note?: string; color?: string }) =>
+    invoke<HighlightItem>('highlights:update', id, updates),
+  deleteHighlight: (id: string) => invoke<void>('highlights:delete', id),
+  listHighlights: (paperId: string, pageNumber?: number) =>
+    invoke<HighlightItem[]>('highlights:list', paperId, pageNumber),
 
   // Window controls (for Windows title bar)
   windowClose: () => {

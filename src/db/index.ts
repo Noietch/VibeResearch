@@ -10,3 +10,4 @@ export * from './repositories/citations.repository';
 export * from './repositories/task-results.repository';
 export * from './repositories/experiment-report.repository';
 export * from './repositories/chat.repository';
+export * from './repositories/highlights.repository';
