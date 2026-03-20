@@ -603,9 +603,11 @@ export function setupProvidersIpc() {
         const shortId = overleafService.generateShortId(p.id);
         const paper = await svc.getByShortId(shortId);
         if (paper) {
+          // Use updatedAt (bumped on each sync) instead of createdAt (first import only)
+          const syncTime = paper.updatedAt ?? paper.createdAt;
           importedMap[p.id] = {
             paperId: paper.id,
-            importedAt: paper.createdAt?.toISOString?.() ?? paper.createdAt,
+            importedAt: syncTime?.toISOString?.() ?? syncTime,
           };
         }
       }

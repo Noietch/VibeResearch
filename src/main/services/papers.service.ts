@@ -228,11 +228,13 @@ export class PapersService {
       const folder = this.getPaperFolder(shortId);
       const importedPdfPath = path.join(folder, 'paper.pdf');
       await fs.copyFile(resolvedPath, importedPdfPath);
+      // Touch the DB record so updatedAt is bumped (used for "Has Updates" detection)
+      const updated = await this.papersRepository.update(existing.id, { title });
       // Re-extract metadata
       void this.extractAndUpdateMetadata(existing.id, shortId, importedPdfPath);
       scheduleCitationExtraction(existing.id);
       scheduleReferenceExtraction(existing.id);
-      return existing;
+      return updated;
     }
 
     const folder = await this.ensurePaperFolder(shortId);
