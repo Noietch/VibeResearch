@@ -1,0 +1,239 @@
+import { useState, useCallback, type KeyboardEvent } from 'react';
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize,
+  ArrowLeftToLine,
+  List,
+  Search,
+  Sun,
+  Moon,
+  Coffee,
+  Undo2,
+  BookOpen,
+} from 'lucide-react';
+import type { FitMode } from './use-pdf-viewport';
+import type { ReadingMode } from './PdfDocument';
+
+interface PdfToolbarProps {
+  currentPage: number;
+  numPages: number;
+  scale: number;
+  fitMode: FitMode;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onSetFitMode: (mode: FitMode) => void;
+  onGoToPage: (page: number) => void;
+  showOutline?: boolean;
+  onToggleOutline?: () => void;
+  showCitationSidebar?: boolean;
+  onToggleCitationSidebar?: () => void;
+  showSearch?: boolean;
+  onToggleSearch?: () => void;
+  readingMode?: ReadingMode;
+  onSetReadingMode?: (mode: ReadingMode) => void;
+  canGoBack?: boolean;
+  onGoBack?: () => void;
+}
+
+const READING_MODE_ICONS: Record<ReadingMode, typeof Sun> = {
+  light: Sun,
+  sepia: Coffee,
+  dark: Moon,
+};
+
+const READING_MODE_CYCLE: ReadingMode[] = ['light', 'sepia', 'dark'];
+
+export function PdfToolbar({
+  currentPage,
+  numPages,
+  scale,
+  fitMode,
+  onZoomIn,
+  onZoomOut,
+  onSetFitMode,
+  onGoToPage,
+  showOutline,
+  onToggleOutline,
+  showCitationSidebar,
+  onToggleCitationSidebar,
+  showSearch,
+  onToggleSearch,
+  readingMode = 'light',
+  onSetReadingMode,
+  canGoBack,
+  onGoBack,
+}: PdfToolbarProps) {
+  const [pageInput, setPageInput] = useState('');
+  const [editing, setEditing] = useState(false);
+
+  const handlePageInputKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.nativeEvent.isComposing) return;
+      if (e.key === 'Enter') {
+        const num = parseInt(pageInput, 10);
+        if (num >= 1 && num <= numPages) {
+          onGoToPage(num);
+        }
+        setEditing(false);
+        setPageInput('');
+      } else if (e.key === 'Escape') {
+        setEditing(false);
+        setPageInput('');
+      }
+    },
+    [pageInput, numPages, onGoToPage],
+  );
+
+  const zoomPercent = Math.round(scale * 100);
+
+  const cycleReadingMode = useCallback(() => {
+    if (!onSetReadingMode) return;
+    const idx = READING_MODE_CYCLE.indexOf(readingMode);
+    const next = READING_MODE_CYCLE[(idx + 1) % READING_MODE_CYCLE.length];
+    onSetReadingMode(next);
+  }, [readingMode, onSetReadingMode]);
+
+  const ReadingModeIcon = READING_MODE_ICONS[readingMode];
+
+  return (
+    <div className="flex h-9 items-center justify-between border-b border-notion-border bg-white px-2">
+      {/* Left: outline + search toggles */}
+      <div className="flex items-center gap-0.5">
+        {onToggleOutline && (
+          <button
+            onClick={onToggleOutline}
+            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+              showOutline
+                ? 'bg-notion-accent-light text-notion-accent'
+                : 'text-notion-text-secondary hover:bg-notion-sidebar'
+            }`}
+            title="Table of Contents"
+          >
+            <List size={14} />
+          </button>
+        )}
+        {onToggleCitationSidebar && (
+          <button
+            onClick={onToggleCitationSidebar}
+            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+              showCitationSidebar
+                ? 'bg-notion-accent-light text-notion-accent'
+                : 'text-notion-text-secondary hover:bg-notion-sidebar'
+            }`}
+            title="Citations"
+          >
+            <BookOpen size={14} />
+          </button>
+        )}
+        {onToggleSearch && (
+          <button
+            onClick={onToggleSearch}
+            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+              showSearch
+                ? 'bg-notion-accent-light text-notion-accent'
+                : 'text-notion-text-secondary hover:bg-notion-sidebar'
+            }`}
+            title="Search (Ctrl+F)"
+          >
+            <Search size={14} />
+          </button>
+        )}
+
+        <div className="mx-1 h-4 w-px bg-notion-border" />
+
+        {/* Page navigation */}
+        {editing ? (
+          <input
+            type="text"
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onKeyDown={handlePageInputKeyDown}
+            onBlur={() => {
+              setEditing(false);
+              setPageInput('');
+            }}
+            autoFocus
+            className="w-12 rounded border border-notion-accent px-1.5 py-0.5 text-center text-xs text-notion-text outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => {
+              setEditing(true);
+              setPageInput(String(currentPage));
+            }}
+            className="rounded px-1.5 py-0.5 text-xs text-notion-text hover:bg-notion-sidebar"
+          >
+            {currentPage}
+          </button>
+        )}
+        <span className="text-xs text-notion-text-tertiary">/ {numPages}</span>
+
+        {canGoBack && onGoBack && (
+          <>
+            <div className="mx-1 h-4 w-px bg-notion-border" />
+            <button
+              onClick={onGoBack}
+              className="flex h-6 items-center gap-1 rounded px-1.5 text-xs font-medium text-notion-accent hover:bg-notion-accent-light"
+              title="Go back"
+            >
+              <Undo2 size={12} />
+              <span>Back</span>
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Center: zoom controls */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={onZoomOut}
+          className="flex h-6 w-6 items-center justify-center rounded hover:bg-notion-sidebar"
+          title="Zoom out (Ctrl+-)"
+        >
+          <ZoomOut size={14} className="text-notion-text-secondary" />
+        </button>
+
+        <span className="min-w-[3rem] text-center text-xs text-notion-text-secondary">
+          {zoomPercent}%
+        </span>
+
+        <button
+          onClick={onZoomIn}
+          className="flex h-6 w-6 items-center justify-center rounded hover:bg-notion-sidebar"
+          title="Zoom in (Ctrl+=)"
+        >
+          <ZoomIn size={14} className="text-notion-text-secondary" />
+        </button>
+
+        <div className="mx-1 h-4 w-px bg-notion-border" />
+
+        <button
+          onClick={() => onSetFitMode(fitMode === 'fit-width' ? 'fit-page' : 'fit-width')}
+          className={`flex h-6 items-center gap-1 rounded px-1.5 text-xs transition-colors ${
+            fitMode !== 'custom'
+              ? 'bg-notion-accent-light text-notion-accent'
+              : 'text-notion-text-secondary hover:bg-notion-sidebar'
+          }`}
+          title={fitMode === 'fit-width' ? 'Fit page' : 'Fit width'}
+        >
+          {fitMode === 'fit-page' ? <Maximize size={12} /> : <ArrowLeftToLine size={12} />}
+          <span>{fitMode === 'fit-page' ? 'Page' : 'Width'}</span>
+        </button>
+      </div>
+
+      {/* Right: reading mode */}
+      <div className="flex items-center gap-0.5">
+        {onSetReadingMode && (
+          <button
+            onClick={cycleReadingMode}
+            className="flex h-6 w-6 items-center justify-center rounded text-notion-text-secondary hover:bg-notion-sidebar"
+            title={`Reading mode: ${readingMode}`}
+          >
+            <ReadingModeIcon size={14} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
