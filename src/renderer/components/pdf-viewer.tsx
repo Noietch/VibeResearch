@@ -16,7 +16,6 @@ interface PdfViewerProps {
     rectsJson: string;
     text: string;
     color: string;
-    note?: string;
   }) => void;
   onDeleteHighlight?: (id: string) => void;
   onUpdateHighlight?: (id: string, params: { color?: string }) => void;
@@ -24,7 +23,6 @@ interface PdfViewerProps {
   onSearchPaper?: (query: string) => void;
   showCitationSidebar?: boolean;
   onToggleCitationSidebar?: () => void;
-  goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
 }
 
 export function PdfViewer({
@@ -44,7 +42,6 @@ export function PdfViewer({
   onSearchPaper,
   showCitationSidebar,
   onToggleCitationSidebar,
-  goToPageRef,
 }: PdfViewerProps) {
   return (
     <PdfDocument
@@ -64,7 +61,6 @@ export function PdfViewer({
       onSearchPaper={onSearchPaper}
       showCitationSidebar={showCitationSidebar}
       onToggleCitationSidebar={onToggleCitationSidebar}
-      goToPageRef={goToPageRef}
     />
   );
 }

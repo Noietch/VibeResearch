@@ -42,7 +42,6 @@ interface PdfDocumentProps {
     rectsJson: string;
     text: string;
     color: string;
-    note?: string;
   }) => void;
   onDeleteHighlight?: (id: string) => void;
   onUpdateHighlight?: (id: string, params: { color?: string }) => void;
@@ -50,7 +49,6 @@ interface PdfDocumentProps {
   onSearchPaper?: (query: string) => void;
   showCitationSidebar?: boolean;
   onToggleCitationSidebar?: () => void;
-  goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
 }
 
 const PAGE_GAP = 8;
@@ -79,7 +77,6 @@ export function PdfDocument({
   onSearchPaper,
   showCitationSidebar: externalShowCitationSidebar,
   onToggleCitationSidebar,
-  goToPageRef,
 }: PdfDocumentProps) {
   // Session key for persisting scroll position and scale per PDF
   const sessionKey = `pdf-state:${path}`;
@@ -350,14 +347,6 @@ export function PdfDocument({
     [numPages, pageHeights, actualScale],
   );
 
-  // Expose goToPage to parent via ref
-  useEffect(() => {
-    if (goToPageRef) goToPageRef.current = goToPage;
-    return () => {
-      if (goToPageRef) goToPageRef.current = null;
-    };
-  }, [goToPage, goToPageRef]);
-
   const goBack = useCallback(() => {
     if (scrollHistory.length === 0 || !scrollRef.current) return;
     const prevScrollTop = scrollHistory[scrollHistory.length - 1];
@@ -575,13 +564,8 @@ export function PdfDocument({
               onAskAI={onAskAI}
               onHighlight={
                 onCreateHighlight
-                  ? (text, rectsJson, pageNumber, color) => {
-                      onCreateHighlight({
-                        pageNumber,
-                        rectsJson,
-                        text,
-                        color: color ?? 'yellow',
-                      });
+                  ? (text, rectsJson, pageNumber) => {
+                      onCreateHighlight({ pageNumber, rectsJson, text, color: 'yellow' });
                     }
                   : undefined
               }
