@@ -84,8 +84,14 @@ export function IdeaChatModal({
   const loadSessions = async () => {
     setLoadingSessions(true);
     try {
-      const result = await ipc.listChatSessions(projectId);
-      setSessions(result);
+      const result = await ipc.listAcpChatSessions(projectId);
+      setSessions(
+        result.map((r) => ({
+          ...r,
+          paperIds: JSON.parse(r.paperIdsJson) as string[],
+          repoIds: JSON.parse(r.repoIdsJson) as string[],
+        })),
+      );
     } catch (err) {
       console.error('Failed to load chat sessions:', err);
     } finally {
@@ -95,7 +101,7 @@ export function IdeaChatModal({
 
   const createNewSession = async () => {
     try {
-      const result = await ipc.createChatSession({
+      const result = await ipc.createAcpChatSession({
         projectId,
         title: 'New Chat',
         paperIds,
@@ -118,16 +124,16 @@ export function IdeaChatModal({
 
   const loadSession = async (sessionId: string) => {
     try {
-      const session = await ipc.getChatSession(sessionId);
+      const session = await ipc.getAcpChatSession(sessionId);
       if (!session) return;
 
       setCurrentSessionId(sessionId);
       // Use the paperIds saved with this session so continued conversation uses the same context
       const savedPaperIds = session.paperIds as string[];
       setCurrentSessionPaperIds(savedPaperIds.length > 0 ? savedPaperIds : null);
-      const msgs = await ipc.listChatMessages(sessionId);
+      const msgs = await ipc.listAcpChatMessages(sessionId);
       setMessages(
-        msgs.map((m) => ({
+        msgs.map((m: any) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content,
         })),
@@ -141,7 +147,7 @@ export function IdeaChatModal({
   const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await ipc.deleteChatSession(sessionId);
+      await ipc.deleteAcpChatSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
@@ -175,7 +181,7 @@ export function IdeaChatModal({
         setStreamingContent((prev) => {
           if (prev && currentSessionId) {
             // Save assistant message to database
-            void ipc.addChatMessage({
+            void (ipc as any).addAcpChatMessage({
               sessionId: currentSessionId,
               role: 'assistant',
               content: prev,
@@ -195,7 +201,7 @@ export function IdeaChatModal({
         setStreamingContent((prev) => {
           const content = prev || `Error: ${msg}`;
           if (currentSessionId) {
-            void ipc.addChatMessage({
+            void (ipc as any).addAcpChatMessage({
               sessionId: currentSessionId,
               role: 'assistant',
               content,
@@ -237,7 +243,7 @@ export function IdeaChatModal({
     let sessionId = currentSessionId;
     if (!sessionId) {
       try {
-        const result = await ipc.createChatSession({
+        const result = await ipc.createAcpChatSession({
           projectId,
           title: 'New Chat',
           paperIds: activePaperIds,
@@ -254,8 +260,8 @@ export function IdeaChatModal({
 
         // Generate title from first message
         if (messages.length === 0) {
-          void ipc.generateChatTitle(text).then((title) => {
-            void ipc.updateChatSessionTitle(sessionId, title);
+          void ipc.generateAcpChatTitle(text).then((title: string) => {
+            void ipc.updateAcpChatSessionTitle(sessionId!, title);
             setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title } : s)));
           });
         }
@@ -267,7 +273,7 @@ export function IdeaChatModal({
 
     // Save user message
     try {
-      await ipc.addChatMessage({
+      await (ipc as any).addAcpChatMessage({
         sessionId,
         role: 'user',
         content: text,
@@ -286,7 +292,7 @@ export function IdeaChatModal({
     const newMessages = [...messages, userMsg];
 
     try {
-      await ipc.startChatStream({
+      await (ipc as any).startAcpChatStream({
         streamId: streamId.current,
         sessionId,
         projectId,
@@ -300,7 +306,7 @@ export function IdeaChatModal({
       const errorMsg = `Error: ${err instanceof Error ? err.message : String(err)}`;
       setMessages((msgs) => [...msgs, { role: 'assistant', content: errorMsg }]);
       // Save error message
-      void ipc.addChatMessage({
+      void (ipc as any).addAcpChatMessage({
         sessionId,
         role: 'assistant',
         content: errorMsg,
@@ -529,7 +535,7 @@ export function IdeaChatModal({
                   />
                   {streaming ? (
                     <button
-                      onClick={() => void ipc.killChatStream(streamId.current)}
+                      onClick={() => void (ipc as any).killAcpChatStream(streamId.current)}
                       className="absolute bottom-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-lg bg-red-500 text-white transition-all hover:bg-red-600"
                     >
                       <Square size={12} fill="currentColor" />

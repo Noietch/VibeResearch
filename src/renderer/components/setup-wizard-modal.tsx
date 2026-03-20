@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ipc, type ProviderConfig } from '../hooks/use-ipc';
+// @ts-ignore asset import
 import appIcon from '../../../assets/icon.png';
 
 const SETUP_DISMISSED_KEY = 'researchclaw-setup-dismissed';

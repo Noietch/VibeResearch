@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useScrollRestore } from '../hooks/use-scroll-restore';
 import { useTranslation } from 'react-i18next';
+// @ts-ignore asset import
 import appIcon from '../../../assets/icon.png';
 import { Link, useLocation, useNavigate, useMatches } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -30,8 +32,17 @@ import {
   type PaperItem,
   type ProjectItem,
   type ProviderConfig,
-  type BuiltinModelDownloadProgress,
 } from '../hooks/use-ipc';
+
+interface BuiltinModelDownloadProgress {
+  percent: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  stage?: string;
+  phase?: string;
+  fileIndex?: number;
+  totalFiles?: number;
+}
 import { useAnalysis } from '../hooks/use-analysis';
 import { useMainReady } from '../hooks/use-main-ready';
 import {
@@ -123,10 +134,10 @@ function BuiltinModelDownloadToast() {
 
   useEffect(() => {
     // Check if the IPC method exists (may not be available in all versions)
-    if (typeof ipc.getBuiltinModelDownloadStatus !== 'function') return;
-    ipc
+    if (typeof (ipc as any).getBuiltinModelDownloadStatus !== 'function') return;
+    (ipc as any)
       .getBuiltinModelDownloadStatus()
-      .then((res) => {
+      .then((res: { downloading: boolean; progress: BuiltinModelDownloadProgress | null }) => {
         if (res.downloading && res.progress) {
           setDownloading(true);
           setProgress(res.progress);
@@ -205,6 +216,7 @@ export function AppShell({
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
+  const mainScrollRef = useScrollRestore<HTMLElement>();
   const pathname = location.pathname;
   const { tabs, activeId, activateTab, closeTab } = useTabs();
   const { jobs: analysisJobs } = useAnalysis();
@@ -807,7 +819,7 @@ export function AppShell({
         </AnimatePresence>
 
         {/* Page content */}
-        <main className="notion-scrollbar flex-1 overflow-y-auto h-full">
+        <main ref={mainScrollRef} className="notion-scrollbar flex-1 overflow-y-auto h-full">
           {fullWidth ? (
             <div className="relative h-full">
               {canGoBack && (
