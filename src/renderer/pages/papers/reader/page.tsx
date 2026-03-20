@@ -35,8 +35,6 @@ import {
   X,
   Zap,
   History,
-  Maximize2,
-  Minimize2,
   StickyNote,
 } from 'lucide-react';
 import type { AgentConfigItem } from '@shared';
@@ -375,6 +373,12 @@ export function ReaderPage() {
   const [showCitationSidebar, setShowCitationSidebar] = useState(
     cachedState?.showCitationSidebar ?? false,
   );
+
+  // Annotation sidebar: show highlights grouped by page
+  const [showAnnotationSidebar, setShowAnnotationSidebar] = useState(false);
+
+  // Ref to call goToPage on the PDF viewer from outside (e.g. annotation sidebar)
+  const goToPageRef = useRef<((page: number) => void) | null>(null);
 
   // Save reader state to cache on unmount (preserve state across tab switches)
   const stateRef = useRef({
@@ -1631,7 +1635,11 @@ export function ReaderPage() {
                     ? (params) => {
                         ipc
                           .createHighlight({ ...params, paperId: paper.id })
-                          .then((h) => setHighlights((prev) => [...prev, h]))
+                          .then((h) => {
+                            setHighlights((prev) => [...prev, h]);
+                            // Auto-open annotation sidebar so user can add a note
+                            setShowAnnotationSidebar(true);
+                          })
                           .catch(() => undefined);
                       }
                     : undefined
@@ -1800,6 +1808,7 @@ export function ReaderPage() {
                 }}
                 showCitationSidebar={showCitationSidebar}
                 onToggleCitationSidebar={() => setShowCitationSidebar((v) => !v)}
+                goToPageRef={goToPageRef}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-4">
