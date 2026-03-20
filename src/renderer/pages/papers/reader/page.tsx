@@ -1430,7 +1430,7 @@ export function ReaderPage() {
         {/* Right: PDF */}
         {layoutMode !== 'chat-only' && (
           <div
-            className="relative flex flex-col"
+            className="relative flex flex-col overflow-x-clip"
             style={{ width: layoutMode === 'pdf-only' ? '100%' : `${100 - leftWidth}%` }}
           >
             {pdfPath ? (
