@@ -329,6 +329,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // needed for preload to use Node.js APIs
+      webviewTag: true, // needed for in-app browser (publisher websites)
     },
   });
 
@@ -386,6 +387,11 @@ function setupWindowControls(win: BrowserWindow) {
     }
   });
   ipcMain.handle('window:isMaximized', () => win.isMaximized());
+  // Open URL in system default browser
+  ipcMain.handle('browser:open', (_event, url: string, _title?: string) => {
+    shell.openExternal(url);
+    return true;
+  });
 }
 
 function setupFileIpc() {
