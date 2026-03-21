@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ipc } from '../../hooks/use-ipc';
+import i18n from 'i18next';
 import { usePdfDocument } from './use-pdf-document';
 import { usePdfViewport } from './use-pdf-viewport';
 import { PdfPage } from './PdfPage';
@@ -7,8 +10,8 @@ import { PdfToolbar } from './PdfToolbar';
 import { PdfOutlineSidebar } from './PdfOutlineSidebar';
 import { PdfSearchBar } from './PdfSearchBar';
 import { PdfSelectionPopover } from './PdfSelectionPopover';
-import { PdfCitationPopover } from './PdfCitationPopover';
 import { PdfCitationSidebar } from './PdfCitationSidebar';
+import { PdfAIOutlineSidebar } from './PdfAIOutlineSidebar';
 import { PdfHighlightLayer, HighlightActionPopover } from './PdfHighlightLayer';
 import type { HighlightItem } from '../../hooks/use-ipc';
 
@@ -50,6 +53,9 @@ interface PdfDocumentProps {
   onSearchPaper?: (query: string) => void;
   showCitationSidebar?: boolean;
   onToggleCitationSidebar?: () => void;
+  showAIOutlineSidebar?: boolean;
+  onToggleAIOutlineSidebar?: () => void;
+  shortId?: string;
   goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
 }
 
@@ -79,6 +85,9 @@ export function PdfDocument({
   onSearchPaper,
   showCitationSidebar: externalShowCitationSidebar,
   onToggleCitationSidebar,
+  showAIOutlineSidebar,
+  onToggleAIOutlineSidebar,
+  shortId,
   goToPageRef,
 }: PdfDocumentProps) {
   // Session key for persisting scroll position and scale per PDF
@@ -108,6 +117,43 @@ export function PdfDocument({
     return null;
   });
 
+  const { t } = useTranslation();
+
+  // Per-page AI summary state
+  const [pageSummaries, setPageSummaries] = useState<Map<number, string>>(new Map());
+  const [summarizingPage, setSummarizingPage] = useState<number | null>(null);
+
+  const handleSummarizePage = useCallback(
+    async (pageNum: number) => {
+      if (!paperId || summarizingPage !== null) return;
+      // If already cached, toggle off
+      if (pageSummaries.has(pageNum)) {
+        setPageSummaries((prev) => {
+          const next = new Map(prev);
+          next.delete(pageNum);
+          return next;
+        });
+        return;
+      }
+      setSummarizingPage(pageNum);
+      try {
+        const result = await ipc.readerInlineAI({
+          paperId,
+          action: 'summarizeParagraph',
+          selectedText: `[Full content of page ${pageNum}]`,
+          pageNumber: pageNum,
+          language: i18n.language,
+        });
+        setPageSummaries((prev) => new Map(prev).set(pageNum, result.result));
+      } catch {
+        // silent
+      } finally {
+        setSummarizingPage(null);
+      }
+    },
+    [paperId, summarizingPage, pageSummaries],
+  );
+
   const { document, numPages, loading, error } = usePdfDocument({ path, onFileNotFound });
   const viewport = usePdfViewport(
     restoredState?.fitMode === 'custom' && restoredState.customScale
@@ -131,6 +177,8 @@ export function PdfDocument({
   const [firstPageWidth, setFirstPageWidth] = useState(0);
   const [showOutline, setShowOutline] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
+  const leftResizing = useRef(false);
   // Scroll position history stack (exact scrollTop values for precise back navigation)
   const [scrollHistory, setScrollHistory] = useState<number[]>([]);
   const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
@@ -222,10 +270,12 @@ export function PdfDocument({
   const scaleReady = firstPageWidth > 0 && containerSize.width > 0;
 
   // Compute actual scale based on fit mode
+  const prevScaleRef = useRef<number>(1.0);
   const actualScale = useMemo(() => {
     if (!scaleReady) return 1.0;
-    // Account for outline sidebar width
-    const availableWidth = containerSize.width - (showOutline ? 240 : 0);
+    // Account for left sidebar width when any sidebar is open
+    const hasLeftSidebar = showOutline || externalShowCitationSidebar || showAIOutlineSidebar;
+    const availableWidth = containerSize.width - (hasLeftSidebar ? leftSidebarWidth : 0);
     if (viewport.fitMode === 'fit-width') {
       return (availableWidth - 32) / firstPageWidth;
     }
@@ -243,7 +293,23 @@ export function PdfDocument({
     pageHeights,
     containerSize,
     showOutline,
+    externalShowCitationSidebar,
+    showAIOutlineSidebar,
+    leftSidebarWidth,
   ]);
+
+  // Preserve scroll position when scale changes due to container resize
+  useEffect(() => {
+    const prevScale = prevScaleRef.current;
+    if (prevScale !== actualScale && prevScale > 0 && savesEnabled.current) {
+      const scrollEl = scrollRef.current;
+      if (scrollEl && scrollEl.scrollTop > 0) {
+        const ratio = actualScale / prevScale;
+        scrollEl.scrollTop = scrollEl.scrollTop * ratio;
+      }
+    }
+    prevScaleRef.current = actualScale;
+  }, [actualScale]);
 
   // Track visible pages via IntersectionObserver
   useEffect(() => {
@@ -488,9 +554,26 @@ export function PdfDocument({
         onSetFitMode={viewport.setFitMode}
         onGoToPage={goToPage}
         showOutline={showOutline}
-        onToggleOutline={() => setShowOutline((v) => !v)}
+        onToggleOutline={() => {
+          setShowOutline((v) => {
+            if (!v) {
+              // Closing other sidebars when opening outline
+              onToggleCitationSidebar && externalShowCitationSidebar && onToggleCitationSidebar();
+              onToggleAIOutlineSidebar && showAIOutlineSidebar && onToggleAIOutlineSidebar();
+            }
+            return !v;
+          });
+        }}
         showCitationSidebar={externalShowCitationSidebar}
-        onToggleCitationSidebar={onToggleCitationSidebar}
+        onToggleCitationSidebar={() => {
+          if (!externalShowCitationSidebar) setShowOutline(false);
+          onToggleCitationSidebar?.();
+        }}
+        showAIOutline={showAIOutlineSidebar}
+        onToggleAIOutline={() => {
+          if (!showAIOutlineSidebar) setShowOutline(false);
+          onToggleAIOutlineSidebar?.();
+        }}
         showSearch={showSearch}
         onToggleSearch={() => setShowSearch((v) => !v)}
         readingMode={readingMode}
@@ -508,22 +591,60 @@ export function PdfDocument({
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Outline sidebar */}
-        {showOutline && (
-          <PdfOutlineSidebar document={document} onGoToPage={goToPage} currentPage={currentPage} />
-        )}
-
-        {/* Citation sidebar */}
-        {externalShowCitationSidebar && onSearchPaper && (
-          <PdfCitationSidebar
-            document={document}
-            currentPage={currentPage}
-            paperId={paperId}
-            cachedReferences={cachedReferences}
-            onReferencesExtracted={onReferencesExtracted}
-            onSearchPaper={onSearchPaper}
-            onGoToPage={goToPage}
-          />
+        {/* Left sidebar (outline / citation / AI outline — mutually exclusive) */}
+        {(showOutline ||
+          (externalShowCitationSidebar && onSearchPaper) ||
+          (showAIOutlineSidebar && paperId && shortId)) && (
+          <>
+            <div
+              className="flex h-full flex-shrink-0 flex-col overflow-hidden"
+              style={{ width: leftSidebarWidth }}
+            >
+              {showOutline && (
+                <PdfOutlineSidebar
+                  document={document}
+                  onGoToPage={goToPage}
+                  currentPage={currentPage}
+                />
+              )}
+              {externalShowCitationSidebar && onSearchPaper && (
+                <PdfCitationSidebar
+                  document={document}
+                  currentPage={currentPage}
+                  paperId={paperId}
+                  cachedReferences={cachedReferences}
+                  onReferencesExtracted={onReferencesExtracted}
+                  onSearchPaper={onSearchPaper}
+                  onGoToPage={goToPage}
+                />
+              )}
+              {showAIOutlineSidebar && paperId && shortId && (
+                <PdfAIOutlineSidebar paperId={paperId} shortId={shortId} />
+              )}
+            </div>
+            {/* Resize handle */}
+            <div
+              className="group flex w-1 cursor-col-resize items-center justify-center hover:bg-blue-400/50 active:bg-blue-400 transition-colors"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                leftResizing.current = true;
+                const startX = e.clientX;
+                const startW = leftSidebarWidth;
+                const onMove = (ev: MouseEvent) => {
+                  if (!leftResizing.current) return;
+                  const newW = Math.max(180, Math.min(500, startW + ev.clientX - startX));
+                  setLeftSidebarWidth(newW);
+                };
+                const onUp = () => {
+                  leftResizing.current = false;
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+              }}
+            />
+          </>
         )}
 
         {/* PDF pages */}
@@ -563,6 +684,51 @@ export function PdfDocument({
                       pageHeight={pageHeight}
                     />
                   )}
+                  {/* Per-page AI summary button */}
+                  {isVisible && paperId && (
+                    <div className="absolute right-2 top-2 z-10">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSummarizePage(pageNum);
+                        }}
+                        disabled={summarizingPage !== null && summarizingPage !== pageNum}
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg shadow-sm transition-all ${
+                          pageSummaries.has(pageNum)
+                            ? 'bg-purple-100 text-purple-600 opacity-100'
+                            : 'bg-white/80 text-notion-text-tertiary opacity-0 hover:opacity-100 hover:bg-purple-50 hover:text-purple-500'
+                        } border border-notion-border/50`}
+                        title={t('reader.ai.summarizePage', 'Summarize page')}
+                      >
+                        {summarizingPage === pageNum ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Sparkles size={13} />
+                        )}
+                      </button>
+                      {/* Page summary card */}
+                      {pageSummaries.has(pageNum) && (
+                        <div className="absolute right-0 top-9 w-72 rounded-lg border border-notion-border bg-white p-3 shadow-lg">
+                          <p className="text-xs leading-relaxed text-notion-text whitespace-pre-wrap">
+                            {pageSummaries.get(pageNum)}
+                          </p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPageSummaries((prev) => {
+                                const next = new Map(prev);
+                                next.delete(pageNum);
+                                return next;
+                              });
+                            }}
+                            className="mt-2 text-[10px] text-notion-text-tertiary hover:text-notion-text"
+                          >
+                            {t('common.close')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -586,6 +752,7 @@ export function PdfDocument({
                   : undefined
               }
               onSearchPaper={onSearchPaper}
+              paperId={paperId}
             />
           )}
 
@@ -596,14 +763,6 @@ export function PdfDocument({
             onDeleteHighlight={onDeleteHighlight}
             onUpdateHighlight={onUpdateHighlight}
           />
-
-          {/* Citation popover for right-click/double-click on citations */}
-          {onSearchPaper && (
-            <PdfCitationPopover
-              containerRef={scrollRef as React.RefObject<HTMLDivElement>}
-              onSearchPaper={onSearchPaper}
-            />
-          )}
         </div>
       </div>
     </div>

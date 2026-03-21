@@ -24,6 +24,9 @@ interface PdfViewerProps {
   onSearchPaper?: (query: string) => void;
   showCitationSidebar?: boolean;
   onToggleCitationSidebar?: () => void;
+  showAIOutlineSidebar?: boolean;
+  onToggleAIOutlineSidebar?: () => void;
+  shortId?: string;
   goToPageRef?: React.MutableRefObject<((page: number) => void) | null>;
 }
 
@@ -44,6 +47,9 @@ export function PdfViewer({
   onSearchPaper,
   showCitationSidebar,
   onToggleCitationSidebar,
+  showAIOutlineSidebar,
+  onToggleAIOutlineSidebar,
+  shortId,
   goToPageRef,
 }: PdfViewerProps) {
   return (
@@ -64,6 +70,9 @@ export function PdfViewer({
       onSearchPaper={onSearchPaper}
       showCitationSidebar={showCitationSidebar}
       onToggleCitationSidebar={onToggleCitationSidebar}
+      showAIOutlineSidebar={showAIOutlineSidebar}
+      onToggleAIOutlineSidebar={onToggleAIOutlineSidebar}
+      shortId={shortId}
       goToPageRef={goToPageRef}
     />
   );
