@@ -40,7 +40,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 const EXCLUDED_TAGS = ['arxiv', 'chrome', 'manual', 'pdf'];
-const MAX_VISIBLE_CHIPS = 8;
+const MAX_VISIBLE_CHIPS = 20;
 
 type ImportTimeFilter = 'all' | 'today' | 'week' | 'month';
 type SortOption = 'lastRead' | 'importDate' | 'title';
@@ -243,7 +243,9 @@ export function PapersByTag({
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [importTimeFilter, setImportTimeFilter] = useState<ImportTimeFilter>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('lastRead');
+  const [sortBy, setSortBy] = useState<SortOption>(
+    () => (localStorage.getItem('researchclaw-library-sort') as SortOption) || 'importDate',
+  );
   const [yearFilter, setYearFilter] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
@@ -272,6 +274,11 @@ export function PapersByTag({
     { value: 'method', label: t('papersByTag.categoryFilter.method') },
     { value: 'topic', label: t('papersByTag.categoryFilter.topic') },
   ];
+
+  // Persist sort preference
+  useEffect(() => {
+    localStorage.setItem('researchclaw-library-sort', sortBy);
+  }, [sortBy]);
 
   // Single paper auto-tag, index and analyze state
   const [autoTaggingPaperId, setAutoTaggingPaperId] = useState<string | null>(null);
@@ -436,6 +443,13 @@ export function PapersByTag({
 
   useEffect(() => {
     fetchPapers();
+  }, [fetchPapers]);
+
+  // Refresh papers when window regains focus (catches imports that happened while navigated away)
+  useEffect(() => {
+    const handleFocus = () => void fetchPapers(true);
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [fetchPapers]);
 
   useEffect(() => {
@@ -1851,8 +1865,8 @@ function PaperCard({
                   onAnalyze(paper);
                 }}
                 disabled={analyzingPaperId === paper.id}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary hover:bg-amber-50 hover:text-amber-600 disabled:opacity-100"
-                title="Analyze paper"
+                className="css-tooltip flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary hover:bg-amber-50 hover:text-amber-600 disabled:opacity-100"
+                data-tip={t('papers.analyze', 'Auto Tag')}
               >
                 {analyzingPaperId === paper.id ? (
                   <Loader2 size={14} className="animate-spin text-amber-600" />
@@ -1870,8 +1884,8 @@ function PaperCard({
                   onExtractMetadata(paper);
                 }}
                 disabled={extractingMetadataPaperId === paper.id}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary hover:bg-purple-50 hover:text-purple-600 disabled:opacity-100"
-                title="Extract title and abstract from PDF"
+                className="css-tooltip flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary hover:bg-purple-50 hover:text-purple-600 disabled:opacity-100"
+                data-tip={t('papers.extractMetadata', 'Extract metadata')}
               >
                 {extractingMetadataPaperId === paper.id ? (
                   <Loader2 size={14} className="animate-spin text-purple-600" />
@@ -1887,8 +1901,8 @@ function PaperCard({
                   onRetry(paper.id);
                 }}
                 disabled={retryingPaperId === paper.id}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-tertiary hover:bg-amber-50 hover:text-amber-700 disabled:opacity-100"
-                title="Retry processing"
+                className="css-tooltip flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-tertiary hover:bg-amber-50 hover:text-amber-700 disabled:opacity-100"
+                data-tip={t('papers.retryProcessing', 'Retry processing')}
               >
                 {retryingPaperId === paper.id ? (
                   <Loader2 size={14} className="animate-spin text-amber-600" />
@@ -1904,8 +1918,8 @@ function PaperCard({
                   onDownload(paper);
                 }}
                 disabled={downloadingPdf === paper.id}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-tertiary hover:bg-blue-50 hover:text-blue-600 disabled:opacity-100"
-                title="Download PDF"
+                className="css-tooltip flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-tertiary hover:bg-blue-50 hover:text-blue-600 disabled:opacity-100"
+                data-tip={t('papers.downloadPdf', 'Download PDF')}
               >
                 {downloadingPdf === paper.id ? (
                   <Loader2 size={14} className="animate-spin text-blue-500" />
@@ -1917,8 +1931,8 @@ function PaperCard({
             <button
               onClick={handleDeleteClick}
               disabled={deleting === paper.id}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-tertiary hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-              title="Delete paper"
+              className="css-tooltip flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-tertiary hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              data-tip={t('common.delete')}
             >
               {deleting === paper.id ? (
                 <Loader2 size={14} className="animate-spin" />

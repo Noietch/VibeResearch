@@ -7,12 +7,11 @@ import {
   type ZoteroScanResult,
   type ZoteroScannedItem,
   type ZoteroImportStatus,
-  type ParsedPaperEntry,
   type SearchResultItem,
   type OverleafProject,
 } from '../hooks/use-ipc';
 import { onIpc } from '../hooks/use-ipc';
-import { cleanArxivTitle } from '@shared';
+import { cleanArxivTitle, type ParsedPaperEntry } from '@shared';
 import { useTranslation } from 'react-i18next';
 import {
   Download,
@@ -116,7 +115,7 @@ export function ImportModal({
   onImported: () => void;
 }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('chrome');
+  const [tab, setTab] = useState<Tab>('local');
   const [step, setStep] = useState<Step>('initial');
   const [days, setDays] = useState<number | null>(1);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -262,7 +261,7 @@ export function ImportModal({
         .zoteroDetect()
         .then((result) => {
           setZoteroDetected(result.found);
-          if (result.found) setZoteroDbPath(result.dbPath);
+          if (result.found && result.dbPath) setZoteroDbPath(result.dbPath);
         })
         .catch(() => setZoteroDetected(false));
     }
@@ -512,13 +511,13 @@ export function ImportModal({
       )
     : [];
 
-  const filteredZoteroSelectedCount = filteredZoteroItems.filter((i) =>
+  const filteredZoteroSelectedCount = filteredZoteroItems.filter((i: ZoteroScannedItem) =>
     zoteroSelectedKeys.has(i.zoteroKey),
   ).length;
 
   const toggleAllZotero = useCallback(() => {
     if (!filteredZoteroItems.length) return;
-    const allFilteredSelected = filteredZoteroItems.every((i) =>
+    const allFilteredSelected = filteredZoteroItems.every((i: ZoteroScannedItem) =>
       zoteroSelectedKeys.has(i.zoteroKey),
     );
     if (allFilteredSelected) {
@@ -937,7 +936,7 @@ export function ImportModal({
                   [
                     { key: 'search' as Tab, icon: Search, label: 'Search' },
                     { key: 'chrome' as Tab, icon: Chrome, label: 'Browser' },
-                    { key: 'local' as Tab, icon: FileText, label: 'PDF' },
+                    { key: 'local' as Tab, icon: FileText, label: 'PDF · DOI' },
                     { key: 'zotero' as Tab, icon: BookOpen, label: 'Zotero' },
                     { key: 'bibtex' as Tab, icon: FileCode, label: 'BibTeX' },
                     { key: 'overleaf' as Tab, icon: Leaf, label: 'Overleaf' },
@@ -1038,7 +1037,7 @@ export function ImportModal({
                                   : 'bg-notion-sidebar text-notion-text-secondary hover:bg-notion-sidebar-hover'
                               }`}
                             >
-                              {t(opt.labelKey)}
+                              {t(opt.labelKey as never)}
                             </button>
                           ))}
                         </div>
@@ -1546,7 +1545,7 @@ export function ImportModal({
                             className="w-full rounded-lg border border-notion-border bg-notion-sidebar px-3 py-1.5 text-sm text-notion-text outline-none"
                           >
                             <option value="">{t('importModal.zotero.allCollections')}</option>
-                            {zoteroScanResult.collections.map((c) => (
+                            {zoteroScanResult.collections.map((c: string) => (
                               <option key={c} value={c}>
                                 {c}
                               </option>
@@ -1583,7 +1582,7 @@ export function ImportModal({
                           </div>
 
                           <div className="max-h-64 overflow-y-auto rounded-lg border border-notion-border">
-                            {filteredZoteroItems.map((item) => {
+                            {filteredZoteroItems.map((item: ZoteroScannedItem) => {
                               const isSelected = zoteroSelectedKeys.has(item.zoteroKey);
                               return (
                                 <div

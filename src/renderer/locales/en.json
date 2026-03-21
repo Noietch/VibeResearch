@@ -518,7 +518,13 @@
   "dashboardContent": {
     "todaysPapers": "Today's Papers",
     "deleteConfirm": "Delete \"{{title}}\"? This action cannot be undone.",
-    "deleteFailed": "Failed to delete paper"
+    "deleteFailed": "Failed to delete paper",
+    "noNewPapers": "No new papers today",
+    "importHint": "Import papers to get started",
+    "importPapers": "Import Papers",
+    "goToLibrary": "Go to Library",
+    "continueReading": "Continue Reading",
+    "page": "p."
   },
   "researchProfile": {
     "noPapers": "No papers in this collection yet. Add papers to see the research profile.",

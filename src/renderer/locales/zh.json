@@ -518,7 +518,13 @@
   "dashboardContent": {
     "todaysPapers": "今日论文",
     "deleteConfirm": "删除「{{title}}」？此操作无法撤销。",
-    "deleteFailed": "删除论文失败"
+    "deleteFailed": "删除论文失败",
+    "noNewPapers": "今天没有新论文",
+    "importHint": "导入论文开始使用",
+    "importPapers": "导入论文",
+    "goToLibrary": "前往文献库",
+    "continueReading": "继续阅读",
+    "page": "页"
   },
   "researchProfile": {
     "noPapers": "此合集中暂无论文。添加论文以查看研究概况。",
