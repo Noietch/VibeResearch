@@ -280,7 +280,11 @@
     "reader": "阅读器",
     "summarizePrompt": "请帮我总结这篇论文的核心贡献、方法和主要结论。",
     "currentPaper": "当前文章: \"{{title}}\"",
-    "workingDirectory": "工作目录: {{dir}}"
+    "workingDirectory": "工作目录: {{dir}}",
+    "analyze": "智能标签",
+    "extractMetadata": "提取元数据",
+    "retryProcessing": "重试处理",
+    "downloadPdf": "下载 PDF"
   },
   "importModal": {
     "title": "导入论文",
@@ -309,6 +313,7 @@
     "orImportByIdUrl": "或通过 ID / URL 导入",
     "clearPdfFirst": "请先清除已选的 PDF",
     "import": "导入",
+    "importPdfs": "导入 {{count}} 个 PDF",
     "importing": "导入中…",
     "completed": "导入完成",
     "cancelled": "导入已取消",
@@ -322,6 +327,7 @@
     "clearAll": "清除全部",
     "recentDownloads": "最近下载的 PDF",
     "noPapersSelected": "未选择论文",
+    "foundPapers": "找到 {{count}} 篇论文",
     "importSuccess": "篇论文导入成功",
     "zotero": {
       "detecting": "正在检测 Zotero…",
@@ -342,7 +348,8 @@
       "parsing": "解析中…",
       "parseFailed": "文件解析失败",
       "unsupportedFormat": "不支持的文件格式",
-      "papersImported": "篇论文已导入"
+      "papersImported": "篇论文已导入",
+      "foundEntries": "找到 {{count}} 条记录"
     }
   },
   "compare": {
@@ -649,14 +656,60 @@
     "alphaXivSuccess": "AI 解读已加载",
     "alphaXivNoData": "该论文暂无 AI 解读",
     "alphaXivError": "获取 AI 解读失败",
-    "alphaXivLoading": "正在加载 AI 解读..."
+    "alphaXivLoading": "正在加载 AI 解读...",
+    "generateAiSummary": "生成 AI 解读",
+    "regenerateAiSummary": "重新生成",
+    "aiSummaryGenerating": "生成中...",
+    "aiSummaryExtracting": "正在提取论文文本...",
+    "aiSummaryWaitingLLM": "等待 LLM 响应...",
+    "aiSummaryLocal": "AI 解读",
+    "noAbstract": "暂无摘要。点击「生成 AI 解读」从论文全文自动生成。",
+    "importForAiSummary": "导入到资料库后可生成 AI 解读"
   },
   "reader": {
     "annotations": "批注",
     "noAnnotations": "暂无高亮。在 PDF 中选择文本以创建高亮。",
     "page": "第",
     "focusMode": "专注模式",
-    "exitFocusMode": "退出专注模式"
+    "exitFocusMode": "退出专注模式",
+    "ai": {
+      "explain": "解释",
+      "simplify": "简化",
+      "deepDive": "深入分析",
+      "translate": "翻译",
+      "askAi": "问AI",
+      "thinking": "思考中...",
+      "translating": "翻译中...",
+      "copyResult": "复制结果",
+      "resultCopied": "已复制!",
+      "chatHint": "关于这篇论文，你可以问任何问题",
+      "selectAgent": "选择上方的代理来讨论这篇论文",
+      "summarize": "总结",
+      "presetContribution": "这篇论文的主要贡献是什么？",
+      "presetMethodology": "解释一下研究方法",
+      "presetResults": "总结一下关键结果",
+      "presetLimitations": "有什么局限性？",
+      "outline": "AI大纲",
+      "generateOutline": "生成AI大纲",
+      "generating": "正在生成大纲...",
+      "regenerate": "重新生成",
+      "researchQuestions": "研究问题",
+      "methodology": "研究方法",
+      "keyFindings": "主要发现",
+      "contributions": "贡献",
+      "limitations": "局限性",
+      "outlineFailed": "大纲生成失败",
+      "noteSuggested": "AI 已生成笔记建议",
+      "generateSummary": "生成阅读总结",
+      "generatingSummary": "正在生成总结...",
+      "explainFormula": "解释公式",
+      "explainFigure": "解释图表",
+      "explainTable": "解释表格",
+      "detectedFormula": "公式",
+      "detectedFigure": "图表",
+      "detectedTable": "表格",
+      "summarizePage": "总结本页"
+    }
   },
   "pdf": {
     "citation": {
