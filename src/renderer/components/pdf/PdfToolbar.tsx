@@ -11,6 +11,7 @@ import {
   Coffee,
   Undo2,
   BookOpen,
+  Sparkles,
 } from 'lucide-react';
 import type { FitMode } from './use-pdf-viewport';
 import type { ReadingMode } from './PdfDocument';
@@ -28,6 +29,8 @@ interface PdfToolbarProps {
   onToggleOutline?: () => void;
   showCitationSidebar?: boolean;
   onToggleCitationSidebar?: () => void;
+  showAIOutline?: boolean;
+  onToggleAIOutline?: () => void;
   showSearch?: boolean;
   onToggleSearch?: () => void;
   readingMode?: ReadingMode;
@@ -57,6 +60,8 @@ export function PdfToolbar({
   onToggleOutline,
   showCitationSidebar,
   onToggleCitationSidebar,
+  showAIOutline,
+  onToggleAIOutline,
   showSearch,
   onToggleSearch,
   readingMode = 'light',
@@ -131,6 +136,19 @@ export function PdfToolbar({
             title="Citations"
           >
             <BookOpen size={14} />
+          </button>
+        )}
+        {onToggleAIOutline && (
+          <button
+            onClick={onToggleAIOutline}
+            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+              showAIOutline
+                ? 'bg-notion-accent-light text-notion-accent'
+                : 'text-notion-text-secondary hover:bg-notion-sidebar'
+            }`}
+            title="AI Outline"
+          >
+            <Sparkles size={14} />
           </button>
         )}
         {onToggleSearch && (

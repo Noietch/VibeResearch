@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
 import { useTabs } from '../../../hooks/use-tabs';
 import { PdfViewer } from '../../../components/pdf-viewer';
 import type { CachedReference } from '../../../components/pdf/PdfDocument';
@@ -38,6 +39,7 @@ import {
   Maximize2,
   Minimize2,
   StickyNote,
+  Sparkles,
 } from 'lucide-react';
 import type { AgentConfigItem } from '@shared';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -310,6 +312,7 @@ export function ReaderPage() {
 
   // Chat input state
   const [chatInput, setChatInput] = useState(cachedState?.chatInput ?? '');
+  const [attachedQuotes, setAttachedQuotes] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [paperDir, setPaperDir] = useState<string | null>(null);
   const [chatModel, setChatModel] = useState<ModelConfig | null>(null);
@@ -376,11 +379,19 @@ export function ReaderPage() {
     cachedState?.showCitationSidebar ?? false,
   );
 
+  // AI Outline sidebar state (mutually exclusive with citation sidebar)
+  const [showAIOutlineSidebar, setShowAIOutlineSidebar] = useState(false);
+
   // Focus mode: hide top toolbar for distraction-free reading
   const [focusMode, setFocusMode] = useState(false);
 
   // Annotation sidebar: show highlights grouped by page
   const [showAnnotationSidebar, setShowAnnotationSidebar] = useState(false);
+  const [annotationSidebarWidth, setAnnotationSidebarWidth] = useState(288);
+  const annotationResizing = useRef(false);
+
+  // AI reading summary generation state
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   // Ref to call goToPage on the PDF viewer from outside (e.g. annotation sidebar)
   const goToPageRef = useRef<((page: number) => void) | null>(null);
@@ -830,7 +841,7 @@ export function ReaderPage() {
 
   const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text && attachedQuotes.length === 0) return;
     if (agentRunning) {
       showWarning('Agent is still running, please wait');
       return;
@@ -847,13 +858,19 @@ export function ReaderPage() {
     setChatInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // Augment prompt with attached papers context
+    // Build full prompt: attached quotes (from PDF selections) + user message + attached papers
     let fullText = text;
+    if (attachedQuotes.length > 0) {
+      const userQuestion = text || 'Explain these passages';
+      const quotesText = attachedQuotes.map((q, i) => `[${i + 1}] "${q}"`).join('\n\n');
+      fullText = `${userQuestion}\n\n--- Selected text from paper ---\n${quotesText}`;
+      setAttachedQuotes([]);
+    }
     if (attachedPapers.length > 0) {
       const ctx = attachedPapers
         .map((p) => `Paper: "${p.title}"\nAbstract: ${p.abstract ?? 'N/A'}`)
         .join('\n\n');
-      fullText = `${text}\n\n--- Attached Papers ---\n${ctx}`;
+      fullText = `${fullText}\n\n--- Attached Papers ---\n${ctx}`;
     }
     setAttachedPapers([]);
 
@@ -1146,6 +1163,11 @@ export function ReaderPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
+                // If chat/split view is open, first go back to PDF-only
+                if (layoutMode !== 'pdf-only') {
+                  setLayoutMode('pdf-only');
+                  return;
+                }
                 const from = (location.state as { from?: string })?.from;
                 if (from === '/discovery' || from === '/discovery/preview') {
                   navigate(from);
@@ -1331,19 +1353,52 @@ export function ReaderPage() {
             <div className="notion-scrollbar flex-1 overflow-y-auto">
               {!agentTodoId &&
                 (chatModel ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 pt-16 text-center">
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 pt-12 text-center">
                     <AgentLogo tool={chatModel.agentTool} size={24} />
                     <p className="text-sm font-medium text-notion-text-secondary">
                       {chatModel.name}
                     </p>
                     <p className="text-xs text-notion-text-tertiary">
-                      Send a message to start the agent
+                      {t('reader.ai.chatHint', 'Ask anything about this paper')}
                     </p>
+                    {/* Preset question buttons */}
+                    <div className="mt-2 flex flex-col gap-1.5 w-full max-w-xs">
+                      {[
+                        {
+                          key: 'contribution',
+                          label: t('reader.ai.presetContribution', "What's the main contribution?"),
+                        },
+                        {
+                          key: 'methodology',
+                          label: t('reader.ai.presetMethodology', 'Explain the methodology'),
+                        },
+                        {
+                          key: 'results',
+                          label: t('reader.ai.presetResults', 'Summarize the key results'),
+                        },
+                        {
+                          key: 'limitations',
+                          label: t('reader.ai.presetLimitations', 'What are the limitations?'),
+                        },
+                      ].map((q) => (
+                        <button
+                          key={q.key}
+                          onClick={() => {
+                            setChatInput(q.label);
+                            setTimeout(() => handleChatSend(), 50);
+                          }}
+                          disabled={agentRunning}
+                          className="rounded-lg border border-notion-border bg-white px-3 py-2 text-left text-xs text-notion-text-secondary transition-colors hover:bg-notion-accent-light hover:text-notion-accent hover:border-notion-accent/30 disabled:opacity-40"
+                        >
+                          {q.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 pt-16 text-center">
                     <p className="text-xs text-notion-text-tertiary">
-                      Select an agent above to chat about this paper
+                      {t('reader.ai.selectAgent', 'Select an agent above to chat about this paper')}
                     </p>
                   </div>
                 ))}
@@ -1362,18 +1417,55 @@ export function ReaderPage() {
 
             {/* Input */}
             <div className="flex-shrink-0 px-4 py-4">
-              <div className="mx-auto mb-2 flex w-full max-w-2xl">
+              <div className="mx-auto mb-2 flex w-full max-w-2xl gap-1.5 flex-wrap">
                 <button
                   onClick={handleSummarize}
                   disabled={agentRunning || !chatModel}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-notion-border bg-white px-3 py-1.5 text-xs font-medium text-notion-text-secondary shadow-sm transition-colors hover:bg-notion-sidebar hover:text-notion-text disabled:opacity-40"
                 >
                   <Zap size={12} />
-                  Summarize
+                  {t('reader.ai.summarize', 'Summarize')}
+                </button>
+                <button
+                  onClick={() => {
+                    setChatInput(
+                      t('reader.ai.presetContribution', "What's the main contribution?"),
+                    );
+                    setTimeout(() => handleChatSend(), 50);
+                  }}
+                  disabled={agentRunning || !chatModel}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-notion-border bg-white px-3 py-1.5 text-xs font-medium text-notion-text-secondary shadow-sm transition-colors hover:bg-notion-sidebar hover:text-notion-text disabled:opacity-40"
+                >
+                  {t('reader.ai.presetContribution', "What's the main contribution?")}
                 </button>
               </div>
               <div className="mx-auto w-full max-w-2xl">
                 <div className="rounded-2xl border border-notion-border bg-white shadow-sm transition-all">
+                  {/* Attached quotes from PDF selections */}
+                  {attachedQuotes.length > 0 && (
+                    <div className="mx-3 mt-3 flex flex-col gap-1.5">
+                      {attachedQuotes.map((q, i) => (
+                        <div
+                          key={i}
+                          className="rounded-lg border border-notion-accent/20 bg-notion-accent-light/50 px-3 py-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="line-clamp-3 text-xs italic text-notion-text-secondary leading-relaxed">
+                              &ldquo;{q}&rdquo;
+                            </p>
+                            <button
+                              onClick={() =>
+                                setAttachedQuotes((prev) => prev.filter((_, j) => j !== i))
+                              }
+                              className="mt-0.5 flex-shrink-0 rounded p-0.5 text-notion-text-tertiary hover:text-red-400"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {/* Attached paper chips */}
                   {attachedPapers.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 px-4 pt-3">
@@ -1586,7 +1678,11 @@ export function ReaderPage() {
                     ) : (
                       <button
                         onClick={handleChatSend}
-                        disabled={!chatInput.trim() || !chatModel || agentRunning}
+                        disabled={
+                          (!chatInput.trim() && attachedQuotes.length === 0) ||
+                          !chatModel ||
+                          agentRunning
+                        }
                         className="flex-shrink-0 rounded-full bg-notion-text p-1.5 text-white transition-opacity hover:opacity-80 disabled:opacity-30"
                         title="Send"
                       >
@@ -1613,8 +1709,12 @@ export function ReaderPage() {
         {/* Right: PDF */}
         {layoutMode !== 'chat-only' && (
           <div
-            className="relative flex flex-col overflow-x-clip"
-            style={{ width: layoutMode === 'pdf-only' ? '100%' : `${100 - leftWidth}%` }}
+            className="relative flex min-w-0 flex-1 flex-col overflow-x-clip"
+            style={
+              layoutMode !== 'pdf-only'
+                ? { maxWidth: `${100 - leftWidth}%`, flexBasis: `${100 - leftWidth}%` }
+                : undefined
+            }
           >
             {pdfPath ? (
               <PdfViewer
@@ -1632,7 +1732,7 @@ export function ReaderPage() {
                   }
                 }}
                 onAskAI={(text) => {
-                  setChatInput(`Explain this passage:\n\n"${text}"`);
+                  setAttachedQuotes((prev) => [...prev, text]);
                   if (layoutMode === 'pdf-only') setLayoutMode('split');
                   setTimeout(() => textareaRef.current?.focus(), 100);
                 }}
@@ -1646,6 +1746,30 @@ export function ReaderPage() {
                             setHighlights((prev) => [...prev, h]);
                             // Auto-open annotation sidebar so user can add a note
                             setShowAnnotationSidebar(true);
+                            // Fire-and-forget: auto-suggest AI note for longer highlights
+                            if (h.text && h.text.length > 20) {
+                              ipc
+                                .readerInlineAI({
+                                  paperId: paper.id,
+                                  action: 'suggestNote',
+                                  selectedText: h.text,
+                                  language: i18n.language,
+                                })
+                                .then((aiResult) => {
+                                  if (aiResult?.result) {
+                                    ipc
+                                      .updateHighlight(h.id, { note: aiResult.result })
+                                      .then((updated) => {
+                                        setHighlights((prev) =>
+                                          prev.map((x) => (x.id === h.id ? updated : x)),
+                                        );
+                                        showSuccess(t('reader.ai.noteSuggested'));
+                                      })
+                                      .catch(() => undefined);
+                                  }
+                                })
+                                .catch(() => undefined);
+                            }
                           })
                           .catch(() => undefined);
                       }
@@ -1812,7 +1936,16 @@ export function ReaderPage() {
                     .catch(() => undefined);
                 }}
                 showCitationSidebar={showCitationSidebar}
-                onToggleCitationSidebar={() => setShowCitationSidebar((v) => !v)}
+                onToggleCitationSidebar={() => {
+                  setShowCitationSidebar((v) => !v);
+                  setShowAIOutlineSidebar(false);
+                }}
+                showAIOutlineSidebar={showAIOutlineSidebar}
+                onToggleAIOutlineSidebar={() => {
+                  setShowAIOutlineSidebar((v) => !v);
+                  setShowCitationSidebar(false);
+                }}
+                shortId={shortId}
                 goToPageRef={goToPageRef}
               />
             ) : (
@@ -1875,70 +2008,138 @@ export function ReaderPage() {
 
         {/* Annotation sidebar */}
         {showAnnotationSidebar && (
-          <div className="flex w-72 flex-shrink-0 flex-col border-l border-notion-border bg-white">
-            <div className="flex items-center justify-between border-b border-notion-border px-3 py-2">
-              <span className="text-xs font-medium text-notion-text">
-                {t('reader.annotations')} ({highlights.length})
-              </span>
-              <button
-                onClick={() => setShowAnnotationSidebar(false)}
-                className="rounded p-1 text-notion-text-tertiary hover:bg-notion-sidebar"
-              >
-                <X size={12} />
-              </button>
-            </div>
-            <div className="notion-scrollbar flex-1 overflow-y-auto">
-              {highlights.length === 0 ? (
-                <div className="px-4 py-8 text-center text-xs text-notion-text-tertiary">
-                  {t('reader.noAnnotations')}
+          <>
+            {/* Resize handle */}
+            <div
+              className="group flex w-1 cursor-col-resize items-center justify-center hover:bg-blue-400/50 active:bg-blue-400 transition-colors"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                annotationResizing.current = true;
+                const startX = e.clientX;
+                const startW = annotationSidebarWidth;
+                const onMove = (ev: MouseEvent) => {
+                  if (!annotationResizing.current) return;
+                  // Dragging left increases width
+                  const newW = Math.max(200, Math.min(500, startW - (ev.clientX - startX)));
+                  setAnnotationSidebarWidth(newW);
+                };
+                const onUp = () => {
+                  annotationResizing.current = false;
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+              }}
+            />
+            <div
+              className="flex flex-shrink-0 flex-col border-l border-notion-border bg-white"
+              style={{ width: annotationSidebarWidth }}
+            >
+              <div className="flex items-center justify-between border-b border-notion-border px-3 py-2">
+                <span className="text-xs font-medium text-notion-text">
+                  {t('reader.annotations')} ({highlights.length})
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      if (!paper || highlights.length === 0 || generatingSummary) return;
+                      setGeneratingSummary(true);
+                      ipc
+                        .readerReadingSummary({
+                          paperId: paper.id,
+                          highlights: highlights.map((h) => ({
+                            text: h.text,
+                            note: h.note || '',
+                            color: h.color,
+                            page: h.pageNumber,
+                          })),
+                          language: i18n.language,
+                        })
+                        .then((res) => {
+                          if (res?.summary) {
+                            setChatInput(res.summary);
+                            if (layoutMode === 'pdf-only') setLayoutMode('split');
+                            setTimeout(() => textareaRef.current?.focus(), 100);
+                          }
+                        })
+                        .catch(() => showError('Failed to generate summary'))
+                        .finally(() => setGeneratingSummary(false));
+                    }}
+                    disabled={highlights.length === 0 || generatingSummary}
+                    title={t('reader.ai.generateSummary')}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-notion-accent transition-colors hover:bg-notion-accent-light disabled:opacity-50"
+                  >
+                    {generatingSummary ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={10} />
+                    )}
+                    {generatingSummary
+                      ? t('reader.ai.generatingSummary')
+                      : t('reader.ai.generateSummary')}
+                  </button>
+                  <button
+                    onClick={() => setShowAnnotationSidebar(false)}
+                    className="rounded p-1 text-notion-text-tertiary hover:bg-notion-sidebar"
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
-              ) : (
-                (() => {
-                  // Group highlights by page
-                  const byPage = new Map<number, typeof highlights>();
-                  for (const h of [...highlights].sort((a, b) => a.pageNumber - b.pageNumber)) {
-                    const arr = byPage.get(h.pageNumber) ?? [];
-                    arr.push(h);
-                    byPage.set(h.pageNumber, arr);
-                  }
-                  return Array.from(byPage.entries()).map(([page, items]) => (
-                    <div key={page} className="border-b border-notion-border/50">
-                      <div className="sticky top-0 bg-notion-sidebar/50 px-3 py-1">
-                        <span className="text-[10px] font-medium text-notion-text-tertiary">
-                          {t('reader.page')} {page}
-                        </span>
+              </div>
+              <div className="notion-scrollbar flex-1 overflow-y-auto">
+                {highlights.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-xs text-notion-text-tertiary">
+                    {t('reader.noAnnotations')}
+                  </div>
+                ) : (
+                  (() => {
+                    // Group highlights by page
+                    const byPage = new Map<number, typeof highlights>();
+                    for (const h of [...highlights].sort((a, b) => a.pageNumber - b.pageNumber)) {
+                      const arr = byPage.get(h.pageNumber) ?? [];
+                      arr.push(h);
+                      byPage.set(h.pageNumber, arr);
+                    }
+                    return Array.from(byPage.entries()).map(([page, items]) => (
+                      <div key={page} className="border-b border-notion-border/50">
+                        <div className="sticky top-0 bg-notion-sidebar/50 px-3 py-1">
+                          <span className="text-[10px] font-medium text-notion-text-tertiary">
+                            {t('reader.page')} {page}
+                          </span>
+                        </div>
+                        {items.map((h) => (
+                          <AnnotationCard
+                            key={h.id}
+                            highlight={h}
+                            onJumpToPage={(page) => goToPageRef.current?.(page)}
+                            onUpdateNote={(note) => {
+                              ipc
+                                .updateHighlight(h.id, { note })
+                                .then((updated) =>
+                                  setHighlights((prev) =>
+                                    prev.map((x) => (x.id === h.id ? updated : x)),
+                                  ),
+                                )
+                                .catch(() => undefined);
+                            }}
+                            onDelete={() => {
+                              ipc
+                                .deleteHighlight(h.id)
+                                .then(() =>
+                                  setHighlights((prev) => prev.filter((x) => x.id !== h.id)),
+                                )
+                                .catch(() => undefined);
+                            }}
+                          />
+                        ))}
                       </div>
-                      {items.map((h) => (
-                        <AnnotationCard
-                          key={h.id}
-                          highlight={h}
-                          onJumpToPage={(page) => goToPageRef.current?.(page)}
-                          onUpdateNote={(note) => {
-                            ipc
-                              .updateHighlight(h.id, { note })
-                              .then((updated) =>
-                                setHighlights((prev) =>
-                                  prev.map((x) => (x.id === h.id ? updated : x)),
-                                ),
-                              )
-                              .catch(() => undefined);
-                          }}
-                          onDelete={() => {
-                            ipc
-                              .deleteHighlight(h.id)
-                              .then(() =>
-                                setHighlights((prev) => prev.filter((x) => x.id !== h.id)),
-                              )
-                              .catch(() => undefined);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ));
-                })()
-              )}
+                    ));
+                  })()
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {isDragging && <div className="absolute inset-0 z-50 cursor-col-resize" />}

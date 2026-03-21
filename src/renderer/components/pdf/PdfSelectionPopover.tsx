@@ -1,6 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { MessageSquare, Copy, Check, ExternalLink } from 'lucide-react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
+import { MessageSquare, Copy, Check, Languages, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
+import { ipc } from '../../hooks/use-ipc';
 
 const HIGHLIGHT_COLORS = [
   { color: 'yellow', label: 'Important', bg: 'bg-yellow-300', hover: 'hover:bg-yellow-400' },
@@ -15,6 +18,7 @@ interface PdfSelectionPopoverProps {
   onAskAI: (text: string) => void;
   onHighlight?: (text: string, rectsJson: string, pageNumber: number, color?: string) => void;
   onSearchPaper?: (text: string) => void;
+  paperId?: string;
 }
 
 interface PopoverState {
@@ -31,16 +35,34 @@ export function PdfSelectionPopover({
   onAskAI,
   onHighlight,
   onSearchPaper,
+  paperId,
 }: PdfSelectionPopoverProps) {
+  const { t } = useTranslation();
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [copied, setCopied] = useState(false);
+  const [aiAction, setAiAction] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [resultCopied, setResultCopied] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const resultCopiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Track AI operation via ref (state updates are async, ref is immediate)
+  const aiActiveRef = useRef(false);
+
+  const resetAiState = useCallback(() => {
+    setAiAction(null);
+    setAiResult(null);
+    setAiLoading(false);
+    setResultCopied(false);
+    aiActiveRef.current = false;
+  }, []);
 
   const dismiss = useCallback(() => {
     setPopover(null);
     setCopied(false);
-  }, []);
+    resetAiState();
+  }, [resetAiState]);
 
   // Listen for text selection on the container
   useEffect(() => {
@@ -89,12 +111,14 @@ export function PdfSelectionPopover({
 
         setPopover({ text, centerX, containerW, y, pageNumber, normalizedRects });
         setCopied(false);
+        // Reset AI state when new selection happens
+        resetAiState();
       });
     };
 
     container.addEventListener('mouseup', handleMouseUp);
     return () => container.removeEventListener('mouseup', handleMouseUp);
-  }, [containerRef]);
+  }, [containerRef, resetAiState]);
 
   // Dismiss when clicking outside the popover
   useEffect(() => {
@@ -111,22 +135,38 @@ export function PdfSelectionPopover({
     };
   }, [popover, dismiss]);
 
-  // Dismiss when selection is cleared
+  // Dismiss when selection is cleared (debounced to avoid race with button clicks)
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     if (!popover) return;
     const handleSelectionChange = () => {
+      // Don't dismiss while AI is active (use ref for immediate check, not state)
+      if (aiActiveRef.current) return;
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) {
-        dismiss();
+        // Debounce to avoid dismissing when clicking popover buttons
+        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = setTimeout(() => {
+          // Re-check ref — button click may have set it during the delay
+          if (aiActiveRef.current) return;
+          const sel = window.getSelection();
+          if (!sel || sel.isCollapsed) {
+            dismiss();
+          }
+        }, 200);
       }
     };
     document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
   }, [popover, dismiss]);
 
   useEffect(() => {
     return () => {
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (resultCopiedTimerRef.current) clearTimeout(resultCopiedTimerRef.current);
     };
   }, []);
 
@@ -155,6 +195,56 @@ export function PdfSelectionPopover({
     [popover, onHighlight, dismiss],
   );
 
+  const handleTranslate = useCallback(async () => {
+    if (!popover) return;
+    // Clean PDF line breaks: join hyphenated words and collapse newlines
+    const textToTranslate = popover.text
+      .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2') // "pro-\ngramming" → "programming"
+      .replace(/\s*\n\s*/g, ' ') // collapse newlines to spaces
+      .replace(/\s{2,}/g, ' ') // collapse multiple spaces
+      .trim();
+    aiActiveRef.current = true;
+    setAiAction('translate');
+    setAiResult(null);
+    setAiLoading(true);
+    setResultCopied(false);
+    try {
+      const isChinese = /[\u4e00-\u9fff]/.test(textToTranslate);
+      const targetLang = isChinese ? 'en' : 'zh-CN';
+      const response = await ipc.readerTranslate({
+        text: textToTranslate,
+        targetLanguage: targetLang,
+      });
+      // Re-assert state in case something tried to clear it during await
+      setAiAction('translate');
+      setAiLoading(false);
+      setAiResult(response.translatedText);
+    } catch (err) {
+      setAiAction('translate');
+      setAiLoading(false);
+      setAiResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [popover]);
+
+  const handleCopyResult = useCallback(() => {
+    if (!aiResult) return;
+    navigator.clipboard.writeText(aiResult);
+    setResultCopied(true);
+    if (resultCopiedTimerRef.current) clearTimeout(resultCopiedTimerRef.current);
+    resultCopiedTimerRef.current = setTimeout(() => setResultCopied(false), 1500);
+  }, [aiResult]);
+
+  // Clamp popover position after every render so it never overflows the container
+  const [clampedLeft, setClampedLeft] = useState(0);
+  useLayoutEffect(() => {
+    if (!popover || !popoverRef.current || !containerRef.current) return;
+    const w = popoverRef.current.offsetWidth;
+    // Use live container width (accounts for sidebars)
+    const containerW = containerRef.current.clientWidth;
+    const ideal = popover.centerX - w / 2;
+    setClampedLeft(Math.max(8, Math.min(ideal, containerW - w - 8)));
+  });
+
   return (
     <AnimatePresence>
       {popover && (
@@ -166,75 +256,113 @@ export function PdfSelectionPopover({
           transition={{ duration: 0.15 }}
           className="absolute z-50"
           style={{
-            // Clamp left so popover stays within the visible container width
-            left: Math.max(
-              8,
-              Math.min(
-                popover.centerX - (popoverRef.current?.offsetWidth ?? 300) / 2,
-                popover.containerW - (popoverRef.current?.offsetWidth ?? 300) - 8,
-              ),
-            ),
+            left: clampedLeft,
             top: popover.y,
           }}
         >
-          <div className="flex items-center gap-0.5 whitespace-nowrap rounded-lg border border-notion-border bg-white p-1.5 shadow-lg">
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={handleAskAI}
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-notion-text transition-colors hover:bg-notion-accent-light hover:text-notion-accent"
-            >
-              <MessageSquare size={14} />
-              <span>Ask AI</span>
-            </button>
+          {/* Prevent mousedown inside popover from clearing text selection */}
+          <div
+            className="rounded-lg border border-notion-border bg-white shadow-lg"
+            style={{
+              maxWidth: containerRef.current ? containerRef.current.clientWidth - 16 : undefined,
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <div className="flex flex-wrap items-center gap-0.5 p-1.5">
+              {/* Ask AI — sends selected text to chat panel */}
+              <button
+                onClick={handleAskAI}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-notion-text transition-colors hover:bg-notion-accent-light hover:text-notion-accent"
+              >
+                <MessageSquare size={14} />
+                <span>{t('reader.ai.askAi')}</span>
+              </button>
 
-            {/* Color dots for instant highlight — click to create, add notes in sidebar */}
-            {onHighlight && (
-              <>
-                <div className="h-4 w-px bg-notion-border" />
-                {HIGHLIGHT_COLORS.map((c) => (
-                  <button
-                    key={c.color}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleHighlight(c.color)}
-                    className={`mx-0.5 h-5 w-5 rounded-full ${c.bg} ${c.hover} transition-transform hover:scale-125`}
-                    title={c.label}
-                  />
-                ))}
-              </>
+              {/* Translate */}
+              <button
+                onClick={handleTranslate}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  aiAction === 'translate'
+                    ? 'bg-notion-accent-light text-notion-accent'
+                    : 'text-notion-text hover:bg-notion-accent-light hover:text-notion-accent'
+                }`}
+              >
+                <Languages size={14} />
+                <span>{t('reader.ai.translate')}</span>
+              </button>
+
+              {/* Color dots for instant highlight */}
+              {onHighlight && (
+                <>
+                  <div className="h-4 w-px bg-notion-border" />
+                  {HIGHLIGHT_COLORS.map((c) => (
+                    <button
+                      key={c.color}
+                      onClick={() => handleHighlight(c.color)}
+                      className={`mx-0.5 h-5 w-5 rounded-full ${c.bg} ${c.hover} transition-transform hover:scale-125`}
+                      title={c.label}
+                    />
+                  ))}
+                </>
+              )}
+
+              <div className="h-4 w-px bg-notion-border" />
+
+              <button
+                onClick={handleCopy}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  copied
+                    ? 'text-green-600'
+                    : 'text-notion-text hover:bg-notion-accent-light hover:text-notion-accent'
+                }`}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                <span>{copied ? 'Copied!' : 'Copy'}</span>
+              </button>
+            </div>
+
+            {/* Translate result area */}
+            {/* Translate result — no animation delay, shows loading instantly */}
+            {aiAction === 'translate' && (
+              <div
+                className="mx-1.5 mb-1.5 rounded-lg border border-notion-border bg-notion-sidebar p-3"
+                style={{ width: 360 }}
+              >
+                {aiLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-notion-text-secondary">
+                    <Loader2 size={14} className="animate-spin text-notion-accent" />
+                    <span>{t('reader.ai.translating', 'Translating...')}</span>
+                  </div>
+                ) : aiResult ? (
+                  <div>
+                    <div className="max-h-[200px] overflow-y-auto text-xs leading-relaxed text-notion-text">
+                      {aiResult}
+                    </div>
+                    <div className="mt-2 flex items-center justify-end gap-1">
+                      <button
+                        onClick={handleCopyResult}
+                        className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                          resultCopied
+                            ? 'text-green-600'
+                            : 'text-notion-text-secondary hover:bg-white hover:text-notion-text'
+                        }`}
+                      >
+                        {resultCopied ? <Check size={12} /> : <Copy size={12} />}
+                        <span>
+                          {resultCopied ? t('reader.ai.resultCopied') : t('reader.ai.copyResult')}
+                        </span>
+                      </button>
+                      <button
+                        onClick={resetAiState}
+                        className="flex items-center justify-center rounded-md p-1 text-notion-text-secondary transition-colors hover:bg-white hover:text-notion-text"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             )}
-
-            {onSearchPaper && (
-              <>
-                <div className="h-4 w-px bg-notion-border" />
-                <button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    if (!popover) return;
-                    onSearchPaper(popover.text);
-                    dismiss();
-                  }}
-                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-notion-text transition-colors hover:bg-green-50 hover:text-green-600"
-                >
-                  <ExternalLink size={14} />
-                  <span>Find</span>
-                </button>
-              </>
-            )}
-
-            <div className="h-4 w-px bg-notion-border" />
-
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={handleCopy}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                copied
-                  ? 'text-green-600'
-                  : 'text-notion-text hover:bg-notion-accent-light hover:text-notion-accent'
-              }`}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-              <span>{copied ? 'Copied!' : 'Copy'}</span>
-            </button>
           </div>
         </motion.div>
       )}

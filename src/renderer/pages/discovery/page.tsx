@@ -40,7 +40,7 @@ const cardVariants = {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { type: 'spring', stiffness: 300, damping: 24 },
+    transition: { type: 'spring' as const, stiffness: 300, damping: 24 },
   },
 };
 
@@ -104,7 +104,7 @@ export function DiscoveryPage() {
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
 
-  // Load cached results on mount
+  // Load cached results on mount, auto-refresh if stale (>6 hours)
   useEffect(() => {
     const loadCached = async () => {
       try {
@@ -128,13 +128,22 @@ export function DiscoveryPage() {
             }
           }
           setImportedIds(importedSet);
+
+          // Auto-refresh if data is older than 6 hours
+          if (cached.fetchedAt) {
+            const staleMs = Date.now() - new Date(cached.fetchedAt).getTime();
+            if (staleMs > 6 * 60 * 60 * 1000) {
+              // Silently trigger a refresh in background
+              handleFetch();
+            }
+          }
         }
       } catch (e) {
         console.error('Failed to load cached discovery results:', e);
       }
     };
     loadCached();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFetch = useCallback(async () => {
     if (selectedCategories.length === 0) return;
@@ -152,7 +161,7 @@ export function DiscoveryPage() {
 
       if (result.success && result.papers) {
         setPapers(result.papers);
-        setFetchedAt(result.fetchedAt);
+        setFetchedAt(result.fetchedAt ?? null);
         setIsFromToday(true);
         setSortByRelevance(false);
       } else {
@@ -187,7 +196,7 @@ export function DiscoveryPage() {
   // Subscribe to evaluation progress
   useEffect(() => {
     const unsub = onIpc('discovery:evaluateProgress', (_event, progress) => {
-      setEvaluateProgress(progress);
+      setEvaluateProgress(progress as { evaluated: number; total: number });
     });
     return unsub;
   }, []);

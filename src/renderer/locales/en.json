@@ -280,7 +280,11 @@
     "reader": "Reader",
     "summarizePrompt": "Please summarize the core contributions, methods, and main conclusions of this paper.",
     "currentPaper": "Current paper: \"{{title}}\"",
-    "workingDirectory": "Working directory: {{dir}}"
+    "workingDirectory": "Working directory: {{dir}}",
+    "analyze": "Auto Tag",
+    "extractMetadata": "Extract metadata",
+    "retryProcessing": "Retry processing",
+    "downloadPdf": "Download PDF"
   },
   "importModal": {
     "title": "Import Papers",
@@ -309,6 +313,7 @@
     "orImportByIdUrl": "or import by ID / URL",
     "clearPdfFirst": "Clear selected PDFs first",
     "import": "Import",
+    "importPdfs": "Import {{count}} PDFs",
     "importing": "Importing…",
     "completed": "Import complete",
     "cancelled": "Import cancelled",
@@ -322,6 +327,7 @@
     "clearAll": "Clear all",
     "recentDownloads": "Recent PDF downloads",
     "noPapersSelected": "No papers selected",
+    "foundPapers": "Found {{count}} papers",
     "importSuccess": "papers imported successfully",
     "zotero": {
       "detecting": "Detecting Zotero…",
@@ -342,7 +348,8 @@
       "parsing": "Parsing…",
       "parseFailed": "Failed to parse file",
       "unsupportedFormat": "Unsupported file format",
-      "papersImported": "papers imported"
+      "papersImported": "papers imported",
+      "foundEntries": "Found {{count}} entries"
     }
   },
   "compare": {
@@ -518,7 +525,13 @@
   "dashboardContent": {
     "todaysPapers": "Today's Papers",
     "deleteConfirm": "Delete \"{{title}}\"? This action cannot be undone.",
-    "deleteFailed": "Failed to delete paper"
+    "deleteFailed": "Failed to delete paper",
+    "noNewPapers": "No new papers today",
+    "importHint": "Import papers to get started",
+    "importPapers": "Import Papers",
+    "goToLibrary": "Go to Library",
+    "continueReading": "Continue Reading",
+    "page": "p."
   },
   "researchProfile": {
     "noPapers": "No papers in this collection yet. Add papers to see the research profile.",
@@ -643,14 +656,60 @@
     "alphaXivSuccess": "AI summary loaded",
     "alphaXivNoData": "No AI summary available for this paper",
     "alphaXivError": "Failed to fetch AI summary",
-    "alphaXivLoading": "Loading AI summary..."
+    "alphaXivLoading": "Loading AI summary...",
+    "generateAiSummary": "Generate AI Summary",
+    "regenerateAiSummary": "Regenerate",
+    "aiSummaryGenerating": "Generating...",
+    "aiSummaryExtracting": "Extracting paper text...",
+    "aiSummaryWaitingLLM": "Waiting for LLM response...",
+    "aiSummaryLocal": "AI Summary",
+    "noAbstract": "No abstract available. Click \"Generate AI Summary\" to create one from the paper text.",
+    "importForAiSummary": "Import to library to generate AI summary"
   },
   "reader": {
     "annotations": "Annotations",
     "noAnnotations": "No highlights yet. Select text in the PDF to create one.",
     "page": "Page",
     "focusMode": "Focus mode",
-    "exitFocusMode": "Exit focus mode"
+    "exitFocusMode": "Exit focus mode",
+    "ai": {
+      "explain": "Explain",
+      "simplify": "Simplify",
+      "deepDive": "Deep Dive",
+      "translate": "Translate",
+      "askAi": "Ask AI",
+      "thinking": "Thinking...",
+      "translating": "Translating...",
+      "copyResult": "Copy result",
+      "resultCopied": "Copied!",
+      "chatHint": "Ask anything about this paper",
+      "selectAgent": "Select an agent above to chat about this paper",
+      "summarize": "Summarize",
+      "presetContribution": "What's the main contribution?",
+      "presetMethodology": "Explain the methodology",
+      "presetResults": "Summarize the key results",
+      "presetLimitations": "What are the limitations?",
+      "outline": "AI Outline",
+      "generateOutline": "Generate AI Outline",
+      "generating": "Generating outline...",
+      "regenerate": "Regenerate",
+      "researchQuestions": "Research Questions",
+      "methodology": "Methodology",
+      "keyFindings": "Key Findings",
+      "contributions": "Contributions",
+      "limitations": "Limitations",
+      "outlineFailed": "Failed to generate outline",
+      "noteSuggested": "AI note suggested",
+      "generateSummary": "Generate Reading Summary",
+      "generatingSummary": "Generating summary...",
+      "explainFormula": "Explain Formula",
+      "explainFigure": "Explain Figure",
+      "explainTable": "Explain Table",
+      "detectedFormula": "Formula",
+      "detectedFigure": "Figure",
+      "detectedTable": "Table",
+      "summarizePage": "Summarize page"
+    }
   },
   "pdf": {
     "citation": {
