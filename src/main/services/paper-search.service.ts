@@ -78,24 +78,8 @@ export async function searchPapers(query: string, limit: number = 20): Promise<S
     }
   }
 
-  // Try OpenAlex first (very generous rate limits)
-  try {
-    const openAlexResults = await searchOpenAlex(query, limit);
-    if (openAlexResults.results.length > 0) {
-      console.log(
-        `[paper-search] OpenAlex returned ${openAlexResults.results.length} results for "${query}"`,
-      );
-      return openAlexResults;
-    }
-    console.log(`[paper-search] OpenAlex returned 0 results, trying Semantic Scholar...`);
-  } catch (err) {
-    console.warn(
-      `[paper-search] OpenAlex failed: ${err instanceof Error ? err.message : String(err)}, trying Semantic Scholar...`,
-    );
-  }
-
-  // Fall back to Semantic Scholar
-  return searchSemanticScholar(query, limit);
+  // OpenAlex only
+  return searchOpenAlex(query, limit);
 }
 
 /**
@@ -153,162 +137,92 @@ async function lookupByDoi(doi: string): Promise<SearchResult | null> {
  * Rate limit: 100,000 requests/day with polite pool (email in User-Agent).
  * No API key needed.
  */
-async function searchOpenAlex(query: string, limit: number): Promise<SearchResponse> {
-  const encodedQuery = encodeURIComponent(query);
-  const url = `${OPENALEX_API_BASE}/works?search=${encodedQuery}&per_page=${limit}&select=id,title,authorships,publication_year,abstract_inverted_index,cited_by_count,ids,primary_location,doi`;
+const OA_SELECT =
+  'id,title,authorships,publication_year,abstract_inverted_index,cited_by_count,ids,primary_location,doi';
+const OA_HEADERS = { 'User-Agent': 'ResearchClaw/1.0 (mailto:researchclaw@example.com)' };
 
-  const agent = getProxyAgent();
-  const res = await proxyFetch(url, {
-    agent,
-    timeoutMs: 15_000,
-    headers: {
-      'User-Agent': 'ResearchClaw/1.0 (mailto:researchclaw@example.com)',
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`OpenAlex HTTP ${res.status}`);
+function parseOpenAlexItem(item: any): SearchResult {
+  let abstract: string | null = null;
+  if (item.abstract_inverted_index) {
+    abstract = reconstructAbstract(item.abstract_inverted_index);
   }
 
-  const json = JSON.parse(res.text());
-  const results: SearchResult[] = (json?.results ?? []).map((item: any) => {
-    // Reconstruct abstract from inverted index
-    let abstract: string | null = null;
-    if (item.abstract_inverted_index) {
-      abstract = reconstructAbstract(item.abstract_inverted_index);
-    }
+  let arxivId: string | undefined;
+  const openalexId = item.ids?.openalex;
+  const primarySource = item.primary_location?.source;
+  if (primarySource?.display_name === 'arXiv (Cornell University)') {
+    const landingUrl = item.primary_location?.landing_page_url ?? '';
+    const arxivMatch = landingUrl.match(/arxiv\.org\/abs\/(\d{4}\.\d{4,5})/);
+    if (arxivMatch) arxivId = arxivMatch[1];
+  }
 
-    // Extract arXiv ID from IDs
-    let arxivId: string | undefined;
-    const openalexId = item.ids?.openalex;
-    if (item.ids?.openalex) {
-      // OpenAlex doesn't directly give arXiv ID in this field
-    }
-    // Check primary_location for arXiv source
-    const primarySource = item.primary_location?.source;
-    if (primarySource?.display_name === 'arXiv (Cornell University)') {
-      // Try to extract from landing_page_url
-      const landingUrl = item.primary_location?.landing_page_url ?? '';
-      const arxivMatch = landingUrl.match(/arxiv\.org\/abs\/(\d{4}\.\d{4,5})/);
-      if (arxivMatch) arxivId = arxivMatch[1];
-    }
+  let doi: string | undefined;
+  if (item.doi) {
+    doi = item.doi.replace('https://doi.org/', '');
+  }
 
-    // Extract DOI
-    let doi: string | undefined;
-    if (item.doi) {
-      doi = item.doi.replace('https://doi.org/', '');
-    }
-
-    // Extract venue from primary_location source or raw_source_name
-    const venue =
-      item.primary_location?.source?.display_name ?? item.primary_location?.raw_source_name ?? null;
-
-    return {
-      paperId: openalexId ?? item.id ?? '',
-      title: item.title ?? 'Untitled',
-      authors: (item.authorships ?? []).map((a: any) => ({
-        name: a.author?.display_name ?? 'Unknown',
-      })),
-      year: item.publication_year ?? null,
-      abstract,
-      citationCount: item.cited_by_count ?? 0,
-      externalIds: {
-        ArXiv: arxivId,
-        DOI: doi,
-      },
-      url: item.doi ?? item.id ?? null,
-      venue,
-    };
-  });
-
-  // Filter results by relevance
-  const STOP_WORDS = new Set([
-    'a',
-    'an',
-    'the',
-    'and',
-    'or',
-    'but',
-    'in',
-    'on',
-    'at',
-    'to',
-    'for',
-    'of',
-    'with',
-    'by',
-    'from',
-    'as',
-    'is',
-    'was',
-    'are',
-    'were',
-    'be',
-    'been',
-    'being',
-    'have',
-    'has',
-    'had',
-    'do',
-    'does',
-    'did',
-    'will',
-    'would',
-    'could',
-    'should',
-    'may',
-    'might',
-    'can',
-    'shall',
-    'not',
-    'no',
-    'nor',
-    'its',
-    'it',
-    'this',
-    'that',
-    'these',
-    'those',
-    'their',
-    'our',
-    'your',
-    'his',
-    'her',
-    'we',
-    'they',
-    'via',
-    'using',
-    'based',
-  ]);
-  const queryWords = query
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
-  const filtered =
-    queryWords.length > 0
-      ? results.filter((r) => {
-          const titleLower = r.title.toLowerCase();
-          const matchCount = queryWords.filter((w) => titleLower.includes(w)).length;
-          const queryLower = query
-            .toLowerCase()
-            .replace(/[^a-z0-9\s]/g, '')
-            .trim();
-          // Pass if:
-          // 1. At least 40% of meaningful query words appear in the title, OR
-          // 2. The full query contains the title (e.g. query="FlowDroid: Precise..." matches title="FlowDroid"), OR
-          // 3. The title contains the full query
-          return (
-            matchCount / queryWords.length >= 0.4 ||
-            queryLower.includes(titleLower.replace(/[^a-z0-9\s]/g, '').trim()) ||
-            titleLower.includes(queryLower)
-          );
-        })
-      : results;
+  const venue =
+    item.primary_location?.source?.display_name ?? item.primary_location?.raw_source_name ?? null;
 
   return {
-    results: filtered,
-    total: json?.meta?.count ?? filtered.length,
+    paperId: openalexId ?? item.id ?? '',
+    title: item.title ?? 'Untitled',
+    authors: (item.authorships ?? []).map((a: any) => ({
+      name: a.author?.display_name ?? 'Unknown',
+    })),
+    year: item.publication_year ?? null,
+    abstract,
+    citationCount: item.cited_by_count ?? 0,
+    externalIds: { ArXiv: arxivId, DOI: doi },
+    url: item.doi ?? item.id ?? null,
+    venue,
+  };
+}
+
+/**
+ * Search papers using OpenAlex API.
+ * Runs fulltext search + title search in parallel for better recall.
+ */
+async function searchOpenAlex(query: string, limit: number): Promise<SearchResponse> {
+  const agent = getProxyAgent();
+  const encodedQuery = encodeURIComponent(query);
+
+  // Parallel: fulltext search + title-specific search
+  const fulltextUrl = `${OPENALEX_API_BASE}/works?search=${encodedQuery}&per_page=${limit}&select=${OA_SELECT}`;
+  const titleUrl = `${OPENALEX_API_BASE}/works?filter=title.search:${encodedQuery}&per_page=${Math.min(limit, 10)}&select=${OA_SELECT}`;
+
+  const [fulltextRes, titleRes] = await Promise.allSettled([
+    proxyFetch(fulltextUrl, { agent, timeoutMs: 15_000, headers: OA_HEADERS }),
+    proxyFetch(titleUrl, { agent, timeoutMs: 15_000, headers: OA_HEADERS }),
+  ]);
+
+  const fulltextItems: any[] =
+    fulltextRes.status === 'fulfilled' && fulltextRes.value.ok
+      ? (JSON.parse(fulltextRes.value.text())?.results ?? [])
+      : [];
+  const titleItems: any[] =
+    titleRes.status === 'fulfilled' && titleRes.value.ok
+      ? (JSON.parse(titleRes.value.text())?.results ?? [])
+      : [];
+
+  // Merge: title matches first (more precise), then fulltext, deduplicate by OpenAlex ID
+  const seen = new Set<string>();
+  const merged: SearchResult[] = [];
+
+  for (const item of [...titleItems, ...fulltextItems]) {
+    const id = item.ids?.openalex ?? item.id ?? '';
+    if (seen.has(id)) continue;
+    seen.add(id);
+    merged.push(parseOpenAlexItem(item));
+  }
+
+  console.log(
+    `[paper-search] OpenAlex fulltext: ${fulltextItems.length}, title: ${titleItems.length}, merged: ${merged.length} for "${query}"`,
+  );
+
+  return {
+    results: merged.slice(0, limit),
+    total: merged.length,
   };
 }
 

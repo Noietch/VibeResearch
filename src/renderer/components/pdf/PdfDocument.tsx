@@ -9,6 +9,7 @@ import { PdfPage } from './PdfPage';
 import { PdfToolbar } from './PdfToolbar';
 import { PdfOutlineSidebar } from './PdfOutlineSidebar';
 import { PdfSearchBar } from './PdfSearchBar';
+import { usePdfSearch, type SearchMatch } from './use-pdf-search';
 import { PdfSelectionPopover } from './PdfSelectionPopover';
 import { PdfCitationSidebar } from './PdfCitationSidebar';
 import { PdfAIOutlineSidebar } from './PdfAIOutlineSidebar';
@@ -37,6 +38,8 @@ interface PdfDocumentProps {
   onReferencesExtracted?: (refs: CachedReference[]) => void;
   onFileNotFound?: () => void;
   initialPage?: number;
+  forceInitialPage?: boolean;
+  initialPageYOffset?: number;
   onPageChange?: (page: number, total: number) => void;
   onAskAI?: (text: string) => void;
   highlights?: HighlightItem[];
@@ -75,6 +78,8 @@ export function PdfDocument({
   onReferencesExtracted,
   onFileNotFound,
   initialPage,
+  forceInitialPage,
+  initialPageYOffset,
   onPageChange,
   onAskAI,
   highlights = [],
@@ -154,7 +159,8 @@ export function PdfDocument({
     [paperId, summarizingPage, pageSummaries],
   );
 
-  const { document, numPages, loading, error } = usePdfDocument({ path, onFileNotFound });
+  const { document: pdfDoc, numPages, loading, error } = usePdfDocument({ path, onFileNotFound });
+  const pdfSearch = usePdfSearch(pdfDoc);
   const viewport = usePdfViewport(
     restoredState?.fitMode === 'custom' && restoredState.customScale
       ? { initialFitMode: 'custom', initialCustomScale: restoredState.customScale }
@@ -163,6 +169,8 @@ export function PdfDocument({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(() => {
+    // When forceInitialPage is set (e.g., jumping from Highlights), skip session storage
+    if (forceInitialPage && initialPage != null) return initialPage;
     const saved = sessionStorage.getItem(sessionKey);
     if (saved) {
       try {
@@ -249,23 +257,23 @@ export function PdfDocument({
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [document]);
+  }, [pdfDoc]);
 
   // Load page dimensions
   useEffect(() => {
-    if (!document) return;
+    if (!pdfDoc) return;
     let cancelled = false;
-    document.getPage(1).then((page) => {
+    pdfDoc.getPage(1).then((page) => {
       if (cancelled) return;
       const vp = page.getViewport({ scale: 1.0 });
       setFirstPageWidth(vp.width);
-      const heights = Array(document.numPages).fill(vp.height);
+      const heights = Array(pdfDoc.numPages).fill(vp.height);
       setPageHeights(heights);
     });
     return () => {
       cancelled = true;
     };
-  }, [document]);
+  }, [pdfDoc]);
 
   const scaleReady = firstPageWidth > 0 && containerSize.width > 0;
 
@@ -314,7 +322,7 @@ export function PdfDocument({
   // Track visible pages via IntersectionObserver
   useEffect(() => {
     const scrollContainer = scrollRef.current;
-    if (!scrollContainer || !document) return;
+    if (!scrollContainer || !pdfDoc) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -373,19 +381,26 @@ export function PdfDocument({
     const pageElements = scrollContainer.querySelectorAll('[data-page-number]');
     pageElements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [document, numPages, pageHeights, actualScale]);
+  }, [pdfDoc, numPages, pageHeights, actualScale]);
 
   // Restore scroll position — use saved scrollTop (pixel-precise) or initialPage
   useEffect(() => {
-    if (!document || !scrollRef.current || initialPageScrolled.current) return;
+    if (!pdfDoc || !scrollRef.current || initialPageScrolled.current) return;
     if (pageHeights.length === 0 || firstPageWidth === 0) return;
 
     requestAnimationFrame(() => {
       if (!scrollRef.current || initialPageScrolled.current) return;
       initialPageScrolled.current = true;
 
-      // Prefer pixel-precise scrollTop, fallback to page-based calculation
-      if (restoredState?.scrollTop && restoredState.scrollTop > 0) {
+      // When forceInitialPage, always scroll to the specified page (skip session restore)
+      if (forceInitialPage && initialPage != null) {
+        const pageTop = (initialPage - 1) * (pageHeights[0] * actualScale + PAGE_GAP);
+        // Add y-offset within the page (normalized 0-1 coordinate)
+        const yOffset =
+          initialPageYOffset != null ? initialPageYOffset * pageHeights[0] * actualScale : 0;
+        scrollRef.current.scrollTop = pageTop + yOffset;
+      } else if (restoredState?.scrollTop && restoredState.scrollTop > 0) {
+        // Prefer pixel-precise scrollTop, fallback to page-based calculation
         scrollRef.current.scrollTop = restoredState.scrollTop;
       } else {
         const targetPage = restoredState?.page ?? initialPage ?? 1;
@@ -399,7 +414,7 @@ export function PdfDocument({
         savesEnabled.current = true;
       }, 500);
     });
-  }, [document, pageHeights, actualScale, firstPageWidth, restoredState]);
+  }, [pdfDoc, pageHeights, actualScale, firstPageWidth, restoredState]);
 
   const goToPage = useCallback(
     (page: number, saveHistory = true, yFraction = 0) => {
@@ -496,7 +511,7 @@ export function PdfDocument({
       clearTimeout(timer);
       scrollContainer.removeEventListener('scroll', handleScroll);
     };
-  }, [document, saveSessionState]);
+  }, [pdfDoc, saveSessionState]);
 
   // Save on unmount (tab switch)
   const saveRef = useRef(saveSessionState);
@@ -536,7 +551,15 @@ export function PdfDocument({
     );
   }
 
-  if (!document) return null;
+  if (!pdfDoc) return null;
+
+  // Build per-page active match index map for search highlighting
+  const currentMatch: SearchMatch | undefined =
+    pdfSearch.currentMatchIndex >= 0 ? pdfSearch.matches[pdfSearch.currentMatchIndex] : undefined;
+  const activeMatchByPage = new Map<number, number>();
+  if (currentMatch) {
+    activeMatchByPage.set(currentMatch.pageNumber, currentMatch.matchIndexInPage);
+  }
 
   return (
     <div ref={containerRef} className="flex h-full w-full flex-col">
@@ -584,9 +607,21 @@ export function PdfDocument({
 
       {showSearch && (
         <PdfSearchBar
-          document={document}
-          onGoToPage={goToPage}
-          onClose={() => setShowSearch(false)}
+          query={pdfSearch.query}
+          currentMatchIndex={pdfSearch.currentMatchIndex}
+          totalMatches={pdfSearch.totalMatches}
+          isSearching={pdfSearch.isSearching}
+          onSearch={pdfSearch.search}
+          onNext={pdfSearch.searchNext}
+          onPrev={pdfSearch.searchPrev}
+          onClear={pdfSearch.clearSearch}
+          onGoToMatch={(match) => {
+            if (match) goToPage(match.pageNumber);
+          }}
+          onClose={() => {
+            pdfSearch.clearSearch();
+            setShowSearch(false);
+          }}
         />
       )}
 
@@ -602,14 +637,14 @@ export function PdfDocument({
             >
               {showOutline && (
                 <PdfOutlineSidebar
-                  document={document}
+                  document={pdfDoc}
                   onGoToPage={goToPage}
                   currentPage={currentPage}
                 />
               )}
               {externalShowCitationSidebar && onSearchPaper && (
                 <PdfCitationSidebar
-                  document={document}
+                  document={pdfDoc}
                   currentPage={currentPage}
                   paperId={paperId}
                   cachedReferences={cachedReferences}
@@ -669,12 +704,14 @@ export function PdfDocument({
                   style={{ width: Math.floor(pageWidth), height: Math.floor(pageHeight) }}
                 >
                   <PdfPage
-                    document={document}
+                    document={pdfDoc}
                     pageNumber={pageNum}
                     scale={actualScale}
                     isVisible={isVisible}
                     onGoToPage={goToPage}
                     onOpenUrl={onOpenUrl}
+                    searchQuery={pdfSearch.query}
+                    activeMatchIndexOnPage={activeMatchByPage.get(pageNum) ?? -1}
                   />
                   {isVisible && (
                     <PdfHighlightLayer

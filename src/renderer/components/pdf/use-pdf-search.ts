@@ -3,6 +3,9 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 export interface SearchMatch {
   pageNumber: number;
+  /** Index of this match within the page (0-based) */
+  matchIndexInPage: number;
+  /** Global index across all pages */
   index: number;
 }
 
@@ -53,8 +56,10 @@ export function usePdfSearch(document: PDFDocumentProxy | null): UsePdfSearchRes
 
         let startIdx = 0;
         let pos: number;
+        let matchIndexInPage = 0;
         while ((pos = pageText.indexOf(needle, startIdx)) !== -1) {
-          found.push({ pageNumber: pageNum, index: found.length });
+          found.push({ pageNumber: pageNum, matchIndexInPage, index: found.length });
+          matchIndexInPage++;
           startIdx = pos + 1;
         }
       }

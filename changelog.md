@@ -1,5 +1,106 @@
 # Changelog
 
+## 2026-03-22 (59)
+
+### fix: PDF in-document search now highlights matches and scrolls to exact position
+
+- **Text layer highlighting**: Search matches are now visually highlighted in the PDF text layer with yellow background (active match in orange)
+- **Precise scroll positioning**: Navigating between matches scrolls to the exact position of the matched text, not just the page
+- **Cross-span matching**: Search correctly handles terms that span across multiple text layer spans
+- **Architecture refactor**: Lifted `usePdfSearch` state from `PdfSearchBar` into `PdfDocument`, passing search query + active match info down to each `PdfPage` for per-page highlighting
+- **Modified**: `use-pdf-search.ts`, `PdfSearchBar.tsx`, `PdfPage.tsx`, `PdfDocument.tsx`, `pdf-overrides.css`, `changelog.md`
+
+## 2026-03-22 (58)
+
+### feat: P1 — Reading progress, global highlights, Markdown export, direct reader access
+
+**Reading progress on Library cards + filter**
+
+- PaperCard now shows reading progress badge (e.g., `p.12/45`) — amber for in-progress, green for finished
+- New "Progress" filter dropdown: All / Unread / Reading / Finished (server-side via raw SQL for field-to-field comparison)
+
+**Direct reader access from Library**
+
+- Clicking the file icon on a paper card opens the reader directly (skipping the detail page), if the paper has a PDF
+- Detail page auto-redirects to reader when navigated with `openReader` state flag
+
+**Global Highlights page**
+
+- New sidebar navigation item "Highlights" with dedicated page
+- Search across all highlights in the library by text content
+- Filter by highlight color (yellow/green/blue/pink/purple)
+- Results grouped by paper with click-to-jump to reader
+- Notion-inspired design with color dots and paper headers
+
+**Markdown export**
+
+- Export button (clipboard icon) in reader toolbar
+- Generates Markdown with paper title, authors, highlights grouped by page, and reading notes
+- ProseMirror/TipTap JSON to Markdown converter (paragraphs, headings, lists, bold, italic, code)
+- Copies to clipboard with toast confirmation
+
+**i18n**: Added `papersByTag.readingStatus.*`, `papers.openReader`, `papers.openDetail`, `sidebar.highlights`, `highlights.*`, `reader.exportHighlights/exportCopied/noHighlightsToExport` to both `en.json` and `zh.json`.
+
+**Modified**: `papers.repository.ts`, `papers.service.ts`, `papers.ipc.ts`, `highlights.repository.ts`, `highlights.ipc.ts`, `use-ipc.ts`, `papers-by-tag.tsx`, `app-shell.tsx`, `router.tsx`, `overview/page.tsx`, `reader/page.tsx`, `en.json`, `zh.json`, `changelog.md`
+**New files**: `src/renderer/pages/highlights/page.tsx`
+
+## 2026-03-22 (57)
+
+### feat: P0 — Server-side pagination, paper deduplication, and backup/restore
+
+**Phase 1: Large library performance — server-side pagination**
+
+- **New `listPaginated` repository method**: Prisma `skip`/`take` with server-side filtering (text search, tag, year, import time, sort) and `count()` for total. Supports `__untagged__` special tag value.
+- **New `getCounts` endpoint**: Returns library-wide stats (total, untagged, unindexed, missingAbstract, withPdf, availableYears) in a single query, replacing per-render client-side computation.
+- **Frontend refactored**: `papers-by-tag.tsx` now fetches via `papers:listPaginated` with current filter state. Client-side filtering/sorting removed. Stats from `papers:counts`. Batch auto-tag delegated to server-side `tagging:tagUntagged`.
+
+**Phase 2: Paper deduplication**
+
+- **PDF content-based dedup** in `importLocalPdf`: Extracts DOI, arXiv ID, and title from first 3000 chars of PDF text before creating a new record. Returns existing paper if match found.
+- **Title-based dedup** in `upsertFromIngest`: Third dedup check after arXiv ID and DOI — normalized title `contains` query with bidirectional substring matching.
+- **New `findByNormalizedTitle` repository method**: Case-insensitive substring search with 80-char prefix, returns first high-confidence match.
+- **Duplicate detection service** (`dedup.service.ts`): Scans library for groups of papers with identical normalized titles. Results shown as orange banner in library view with review modal.
+
+**Phase 3: Backup & Restore**
+
+- **New `backup.service.ts`**: Creates zip with `archiver` (DB, papers/, config JSONs, manifest). Restore via `unzipper`. Excludes vec-store.json (regeneratable).
+- **New `backup.ipc.ts`**: `backup:create` (save dialog → zip), `backup:restore` (open dialog → extract), `backup:getInfo` (manifest peek).
+- **Settings UI**: "Backup & Restore" section in Storage settings with create/restore buttons, progress states, and result messages.
+
+**i18n**: Added `papers.duplicates.*` and `settings.backup.*` keys to both `en.json` and `zh.json`.
+
+**Dependencies**: Added `archiver`, `@types/archiver`, `unzipper`, `@types/unzipper`.
+
+**Modified**: `papers.repository.ts`, `papers.service.ts`, `papers.ipc.ts`, `papers-by-tag.tsx`, `use-ipc.ts`, `dedup.service.ts` (new), `backup.service.ts` (new), `backup.ipc.ts` (new), `index.ts`, `settings/page.tsx`, `en.json`, `zh.json`, `changelog.md`
+
+## 2026-03-22 (56)
+
+### fix: Chat session recovery after mid-conversation exit
+
+- **Initial user message now persisted to DB**: `runAgentTodo` in `agent-todo.service.ts` now saves the initial prompt as a user run message before starting the agent. Previously only follow-up messages (via `sendMessage`) were persisted — the first user message was lost on mid-stream exit.
+- **Chat history dropdown recovers active sessions**: `handleLoadChatSession` in `reader/page.tsx` now checks `getActiveAgentTodoStatus` before loading from DB. If the task is still running, live messages are recovered instead of showing stale DB data.
+- **OverviewPage `t is not defined` fix**: Added missing `useTranslation()` hook call to the `OverviewPage` component.
+- **New IPC handlers**: `acp-chat:message:add` and `acp-chat:activeJobs` for UnifiedChatModal (future use).
+- **pushUserMessage stores in-memory**: `AgentTaskRunner.pushUserMessage()` now pushes to `messages` and `mergedMessages` arrays, so `getActiveTodoStatus()` includes user messages for mid-navigation recovery.
+- **Test coverage**: Added `chat-session-recovery.test.ts` (6 tests, DB persistence) and `chat-backend-flow.test.ts` (6 tests, full service chain with mocked AcpConnection) covering initial prompt persistence, mid-stream recovery, follow-up, tool call, history loading, multi-run isolation, and live state recovery.
+- **Modified**: `agent-todo.service.ts`, `agent-task-runner.ts`, `reader/page.tsx`, `overview/page.tsx`, `acp-chat.service.ts`, `acp-chat.ipc.ts`, `use-ipc.ts`, `UnifiedChatModal.tsx`, `changelog.md`
+
+## 2026-03-22 (55)
+
+### feat: Integrate online paper search into main Search page
+
+- **Search mode now searches both local library and online databases in parallel**. When users search in the "Search" tab, semantic search runs against the local library while OpenAlex/Semantic Scholar searches run concurrently for online results.
+- **Result tabs (Library / Online)**: Results area has two tabs — "Library" (default, shows local semantic results) and "Online" (shows papers from OpenAlex/Semantic Scholar). Tab indicator uses spring animation. Online tab shows a loading spinner while results are being fetched.
+- **One-click import**: Online result cards have an "Import" button that downloads the paper to the library via DOI, arXiv ID, or title lookup. Shows importing spinner and "Imported" confirmation state.
+- **Search state persistence**: All search state (query, results, active tab, imported IDs) is cached at module level, so navigating away from the search page and returning preserves results.
+- **i18n**: Added `search.onlineResults`, `search.onlineSearching`, `search.importToLibrary`, `search.importing`, `search.imported`, `search.citations`, `search.noCitations`, `search.onlineNoResults`, `search.libraryResults` to both `en.json` and `zh.json`.
+- **Relevance score badge**: Semantic search results now display a percentage-based relevance score (top-right corner, fades on hover). Color-coded: green (>=80%), blue (>=60%), amber (>=40%), gray (<40%).
+- **Score normalization**: Added sigmoid-based normalization for embedding similarity scores. `text-embedding-3-small` produces low raw cosine similarities (0.25-0.55 typical), now mapped to a perceptual 0-100% scale.
+- **Online search: dual-strategy for better recall**: OpenAlex now runs fulltext search + title-specific search (`filter=title.search:`) in parallel, then merges results with title matches prioritized. This fixes cases where short queries (e.g. "think like human") missed papers whose title contained the query words but ranked poorly in fulltext.
+- **fix: Import from online search broken** — Two bugs: (1) `importByTitle` and `createFromMetadata` called `this.papersService.create()` but `papersService` was undefined — changed to `this.papersRepository.create()`. (2) `importByDoi` was called with an extra `input` arg, causing `tags` param to receive a string instead of array (`tags.map is not a function`) — removed extra arg.
+- **Import error feedback**: Online result cards now show error state with "Retry" button and error message tooltip when import fails.
+- **Modified**: `search-content.tsx`, `semantic-search.service.ts`, `paper-search.service.ts`, `download.service.ts`, `use-ipc.ts`, `en.json`, `zh.json`, `changelog.md`
+
 ## 2026-03-21 (54)
 
 ### fix: Discovery Smart Filter cancel + 7-day history

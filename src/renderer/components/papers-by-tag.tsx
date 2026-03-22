@@ -247,6 +247,27 @@ export function PapersByTag({
     () => (localStorage.getItem('researchclaw-library-sort') as SortOption) || 'importDate',
   );
   const [yearFilter, setYearFilter] = useState<number | null>(null);
+  type ReadingStatusFilter = 'all' | 'unread' | 'reading' | 'finished';
+  const [readingStatusFilter, setReadingStatusFilter] = useState<ReadingStatusFilter>('all');
+  // Server-side pagination state
+  const [totalPapers, setTotalPapers] = useState(0);
+  // Duplicate detection
+  const [duplicateGroups, setDuplicateGroups] = useState<
+    Array<{
+      reason: string;
+      papers: Array<{ id: string; shortId: string; title: string; sourceUrl: string | null }>;
+    }>
+  >([]);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  // Library-wide stats (from papers:counts)
+  const [paperCounts, setPaperCounts] = useState<{
+    total: number;
+    untagged: number;
+    unindexed: number;
+    missingAbstract: number;
+    withPdf: number;
+    availableYears: number[];
+  } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [retryingPaperId, setRetryingPaperId] = useState<string | null>(null);
@@ -266,6 +287,13 @@ export function PapersByTag({
     { value: 'lastRead', label: t('papersByTag.sort.lastRead') },
     { value: 'importDate', label: t('papersByTag.sort.importDate') },
     { value: 'title', label: t('papersByTag.sort.title') },
+  ];
+
+  const READING_STATUS_OPTIONS: { value: ReadingStatusFilter; label: string }[] = [
+    { value: 'all', label: t('papersByTag.readingStatus.all') },
+    { value: 'unread', label: t('papersByTag.readingStatus.unread') },
+    { value: 'reading', label: t('papersByTag.readingStatus.reading') },
+    { value: 'finished', label: t('papersByTag.readingStatus.finished') },
   ];
 
   const CATEGORY_FILTER_OPTIONS: { value: CategoryFilter; label: string }[] = [
@@ -335,6 +363,21 @@ export function PapersByTag({
     return document.querySelector('main.overflow-y-auto') as HTMLElement | null;
   }, []);
 
+  const fetchCounts = useCallback(async () => {
+    try {
+      const [tagData, counts, dupes] = await Promise.all([
+        ipc.listAllTags(),
+        ipc.getPaperCounts(),
+        ipc.findDuplicates(),
+      ]);
+      setAllTags(tagData);
+      setPaperCounts(counts);
+      setDuplicateGroups(dupes);
+    } catch {
+      // silent
+    }
+  }, []);
+
   const fetchPapers = useCallback(
     async (preserveScroll = false) => {
       if (preserveScroll) {
@@ -345,9 +388,18 @@ export function PapersByTag({
       }
       setLoading(true);
       try {
-        const [paperData, tagData] = await Promise.all([ipc.listPapers(), ipc.listAllTags()]);
-        setPapers(paperData);
-        setAllTags(tagData);
+        const result = await ipc.listPapersPaginated({
+          q: searchQuery || undefined,
+          tag: selectedTag === 'Untagged' ? '__untagged__' : selectedTag || undefined,
+          importedWithin: importTimeFilter !== 'all' ? importTimeFilter : undefined,
+          year: yearFilter ?? undefined,
+          page: currentPage - 1, // server uses 0-indexed
+          pageSize,
+          sortBy,
+          readingStatus: readingStatusFilter !== 'all' ? readingStatusFilter : undefined,
+        });
+        setPapers(result.papers);
+        setTotalPapers(result.total);
         // Restore scroll position after React renders
         if (preserveScroll) {
           requestAnimationFrame(() => {
@@ -363,7 +415,16 @@ export function PapersByTag({
         setLoading(false);
       }
     },
-    [getScrollContainer],
+    [
+      getScrollContainer,
+      searchQuery,
+      selectedTag,
+      importTimeFilter,
+      yearFilter,
+      currentPage,
+      sortBy,
+      readingStatusFilter,
+    ],
   );
 
   const lastRefreshCountRef = useRef(0);
@@ -394,29 +455,24 @@ export function PapersByTag({
 
       if (shouldRefreshTags) {
         lastRefreshCountRef.current = typedStatus.completed;
-        ipc
-          .listAllTags()
-          .then(setAllTags)
-          .catch(() => undefined);
+        void fetchCounts();
       }
 
       if (shouldRefreshPapers) {
         lastPapersRefreshCountRef.current = typedStatus.completed;
-        ipc
-          .listPapers()
-          .then(setPapers)
-          .catch(() => undefined);
+        void fetchPapers(true);
       }
 
       if (!typedStatus.active && typedStatus.completed > 0) {
-        fetchPapers();
+        void fetchPapers();
+        void fetchCounts();
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [fetchPapers, toast]);
+  }, [fetchPapers, fetchCounts, toast]);
 
   useEffect(() => {
     ipc
@@ -445,12 +501,19 @@ export function PapersByTag({
     fetchPapers();
   }, [fetchPapers]);
 
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts]);
+
   // Refresh papers when window regains focus (catches imports that happened while navigated away)
   useEffect(() => {
-    const handleFocus = () => void fetchPapers(true);
+    const handleFocus = () => {
+      void fetchPapers(true);
+      void fetchCounts();
+    };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [fetchPapers]);
+  }, [fetchPapers, fetchCounts]);
 
   useEffect(() => {
     return onIpc('papers:processingStatus', (_event, payload) => {
@@ -472,9 +535,10 @@ export function PapersByTag({
   // Refresh paper when metadata is extracted (e.g. after local PDF upload)
   useEffect(() => {
     return onIpc('papers:metadataUpdated', () => {
-      fetchPapers();
+      void fetchPapers();
+      void fetchCounts();
     });
-  }, [fetchPapers]);
+  }, [fetchPapers, fetchCounts]);
 
   // Check if lightweight model is available for auto-tag
   const canAutoTag = useMemo(() => {
@@ -490,80 +554,14 @@ export function PapersByTag({
   }, [embeddingConfig]);
 
   const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    papers.forEach((p) => {
-      if (p.submittedAt) years.add(new Date(p.submittedAt).getUTCFullYear());
-    });
-    return Array.from(years).sort((a, b) => b - a);
-  }, [papers]);
+    return paperCounts?.availableYears ?? [];
+  }, [paperCounts]);
 
-  const importTimeCutoff = useMemo(() => {
-    if (importTimeFilter === 'all') return null;
-    const now = new Date();
-    switch (importTimeFilter) {
-      case 'today':
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      case 'week':
-        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      case 'month':
-        return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-      default:
-        return null;
-    }
-  }, [importTimeFilter]);
-
-  const visiblePapers = useMemo(() => {
-    const filtered = papers.filter((paper) => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = paper.title.toLowerCase().includes(q);
-        const matchesAuthors = (paper.authors || []).some((a) => a.toLowerCase().includes(q));
-        if (!matchesTitle && !matchesAuthors) return false;
-      }
-
-      if (selectedTag) {
-        const tags = (paper.categorizedTags || [])
-          .filter((t) => !EXCLUDED_TAGS.includes(t.name.toLowerCase()))
-          .map((t) => t.name);
-        if (selectedTag === 'Untagged' && tags.length > 0) return false;
-        if (selectedTag !== 'Untagged' && !tags.includes(selectedTag)) return false;
-      }
-
-      if (importTimeCutoff && paper.createdAt) {
-        const created = new Date(paper.createdAt);
-        if (created < importTimeCutoff) return false;
-      }
-
-      if (
-        yearFilter !== null &&
-        (paper.submittedAt ? new Date(paper.submittedAt).getUTCFullYear() : null) !== yearFilter
-      )
-        return false;
-
-      return true;
-    });
-
-    // Sort based on selected sort option
-    if (sortBy === 'importDate') {
-      filtered.sort((a, b) => {
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return dateB - dateA;
-      });
-    } else if (sortBy === 'title') {
-      filtered.sort((a, b) => a.title.localeCompare(b.title));
-    }
-    // 'lastRead' keeps the default DB order (lastReadAt desc, then createdAt desc)
-
-    return filtered;
-  }, [papers, searchQuery, selectedTag, importTimeCutoff, yearFilter, sortBy]);
+  // Server handles filtering, sorting, and pagination — papers is already the current page
+  const visiblePapers = papers;
 
   const tagList = useMemo(() => {
-    const untaggedCount = papers.filter(
-      (p) =>
-        !p.categorizedTags ||
-        p.categorizedTags.filter((t) => !EXCLUDED_TAGS.includes(t.name)).length === 0,
-    ).length;
+    const untaggedN = paperCounts?.untagged ?? 0;
 
     let tags = allTags.filter((t) => !EXCLUDED_TAGS.includes(t.name.toLowerCase()));
 
@@ -573,8 +571,8 @@ export function PapersByTag({
 
     const tagStats = tags.map((t) => ({ name: t.name, count: t.count, category: t.category }));
 
-    if (categoryFilter === 'all' || untaggedCount > 0) {
-      tagStats.push({ name: 'Untagged', count: untaggedCount, category: 'topic' });
+    if (categoryFilter === 'all' || untaggedN > 0) {
+      tagStats.push({ name: 'Untagged', count: untaggedN, category: 'topic' });
     }
 
     return tagStats.sort((a, b) => {
@@ -582,36 +580,21 @@ export function PapersByTag({
       if (b.name === 'Untagged') return -1;
       return a.name.localeCompare(b.name);
     });
-  }, [allTags, papers, categoryFilter]);
+  }, [allTags, paperCounts, categoryFilter]);
 
-  // Reset to page 1 when filters or sort change
+  // Reset to page 1 when filters or sort change (fetchPapers depends on currentPage and re-fetches)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedTag, importTimeFilter, yearFilter, sortBy]);
+  }, [searchQuery, selectedTag, importTimeFilter, yearFilter, sortBy, readingStatusFilter]);
 
-  // Pagination
-  const totalPages = Math.ceil(visiblePapers.length / pageSize);
-  const paginatedPapers = visiblePapers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Pagination — server returns the current page, totalPapers is from the server
+  const totalPages = Math.ceil(totalPapers / pageSize);
+  const paginatedPapers = visiblePapers;
 
-  const untaggedCount = useMemo(() => {
-    return papers.filter(
-      (p) =>
-        !p.categorizedTags ||
-        p.categorizedTags.filter((t) => !EXCLUDED_TAGS.includes(t.name)).length === 0,
-    ).length;
-  }, [papers]);
-
-  const unindexedCount = useMemo(() => {
-    return papers.filter((p) => !p.indexedAt && p.abstract).length;
-  }, [papers]);
-
-  const missingAbstractCount = useMemo(() => {
-    return papers.filter((p) => !p.abstract && (p.pdfPath || p.pdfUrl)).length;
-  }, [papers]);
-
-  const papersWithPdfCount = useMemo(() => {
-    return papers.filter((p) => p.pdfPath || p.pdfUrl).length;
-  }, [papers]);
+  const untaggedCount = paperCounts?.untagged ?? 0;
+  const unindexedCount = paperCounts?.unindexed ?? 0;
+  const missingAbstractCount = paperCounts?.missingAbstract ?? 0;
+  const papersWithPdfCount = paperCounts?.withPdf ?? 0;
 
   const handleBatchAutoTag = useCallback(async () => {
     // Check if lightweight model is configured
@@ -620,40 +603,20 @@ export function PapersByTag({
       return;
     }
 
-    // Get untagged papers (excluding system tags)
-    const untaggedPapers = papers.filter(
-      (p) =>
-        !p.categorizedTags ||
-        p.categorizedTags.filter((t) => !EXCLUDED_TAGS.includes(t.name)).length === 0,
-    );
-    if (untaggedPapers.length === 0) {
+    if (untaggedCount === 0) {
       toast.info('No untagged papers to process');
       return;
     }
 
-    setBatchTagProgress({ current: 0, total: untaggedPapers.length });
-
+    // Use server-side batch tagging (processes all untagged papers, not just current page)
     try {
-      for (let i = 0; i < untaggedPapers.length; i++) {
-        const paper = untaggedPapers[i];
-        setBatchTagProgress({ current: i + 1, total: untaggedPapers.length });
-        try {
-          await ipc.tagPaper(paper.id);
-        } catch {
-          // Continue with next paper even if one fails
-        }
-        // Small delay to prevent overwhelming the system
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      toast.success(`Auto-tagged ${untaggedPapers.length} papers`);
-      void fetchPapers(true);
+      await ipc.tagUntagged();
+      toast.info(`Auto-tagging ${untaggedCount} papers in background...`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Auto-tagging failed';
       toast.error(msg);
-    } finally {
-      setBatchTagProgress(null);
     }
-  }, [canAutoTag, papers, toast, fetchPapers]);
+  }, [canAutoTag, untaggedCount, toast]);
 
   const handleBatchIndex = useCallback(async () => {
     // Check if embedding model is configured
@@ -701,7 +664,7 @@ export function PapersByTag({
     } finally {
       setBatchIndexProgress(null);
     }
-  }, [canIndex, papers, toast]);
+  }, [canIndex, papers, toast, fetchCounts]);
 
   // Handle metadata extraction for papers missing abstract
   useEffect(() => {
@@ -744,19 +707,24 @@ export function PapersByTag({
     } finally {
       setMetadataProgress(null);
     }
-  }, [missingAbstractCount, papersWithPdfCount, toast, fetchPapers]);
+  }, [missingAbstractCount, papersWithPdfCount, toast, fetchPapers, fetchCounts]);
 
-  const handleDelete = useCallback(async (paperId: string) => {
-    setDeleting(paperId);
-    try {
-      await ipc.deletePaper(paperId);
-      setPapers((prev) => prev.filter((p) => p.id !== paperId));
-    } catch {
-      // silent
-    } finally {
-      setDeleting(null);
-    }
-  }, []);
+  const handleDelete = useCallback(
+    async (paperId: string) => {
+      setDeleting(paperId);
+      try {
+        await ipc.deletePaper(paperId);
+        setPapers((prev) => prev.filter((p) => p.id !== paperId));
+        setTotalPapers((prev) => Math.max(0, prev - 1));
+        void fetchCounts();
+      } catch {
+        // silent
+      } finally {
+        setDeleting(null);
+      }
+    },
+    [fetchCounts],
+  );
 
   const handleDownloadPdf = useCallback(
     async (paper: PaperItem) => {
@@ -922,33 +890,9 @@ export function PapersByTag({
   }, []);
 
   const selectAll = useCallback(() => {
-    const filtered = papers.filter((paper) => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = paper.title.toLowerCase().includes(q);
-        const matchesAuthors = (paper.authors || []).some((a) => a.toLowerCase().includes(q));
-        if (!matchesTitle && !matchesAuthors) return false;
-      }
-      if (selectedTag) {
-        const tags = (paper.categorizedTags || [])
-          .filter((t) => !EXCLUDED_TAGS.includes(t.name.toLowerCase()))
-          .map((t) => t.name);
-        if (selectedTag === 'Untagged' && tags.length > 0) return false;
-        if (selectedTag !== 'Untagged' && !tags.includes(selectedTag)) return false;
-      }
-      if (importTimeCutoff && paper.createdAt) {
-        const created = new Date(paper.createdAt);
-        if (created < importTimeCutoff) return false;
-      }
-      if (
-        yearFilter !== null &&
-        (paper.submittedAt ? new Date(paper.submittedAt).getUTCFullYear() : null) !== yearFilter
-      )
-        return false;
-      return true;
-    });
-    setSelectedIds(new Set(filtered.map((p) => p.id)));
-  }, [papers, searchQuery, selectedTag, importTimeCutoff, yearFilter]);
+    // Select all papers on the current page (server already filtered)
+    setSelectedIds(new Set(papers.map((p) => p.id)));
+  }, [papers]);
 
   const deselectAll = useCallback(() => setSelectedIds(new Set()), []);
 
@@ -962,9 +906,10 @@ export function PapersByTag({
     setIsBatchDeleting(true);
     try {
       await ipc.deletePapers(Array.from(selectedIds));
-      setPapers((prev) => prev.filter((p) => !selectedIds.has(p.id)));
       setSelectedIds(new Set());
       setIsSelectMode(false);
+      void fetchPapers();
+      void fetchCounts();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       alert(`Failed to delete papers: ${message}`);
@@ -972,7 +917,7 @@ export function PapersByTag({
       setIsBatchDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }, [selectedIds]);
+  }, [selectedIds, fetchPapers, fetchCounts]);
 
   const handleExportBibtex = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -1168,17 +1113,26 @@ export function PapersByTag({
               onSelect={setImportTimeFilter}
               label="Time"
             />
+            <PillDropdown
+              options={READING_STATUS_OPTIONS}
+              selected={readingStatusFilter}
+              onSelect={setReadingStatusFilter}
+              label={t('papersByTag.readingStatus.label')}
+            />
             {availableYears.length > 0 && (
               <YearDropdown years={availableYears} selected={yearFilter} onSelect={setYearFilter} />
             )}
-            {(importTimeFilter !== 'all' || yearFilter !== null) && (
+            {(importTimeFilter !== 'all' ||
+              yearFilter !== null ||
+              readingStatusFilter !== 'all') && (
               <button
                 onClick={() => {
                   setImportTimeFilter('all');
                   setYearFilter(null);
+                  setReadingStatusFilter('all');
                 }}
                 className="flex h-6 w-6 items-center justify-center rounded-full text-notion-text-tertiary hover:bg-notion-sidebar hover:text-notion-text"
-                title="Clear time/year filters"
+                title="Clear filters"
               >
                 <X size={12} />
               </button>
@@ -1481,6 +1435,19 @@ export function PapersByTag({
           </div>
         ) : (
           <>
+            {duplicateGroups.length > 0 && (
+              <div className="mb-3 flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5">
+                <span className="text-sm text-orange-700">
+                  {t('papers.duplicates.found', { count: duplicateGroups.length })}
+                </span>
+                <button
+                  onClick={() => setShowDuplicateModal(true)}
+                  className="rounded-lg px-3 py-1 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100"
+                >
+                  {t('papers.duplicates.review')}
+                </button>
+              </div>
+            )}
             <div className="rounded-xl border border-notion-border bg-white overflow-hidden">
               {paginatedPapers.map((paper) => (
                 <PaperCard
@@ -1564,7 +1531,7 @@ export function PapersByTag({
                   {t('papersByTag.pageInfo', {
                     current: currentPage,
                     total: totalPages,
-                    count: visiblePapers.length,
+                    count: totalPapers,
                   })}
                 </span>
               </div>
@@ -1640,6 +1607,90 @@ export function PapersByTag({
         onClose={() => setShowTagManagement(false)}
         onRefresh={fetchPapers}
       />
+
+      {/* Duplicate Detection Modal */}
+      <AnimatePresence>
+        {showDuplicateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+            onClick={() => setShowDuplicateModal(false)}
+            onKeyDown={(e) => e.key === 'Escape' && setShowDuplicateModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="max-h-[70vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-notion-text">
+                {t('papers.duplicates.title')}
+              </h3>
+              <p className="mt-1 text-sm text-notion-text-secondary">
+                {t('papers.duplicates.description')}
+              </p>
+
+              <div className="mt-4 space-y-4">
+                {duplicateGroups.map((group, i) => (
+                  <div key={i} className="rounded-lg border border-notion-border p-3">
+                    <p className="mb-2 text-xs font-medium text-notion-text-tertiary">
+                      {t('papers.duplicates.reasonTitle')}
+                    </p>
+                    {group.papers.map((paper) => (
+                      <div key={paper.id} className="flex items-center justify-between py-1.5">
+                        <div className="mr-2 min-w-0 flex-1">
+                          <p className="truncate text-sm text-notion-text">{paper.title}</p>
+                          <p className="truncate text-xs text-notion-text-tertiary">
+                            {paper.shortId}
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(t('papers.duplicates.deleteConfirm'))) return;
+                            try {
+                              await ipc.deletePaper(paper.id);
+                              setDuplicateGroups((prev) =>
+                                prev
+                                  .map((g) => ({
+                                    ...g,
+                                    papers: g.papers.filter((p) => p.id !== paper.id),
+                                  }))
+                                  .filter((g) => g.papers.length >= 2),
+                              );
+                              void fetchPapers();
+                              void fetchCounts();
+                            } catch {
+                              // silent
+                            }
+                          }}
+                          className="flex-shrink-0 rounded-lg p-1.5 text-notion-text-tertiary transition-colors hover:bg-red-50 hover:text-red-500"
+                          title={t('common.delete')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setShowDuplicateModal(false)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
+                >
+                  {t('common.close')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1742,10 +1793,21 @@ function PaperCard({
           )}
         </AnimatePresence>
 
-        {/* Icon */}
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">
+        {/* Icon — click to open reader directly */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isSelectMode && paper.pdfPath) {
+              onOpen(paper.shortId, { from: '/papers', openReader: true });
+            } else if (!isSelectMode) {
+              onOpen(paper.shortId, { from: '/papers' });
+            }
+          }}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50 transition-colors hover:bg-blue-100"
+          title={paper.pdfPath ? t('papers.openReader') : t('papers.openDetail')}
+        >
           <FileText size={16} className="text-blue-500" />
-        </div>
+        </button>
 
         {/* Clickable content area */}
         <button
@@ -1805,6 +1867,17 @@ function PaperCard({
             {paper.indexedAt && (
               <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-600">
                 indexed
+              </span>
+            )}
+            {paper.lastReadPage != null && paper.totalPages != null && paper.totalPages > 0 && (
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                  paper.lastReadPage >= paper.totalPages
+                    ? 'bg-green-50 text-green-600'
+                    : 'bg-amber-50 text-amber-600'
+                }`}
+              >
+                p.{paper.lastReadPage}/{paper.totalPages}
               </span>
             )}
           </div>

@@ -12,6 +12,7 @@ import {
 } from '../services/paper-processing.service';
 import { type IpcResult, ok, err } from '@shared';
 import { getBibtexBatch } from '../services/bibtex.service';
+import { findDuplicates } from '../services/dedup.service';
 import { searchPapers } from '../services/paper-search.service';
 import { generateWithActiveProvider } from '../services/ai-provider.service';
 import { getPaperOverview, getBestSummary } from '../services/alphaxiv.service';
@@ -102,6 +103,65 @@ export function setupPapersIpc() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error('[papers:list] Error:', msg);
+        return err(msg);
+      }
+    },
+  );
+
+  ipcMain.handle('papers:findDuplicates', async (): Promise<IpcResult<unknown>> => {
+    try {
+      const result = await findDuplicates();
+      return ok(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[papers:findDuplicates] Error:', msg);
+      return err(msg);
+    }
+  });
+
+  ipcMain.handle('papers:counts', async (): Promise<IpcResult<unknown>> => {
+    try {
+      const result = await getPapersService().getCounts();
+      return ok(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[papers:counts] Error:', msg);
+      return err(msg);
+    }
+  });
+
+  ipcMain.handle(
+    'papers:listPaginated',
+    async (
+      _,
+      query: {
+        q?: string;
+        year?: number;
+        tag?: string;
+        importedWithin?: 'today' | 'week' | 'month' | 'all';
+        temporary?: boolean;
+        page?: number;
+        pageSize?: number;
+        sortBy?: 'lastRead' | 'importDate' | 'title';
+        readingStatus?: 'all' | 'unread' | 'reading' | 'finished';
+      } = {},
+    ): Promise<IpcResult<unknown>> => {
+      try {
+        const result = await getPapersService().listPaginated(query);
+        console.log(
+          '[papers:listPaginated] page:',
+          result.page,
+          'pageSize:',
+          result.pageSize,
+          'total:',
+          result.total,
+          'returned:',
+          result.papers.length,
+        );
+        return ok(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[papers:listPaginated] Error:', msg);
         return err(msg);
       }
     },
