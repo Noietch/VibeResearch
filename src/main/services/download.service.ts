@@ -126,7 +126,7 @@ export class DownloadService {
 
     // Handle DOI or general URL via doi-resolver
     if (parsed.type === 'doi' && parsed.doi) {
-      return this.importByDoi(parsed.doi, input, tags, isTemporary);
+      return this.importByDoi(parsed.doi, tags, isTemporary);
     }
     if (parsed.type === 'url') {
       return this.importByUrl(input.trim(), tags, isTemporary);
@@ -391,7 +391,8 @@ export class DownloadService {
     }
 
     await this.ensurePaperFolder(shortId);
-    const paper = await this.papersService.create({
+    const paper = await this.papersRepository.create({
+      shortId,
       title: bestMatch.title,
       authors,
       source: arxivId ? 'arxiv' : 'manual',
@@ -497,7 +498,8 @@ export class DownloadService {
     await this.ensurePaperFolder(shortId);
     const submittedAt = metadata.year ? new Date(`${metadata.year}-01-01T00:00:00Z`) : undefined;
 
-    const paper = await this.papersService.create({
+    const paper = await this.papersRepository.create({
+      shortId,
       title: metadata.title,
       authors: metadata.authors,
       source: 'manual',
