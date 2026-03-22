@@ -782,12 +782,16 @@ export function PapersByTag({
       try {
         await ipc.retryPaperProcessing(paperId);
       } catch (error) {
-        alert(error instanceof Error ? error.message : 'Retrying paper processing failed');
+        const msg = error instanceof Error ? error.message : 'Retrying paper processing failed';
+        toast.error(msg, {
+          label: t('common.retry'),
+          onClick: () => void handleRetryProcessing(paperId),
+        });
       } finally {
         setRetryingPaperId(null);
       }
     },
-    [fetchPapers],
+    [fetchPapers, toast, t],
   );
 
   const handleAutoTagPaper = useCallback(
@@ -812,13 +816,16 @@ export function PapersByTag({
         if (isNoModel) {
           toast.warning('Lightweight model not configured. Please set it up in Settings > Models.');
         } else {
-          toast.error(msg);
+          toast.error(msg, {
+            label: t('common.retry'),
+            onClick: () => void handleAutoTagPaper(paperId),
+          });
         }
       } finally {
         setAutoTaggingPaperId(null);
       }
     },
-    [canAutoTag, fetchPapers, toast],
+    [canAutoTag, fetchPapers, toast, t],
   );
 
   const handleIndexPaper = useCallback(
@@ -839,12 +846,15 @@ export function PapersByTag({
         toast.success('Indexed');
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Indexing failed';
-        toast.error(msg);
+        toast.error(msg, {
+          label: t('common.retry'),
+          onClick: () => void handleIndexPaper(paperId),
+        });
       } finally {
         setIndexingPaperId(null);
       }
     },
-    [canIndex, toast],
+    [canIndex, toast, t],
   );
 
   const handleAnalyzePaper = useCallback(
@@ -860,12 +870,15 @@ export function PapersByTag({
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Analysis failed';
-        toast.error(msg);
+        toast.error(msg, {
+          label: t('common.retry'),
+          onClick: () => void handleAnalyzePaper(paper),
+        });
       } finally {
         setAnalyzingPaperId(null);
       }
     },
-    [toast],
+    [toast, t],
   );
 
   const handleExtractPaperMetadata = useCallback(
@@ -885,12 +898,15 @@ export function PapersByTag({
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Metadata extraction failed';
-        toast.error(msg);
+        toast.error(msg, {
+          label: t('common.retry'),
+          onClick: () => void handleExtractPaperMetadata(paper),
+        });
       } finally {
         setExtractingMetadataPaperId(null);
       }
     },
-    [toast, fetchPapers],
+    [toast, fetchPapers, t],
   );
 
   const toggleSelect = useCallback((paperId: string) => {
