@@ -25,6 +25,7 @@ import {
   Clock,
   XCircle,
   RotateCcw,
+  CalendarDays,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -154,6 +155,31 @@ export function DiscoveryPage() {
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
   const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+  const [showHistoryDropdown, setShowHistoryDropdown] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<
+    { date: string; fetchedAt: string; paperCount: number; categories: string[] }[]
+  >([]);
+  const [viewingHistoryDate, setViewingHistoryDate] = useState<string | null>(null);
+  const historyDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close history dropdown on outside click
+  useEffect(() => {
+    if (!showHistoryDropdown) return;
+    const handleClick = (e: MouseEvent) => {
+      if (historyDropdownRef.current && !historyDropdownRef.current.contains(e.target as Node)) {
+        setShowHistoryDropdown(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowHistoryDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showHistoryDropdown]);
 
   // Load cached results on mount, auto-refresh if stale (>6 hours)
   useEffect(() => {
@@ -216,6 +242,7 @@ export function DiscoveryPage() {
         setFetchedAt(result.fetchedAt ?? null);
         setIsFromToday(true);
         setSortByRelevance(false);
+        setViewingHistoryDate(null);
       } else {
         setError(classifyError(result.error || 'Failed to fetch papers', t));
         setLastFailedOp('fetch');
@@ -371,6 +398,88 @@ export function DiscoveryPage() {
     else if (lastFailedOp === 'relevance') handleCalculateRelevance();
   }, [lastFailedOp, handleFetch, handleEvaluate, handleCalculateRelevance]);
 
+  // Load history entries
+  const loadHistory = useCallback(async () => {
+    try {
+      const entries = await ipc.getDiscoveryHistory();
+      setHistoryEntries(entries);
+    } catch (e) {
+      console.error('Failed to load discovery history:', e);
+    }
+  }, []);
+
+  // Load a specific history entry
+  const handleLoadHistoryEntry = useCallback(
+    async (date: string) => {
+      try {
+        const result = await ipc.loadDiscoveryHistoryEntry(date);
+        if (result && result.papers.length > 0) {
+          setPapers(result.papers);
+          setFetchedAt(result.fetchedAt);
+          setIsFromToday(result.isFromToday);
+          setViewingHistoryDate(result.isFromToday ? null : date);
+          if (result.papers.some((p) => p.relevanceScore !== null && p.relevanceScore !== undefined)) {
+            setSortByRelevance(true);
+          } else {
+            setSortByRelevance(false);
+          }
+          setCurrentPage(1);
+        }
+      } catch (e) {
+        console.error('Failed to load history entry:', e);
+      }
+      setShowHistoryDropdown(false);
+    },
+    [],
+  );
+
+  // Go back to today's results
+  const handleBackToToday = useCallback(async () => {
+    setViewingHistoryDate(null);
+    try {
+      const cached = await ipc.getLastDiscoveryResult();
+      if (cached && cached.papers.length > 0) {
+        // Reload from the most recent entry (today if available)
+        const entries = await ipc.getDiscoveryHistory();
+        if (entries.length > 0) {
+          const todayKey = new Date().toISOString().slice(0, 10);
+          const todayEntry = entries.find((e) => e.date === todayKey);
+          if (todayEntry) {
+            await handleLoadHistoryEntry(todayKey);
+            setViewingHistoryDate(null);
+            return;
+          }
+        }
+        // Fallback: just load last result
+        setPapers(cached.papers);
+        setFetchedAt(cached.fetchedAt);
+        setIsFromToday(cached.isFromToday);
+      }
+    } catch (e) {
+      console.error('Failed to go back to today:', e);
+    }
+  }, [handleLoadHistoryEntry]);
+
+  // Format a date key for display
+  const formatHistoryDate = useCallback(
+    (dateStr: string) => {
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+      if (dateStr === todayKey) return t('discovery.today', 'Today');
+      if (dateStr === yesterdayKey) return t('discovery.yesterday', 'Yesterday');
+
+      // Format as "Mar 19" style
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    },
+    [t],
+  );
+
   const toggleCategory = (cat: string) => {
     setSelectedCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
@@ -455,6 +564,56 @@ export function DiscoveryPage() {
                     </span>
                   </>
                 )}
+                {/* History button */}
+                <div className="relative" ref={historyDropdownRef}>
+                  <button
+                    onClick={() => {
+                      if (!showHistoryDropdown) loadHistory();
+                      setShowHistoryDropdown(!showHistoryDropdown);
+                    }}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-notion-text-tertiary transition-colors hover:bg-notion-sidebar-hover hover:text-notion-text-secondary"
+                  >
+                    <CalendarDays size={10} />
+                    {t('discovery.history', 'History')}
+                  </button>
+                  <AnimatePresence>
+                    {showHistoryDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-0 top-full z-30 mt-1 w-52 rounded-lg border border-notion-border bg-white p-1.5 shadow-lg"
+                      >
+                        {historyEntries.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-notion-text-tertiary">
+                            {t('discovery.noHistory', 'No history available')}
+                          </div>
+                        ) : (
+                          historyEntries.map((entry) => (
+                            <button
+                              key={entry.date}
+                              onClick={() => handleLoadHistoryEntry(entry.date)}
+                              className={clsx(
+                                'flex w-full items-center justify-between rounded px-3 py-1.5 text-xs transition-colors',
+                                viewingHistoryDate === entry.date
+                                  ? 'bg-notion-accent-light text-notion-accent'
+                                  : 'text-notion-text-secondary hover:bg-notion-sidebar',
+                              )}
+                            >
+                              <span className="font-medium">
+                                {formatHistoryDate(entry.date)}
+                              </span>
+                              <span className="text-notion-text-tertiary">
+                                {entry.paperCount} papers
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
           </div>
@@ -563,6 +722,25 @@ export function DiscoveryPage() {
                 <XCircle size={14} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Viewing history banner */}
+        {viewingHistoryDate && (
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-notion-accent/20 bg-notion-accent-light px-4 py-2.5 text-sm">
+            <div className="flex items-center gap-2 text-notion-accent">
+              <CalendarDays size={14} />
+              {t('discovery.viewingHistory', {
+                date: formatHistoryDate(viewingHistoryDate),
+                defaultValue: `Viewing results from ${formatHistoryDate(viewingHistoryDate)}`,
+              })}
+            </div>
+            <button
+              onClick={handleBackToToday}
+              className="text-xs font-medium text-notion-accent underline decoration-notion-accent/30 transition-colors hover:decoration-notion-accent"
+            >
+              {t('discovery.backToToday', 'Back to today')}
+            </button>
           </div>
         )}
 

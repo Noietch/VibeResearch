@@ -1535,6 +1535,23 @@ export const ipc = {
     ),
   cancelEvaluation: () => invoke<{ success: boolean }>('discovery:cancelEvaluation'),
   cancelRelevance: () => invoke<{ success: boolean }>('discovery:cancelRelevance'),
+  getDiscoveryHistory: () =>
+    invoke<
+      {
+        date: string;
+        fetchedAt: string;
+        paperCount: number;
+        categories: string[];
+      }[]
+    >('discovery:getHistory'),
+  loadDiscoveryHistoryEntry: (date: string) =>
+    invoke<{
+      papers: DiscoveredPaper[];
+      total: number;
+      fetchedAt: string;
+      categories: string[];
+      isFromToday: boolean;
+    } | null>('discovery:loadHistoryEntry', date),
 
   // Window controls (for Windows title bar)
   windowClose: () => {

@@ -683,7 +683,13 @@
     "errorTimeout": "请求超时，请尝试减少论文数量后重试。",
     "errorAI": "AI 评估失败，请在设置中检查模型配置。",
     "evaluationCancelled": "评估已取消，部分结果已保存。",
-    "relevanceFailed": "相关性计算失败，请重试。"
+    "relevanceFailed": "相关性计算失败，请重试。",
+    "history": "历史记录",
+    "today": "今天",
+    "yesterday": "昨天",
+    "noHistory": "暂无历史记录",
+    "viewingHistory": "正在查看 {{date}} 的结果",
+    "backToToday": "回到今天"
   },
   "paper": {
     "fetchAlphaXiv": "获取 AI 解读",

@@ -683,7 +683,13 @@
     "errorTimeout": "Request timed out. Try again with fewer papers.",
     "errorAI": "AI evaluation failed. Check your model configuration in Settings.",
     "evaluationCancelled": "Evaluation cancelled. Partial results have been saved.",
-    "relevanceFailed": "Relevance calculation failed. Please try again."
+    "relevanceFailed": "Relevance calculation failed. Please try again.",
+    "history": "History",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "noHistory": "No history available",
+    "viewingHistory": "Viewing results from {{date}}",
+    "backToToday": "Back to today"
   },
   "paper": {
     "fetchAlphaXiv": "Get AI Summary",

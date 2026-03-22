@@ -23,44 +23,112 @@ let evaluatedPapers: DiscoveredPaper[] = [];
 let evaluationAbortController: AbortController | null = null;
 let relevanceAbortController: AbortController | null = null;
 
-interface CachedDiscovery {
+interface DiscoveryCacheEntry {
   papers: DiscoveredPaper[];
   evaluatedPapers: DiscoveredPaper[];
   fetchedAt: string;
   categories: string[];
 }
 
+// Legacy single-entry format (for migration)
+interface LegacyCachedDiscovery {
+  papers: DiscoveredPaper[];
+  evaluatedPapers: DiscoveredPaper[];
+  fetchedAt: string;
+  categories: string[];
+}
+
+const HISTORY_MAX_DAYS = 7;
+
 /**
- * Save discovery cache to disk
+ * Get the date key (YYYY-MM-DD) from an ISO date string
+ */
+function getDateKey(isoDate: string): string {
+  const d = new Date(isoDate);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Save discovery cache to disk (upsert by date, prune >7 days)
  */
 function saveCache(): void {
   try {
-    const cache: CachedDiscovery = {
+    const fetchedAt = lastDiscoveryResult?.fetchedAt?.toISOString() ?? new Date().toISOString();
+    const dateKey = getDateKey(fetchedAt);
+
+    const newEntry: DiscoveryCacheEntry = {
       papers: lastDiscoveryResult?.papers ?? [],
       evaluatedPapers,
-      fetchedAt: lastDiscoveryResult?.fetchedAt?.toISOString() ?? new Date().toISOString(),
+      fetchedAt,
       categories: lastDiscoveryResult?.categories ?? [],
     };
-    fs.writeFileSync(getDiscoveryCachePath(), JSON.stringify(cache, null, 2), 'utf-8');
+
+    // Load existing history
+    let history = loadAllHistory();
+
+    // Upsert: replace if same date, append if new
+    const existingIdx = history.findIndex((e) => getDateKey(e.fetchedAt) === dateKey);
+    if (existingIdx >= 0) {
+      history[existingIdx] = newEntry;
+    } else {
+      history.push(newEntry);
+    }
+
+    // Sort by date descending (newest first)
+    history.sort((a, b) => new Date(b.fetchedAt).getTime() - new Date(a.fetchedAt).getTime());
+
+    // Prune entries older than 7 days
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - HISTORY_MAX_DAYS);
+    history = history.filter((e) => new Date(e.fetchedAt).getTime() >= cutoff.getTime());
+
+    fs.writeFileSync(getDiscoveryCachePath(), JSON.stringify(history, null, 2), 'utf-8');
   } catch (e) {
     console.error('[discovery] Failed to save cache:', e);
   }
 }
 
 /**
- * Load discovery cache from disk
+ * Load all history entries from disk, with migration from legacy format
  */
-function loadCache(): CachedDiscovery | null {
+function loadAllHistory(): DiscoveryCacheEntry[] {
   try {
     const path = getDiscoveryCachePath();
-    if (fs.existsSync(path)) {
-      const data = fs.readFileSync(path, 'utf-8');
-      return JSON.parse(data) as CachedDiscovery;
+    if (!fs.existsSync(path)) return [];
+
+    const data = fs.readFileSync(path, 'utf-8');
+    const parsed = JSON.parse(data);
+
+    // Migrate legacy single-entry format (object with papers/fetchedAt)
+    if (!Array.isArray(parsed) && parsed.papers && parsed.fetchedAt) {
+      const legacy = parsed as LegacyCachedDiscovery;
+      const migrated: DiscoveryCacheEntry[] = [
+        {
+          papers: legacy.papers,
+          evaluatedPapers: legacy.evaluatedPapers ?? [],
+          fetchedAt: legacy.fetchedAt,
+          categories: legacy.categories ?? [],
+        },
+      ];
+      // Write back migrated format
+      fs.writeFileSync(getDiscoveryCachePath(), JSON.stringify(migrated, null, 2), 'utf-8');
+      console.log('[discovery] Migrated legacy cache to history format');
+      return migrated;
     }
+
+    return parsed as DiscoveryCacheEntry[];
   } catch (e) {
     console.error('[discovery] Failed to load cache:', e);
+    return [];
   }
-  return null;
+}
+
+/**
+ * Load the most recent cache entry
+ */
+function loadCache(): DiscoveryCacheEntry | null {
+  const history = loadAllHistory();
+  return history.length > 0 ? history[0] : null;
 }
 
 /**
@@ -291,6 +359,43 @@ export function setupDiscoveryIpc() {
       isFromToday: isCacheFromToday(lastDiscoveryResult.fetchedAt.toISOString()),
     };
     return result;
+  });
+
+  // Get history summary (dates + paper counts, no full paper data)
+  ipcMain.handle('discovery:getHistory', () => {
+    const history = loadAllHistory();
+    return history.map((entry) => ({
+      date: getDateKey(entry.fetchedAt),
+      fetchedAt: entry.fetchedAt,
+      paperCount: entry.papers.length,
+      categories: entry.categories,
+    }));
+  });
+
+  // Load a specific history entry by date key (YYYY-MM-DD)
+  ipcMain.handle('discovery:loadHistoryEntry', (_event, date: string) => {
+    const history = loadAllHistory();
+    const entry = history.find((e) => getDateKey(e.fetchedAt) === date);
+    if (!entry) {
+      return null;
+    }
+
+    // Set as current active result
+    lastDiscoveryResult = {
+      papers: entry.papers,
+      total: entry.papers.length,
+      fetchedAt: new Date(entry.fetchedAt),
+      categories: entry.categories,
+    };
+    evaluatedPapers = entry.evaluatedPapers ?? [];
+
+    return {
+      papers: evaluatedPapers.length > 0 ? evaluatedPapers : entry.papers,
+      total: entry.papers.length,
+      fetchedAt: entry.fetchedAt,
+      categories: entry.categories,
+      isFromToday: isCacheFromToday(entry.fetchedAt),
+    };
   });
 
   // Clear discovery cache
