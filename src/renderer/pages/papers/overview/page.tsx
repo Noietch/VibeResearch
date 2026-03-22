@@ -658,6 +658,24 @@ export function OverviewPage() {
       .finally(() => setLoading(false));
   }, [shortId]);
 
+  // Auto-open reader if navigated with openReader flag
+  useEffect(() => {
+    if (!paper || loading) return;
+    const state = location.state as {
+      openReader?: boolean;
+      from?: string;
+      initialPage?: number;
+      initialPageYOffset?: number;
+    } | null;
+    if (state?.openReader && paper.pdfPath) {
+      const navState: Record<string, unknown> = {};
+      if (state.from) navState.from = state.from;
+      if (state.initialPage != null) navState.initialPage = state.initialPage;
+      if (state.initialPageYOffset != null) navState.initialPageYOffset = state.initialPageYOffset;
+      openTab(`/papers/${paper.shortId}/reader`, navState);
+    }
+  }, [paper, loading, location.state, openTab]);
+
   // Load citation counts
   useEffect(() => {
     if (!paper) return;
