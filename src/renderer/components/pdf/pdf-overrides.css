@@ -8,18 +8,3 @@
 .textLayer ::selection {
   background: rgba(46, 170, 220, 0.4) !important;
 }
-
-/* PDF search highlights */
-.pdf-search-highlight {
-  background: rgba(255, 235, 59, 0.45) !important;
-  color: inherit !important;
-  border-radius: 1px;
-  padding: 0;
-}
-
-.pdf-search-highlight-active {
-  background: rgba(255, 152, 0, 0.7) !important;
-  color: inherit !important;
-  border-radius: 1px;
-  padding: 0;
-}

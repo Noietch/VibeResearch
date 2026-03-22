@@ -40,24 +40,4 @@ export class HighlightsRepository {
       orderBy: [{ pageNumber: 'asc' }, { createdAt: 'asc' }],
     });
   }
-
-  async search(params?: { query?: string; color?: string; limit?: number; offset?: number }) {
-    const conditions: Record<string, unknown>[] = [];
-    if (params?.query) {
-      conditions.push({ text: { contains: params.query } });
-    }
-    if (params?.color) {
-      conditions.push({ color: params.color });
-    }
-
-    return this.prisma.paperHighlight.findMany({
-      where: conditions.length > 0 ? { AND: conditions } : {},
-      include: {
-        paper: { select: { id: true, shortId: true, title: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: params?.limit ?? 100,
-      skip: params?.offset ?? 0,
-    });
-  }
 }

@@ -25,7 +25,6 @@ import {
   PanelLeftOpen,
   Sparkles,
   FlaskConical,
-  Highlighter,
 } from 'lucide-react';
 import { useTabs } from '../hooks/use-tabs';
 import {
@@ -70,7 +69,6 @@ const primaryNavRoutes = [
   { to: '/dashboard', labelKey: 'sidebar.dashboard' as const, icon: LayoutDashboard },
   { to: '/search', labelKey: 'sidebar.search' as const, icon: Search },
   { to: '/discovery', labelKey: 'sidebar.discovery' as const, icon: Sparkles },
-  { to: '/highlights', labelKey: 'sidebar.highlights' as const, icon: Highlighter },
 ];
 
 const SIDEBAR_COLLAPSED_KEY = 'researchclaw-sidebar-collapsed';

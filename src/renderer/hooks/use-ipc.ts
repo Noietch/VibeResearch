@@ -302,7 +302,6 @@ export interface SemanticSearchPaper {
   abstract?: string | null;
   relevanceReason?: string;
   similarityScore: number;
-  finalScore: number;
   matchedChunks: string[];
   processingStatus?: string;
   processingError?: string | null;
@@ -727,37 +726,6 @@ export const ipc = {
     importedWithin?: 'today' | 'week' | 'month' | 'all';
     temporary?: boolean;
   }) => invoke<PaperItem[]>('papers:list', query ?? {}),
-  findDuplicates: () =>
-    invoke<
-      Array<{
-        reason: string;
-        papers: Array<{ id: string; shortId: string; title: string; sourceUrl: string | null }>;
-      }>
-    >('papers:findDuplicates'),
-  getPaperCounts: () =>
-    invoke<{
-      total: number;
-      untagged: number;
-      unindexed: number;
-      missingAbstract: number;
-      withPdf: number;
-      availableYears: number[];
-    }>('papers:counts'),
-  listPapersPaginated: (query?: {
-    q?: string;
-    year?: number;
-    tag?: string;
-    importedWithin?: 'today' | 'week' | 'month' | 'all';
-    temporary?: boolean;
-    page?: number;
-    pageSize?: number;
-    sortBy?: 'lastRead' | 'importDate' | 'title';
-    readingStatus?: 'all' | 'unread' | 'reading' | 'finished';
-  }) =>
-    invoke<{ papers: PaperItem[]; total: number; page: number; pageSize: number }>(
-      'papers:listPaginated',
-      query ?? {},
-    ),
   listTodayPapers: () => invoke<PaperItem[]>('papers:listToday'),
   importTemporary: (paperId: string) =>
     invoke<{ success: boolean }>('papers:importTemporary', paperId),
@@ -1590,33 +1558,6 @@ export const ipc = {
       isFromToday: boolean;
     } | null>('discovery:loadHistoryEntry', date),
 
-  // Highlights
-  searchHighlights: (params?: {
-    query?: string;
-    color?: string;
-    limit?: number;
-    offset?: number;
-  }) =>
-    invoke<
-      Array<{
-        id: string;
-        paperId: string;
-        pageNumber: number;
-        text: string;
-        note: string | null;
-        color: string;
-        createdAt: string;
-        paper: { id: string; shortId: string; title: string };
-      }>
-    >('highlights:search', params ?? {}),
-  exportHighlightsMarkdown: (paperId: string) =>
-    invoke<{ markdown: string }>('highlights:exportMarkdown', paperId),
-
-  // Backup & Restore
-  createBackup: () =>
-    invoke<{ path: string; sizeBytes: number; paperCount: number } | null>('backup:create'),
-  restoreBackup: () => invoke<{ paperCount: number } | null>('backup:restore'),
-
   // Window controls (for Windows title bar)
   windowClose: () => {
     const api = getElectronAPI();
@@ -1648,7 +1589,7 @@ export const ipc = {
     invoke<HighlightItem>('highlights:update', id, updates),
   deleteHighlight: (id: string) => invoke<void>('highlights:delete', id),
   listHighlights: (paperId: string, pageNumber?: number) =>
-    invoke<HighlightItem[]>('highlights:listByPaper', paperId, pageNumber),
+    invoke<HighlightItem[]>('highlights:list', paperId, pageNumber),
 
   // Overleaf Integration
   getOverleafSession: () =>

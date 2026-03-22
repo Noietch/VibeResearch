@@ -40,7 +40,6 @@ import {
   Minimize2,
   StickyNote,
   Sparkles,
-  ClipboardCopy,
 } from 'lucide-react';
 import type { AgentConfigItem } from '@shared';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -452,24 +451,16 @@ export function ReaderPage() {
 
   // Use live stream messages if available, otherwise fall back to historic messages
   const streamBased = agentMessages.length > 0 ? agentMessages : historicMessages;
-  // Merge local user messages with stream/historic messages chronologically.
-  // Local user messages have createdAt timestamps; stream messages also have createdAt.
-  // This ensures multi-turn conversations display in correct order:
-  //   user1 → assistant1 → user2 → assistant2 (not user1 → user2 → assistant1 → assistant2)
+  // Local user messages are only shown while the stream hasn't received any user messages yet.
+  // Once the stream has user messages, switch to stream data — but keep any local messages
+  // whose msgId hasn't arrived in the stream yet (e.g. a second message sent before the first
+  // one is persisted to DB and echoed back through the stream).
   const streamMsgIds = new Set(streamBased.map((m: any) => m.msgId as string));
+  const streamHasUserMessages = streamBased.some((m: any) => m.role === 'user');
   const pendingLocalMessages = localUserMessages.filter((m) => !streamMsgIds.has(m.msgId));
-  const displayMessages = (() => {
-    if (pendingLocalMessages.length === 0) return streamBased;
-    if (streamBased.length === 0) return [...pendingLocalMessages];
-    // Merge by createdAt timestamp for correct chronological order
-    const all = [...pendingLocalMessages, ...streamBased];
-    all.sort((a: any, b: any) => {
-      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return ta - tb;
-    });
-    return all;
-  })();
+  const displayMessages = streamHasUserMessages
+    ? [...streamBased, ...pendingLocalMessages]
+    : [...localUserMessages, ...streamBased];
 
   // Debug logging for message display
   if (localUserMessages.length > 0) {
@@ -479,7 +470,11 @@ export function ReaderPage() {
       historicMessages: historicMessages.length,
       streamBased: streamBased.length,
       streamHasUserMessages,
+      pendingLocalMessages: pendingLocalMessages.length,
       displayMessages: displayMessages.length,
+      localMsgIds: localUserMessages.map((m) => m.msgId),
+      streamMsgIds: Array.from(streamMsgIds),
+      pendingMsgIds: pendingLocalMessages.map((m) => m.msgId),
     });
   }
 
@@ -512,56 +507,19 @@ export function ReaderPage() {
             activeStatus.status === 'initializing' ||
             activeStatus.status === 'waiting_permission')
         ) {
-          // Task is still running — combine DB messages from ALL runs with live runner messages.
-          // Runner memory only has assistant/tool messages (pushUserMessage is a no-op).
-          // User messages come from DB (persisted by createMessage in runTodo/sendMessage).
-          const allDbMsgs: Awaited<ReturnType<typeof ipc.getAgentTodoRunMessages>> = [];
-          for (const run of runs) {
-            const runMsgs = await ipc.getAgentTodoRunMessages(run.id);
-            allDbMsgs.push(...runMsgs);
-          }
-          const dbMsgs = allDbMsgs;
-          const dbUserMsgs = dbMsgs
-            .filter((m) => m.role === 'user')
-            .map((m) => ({
+          // Task is still running - use live messages from runner
+          setHistoricMessages(
+            activeStatus.messages.map((m) => ({
               ...m,
-              content: typeof m.content === 'string' ? JSON.parse(m.content) : m.content,
+              content: typeof m.content === 'string' ? JSON.parse(m.content as string) : m.content,
               status: m.status ?? null,
-            }));
-          const liveMessages = activeStatus.messages.map((m) => ({
-            ...m,
-            content: typeof m.content === 'string' ? JSON.parse(m.content as string) : m.content,
-            status: m.status ?? null,
-          }));
-          // Clean up user messages that may contain paper context
-          for (const m of dbUserMsgs) {
-            if (m.type === 'text') {
-              const text = (m.content as { text: string }).text;
-              const match = text.match(/(?:用户问题:\s*)([\s\S]*?)$/);
-              if (match) {
-                (m.content as { text: string }).text = match[1].trim();
-              }
-            }
-          }
-          const combined = [...dbUserMsgs, ...liveMessages];
-          combined.sort((a: any, b: any) => {
-            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return ta - tb;
-          });
-          setHistoricMessages(combined);
+            })),
+          );
           return;
         }
 
-        // Task completed/failed - load persisted messages from ALL runs of this todo.
-        // Each follow-up creates a new run, so we need messages from all of them
-        // to reconstruct the full conversation history.
-        const allMsgs: Awaited<ReturnType<typeof ipc.getAgentTodoRunMessages>> = [];
-        for (const run of runs) {
-          const runMsgs = await ipc.getAgentTodoRunMessages(run.id);
-          allMsgs.push(...runMsgs);
-        }
-        const msgs = allMsgs;
+        // Task completed/failed - load persisted messages from DB
+        const msgs = await ipc.getAgentTodoRunMessages(latestRun.id);
         const parsed = msgs.map((m) => ({
           ...m,
           content: typeof m.content === 'string' ? JSON.parse(m.content) : m.content,
@@ -593,23 +551,6 @@ export function ReaderPage() {
             merged.push(m);
           }
         }
-        // Clean up old user messages that may contain injected paper context.
-        // Extract just the user question from "...用户问题: <question>" format.
-        for (const m of merged) {
-          if (m.role === 'user' && m.type === 'text') {
-            const text = (m.content as { text: string }).text;
-            const match = text.match(/(?:用户问题:\s*)([\s\S]*?)$/);
-            if (match) {
-              (m.content as { text: string }).text = match[1].trim();
-            }
-          }
-        }
-        // Sort chronologically — runs are loaded in desc order but messages should display asc
-        merged.sort((a, b) => {
-          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return ta - tb;
-        });
         setHistoricMessages(merged);
       } catch (error) {
         console.error('Failed to load chat session:', error);
@@ -816,69 +757,8 @@ export function ReaderPage() {
       agentRunIdRef.current = null;
       agentTodoIdRef.current = '';
 
-      // Set todo/run refs so useAgentStream can pick up live events
-      agentTodoIdRef.current = session.id;
-      setAgentTodoId(session.id);
-      setAgentRunId(session.runId);
-      agentRunIdRef.current = session.runId;
-
-      // Load messages from ALL runs of this todo
-      const allRuns = await ipc.listAgentTodoRuns(session.id);
-
-      // Check if the task is still actively running — recover live state if so
-      const activeStatus = await ipc.getActiveAgentTodoStatus(session.id);
-      if (
-        activeStatus &&
-        (activeStatus.status === 'running' ||
-          activeStatus.status === 'initializing' ||
-          activeStatus.status === 'waiting_permission')
-      ) {
-        // Combine DB messages from ALL runs with live runner messages
-        const allDbMsgs: Awaited<ReturnType<typeof ipc.getAgentTodoRunMessages>> = [];
-        for (const run of allRuns) {
-          const runMsgs = await ipc.getAgentTodoRunMessages(run.id);
-          allDbMsgs.push(...runMsgs);
-        }
-        const dbUserMsgs = allDbMsgs
-          .filter((m) => m.role === 'user')
-          .map((m) => ({
-            ...m,
-            content: typeof m.content === 'string' ? JSON.parse(m.content) : m.content,
-            status: m.status ?? null,
-          }));
-        const liveMessages = activeStatus.messages.map((m) => ({
-          ...m,
-          content: typeof m.content === 'string' ? JSON.parse(m.content as string) : m.content,
-          status: m.status ?? null,
-        }));
-        for (const m of dbUserMsgs) {
-          if (m.type === 'text') {
-            const text = (m.content as { text: string }).text;
-            const match = text.match(/(?:用户问题:\s*)([\s\S]*?)$/);
-            if (match) {
-              (m.content as { text: string }).text = match[1].trim();
-            }
-          }
-        }
-        const combined = [...dbUserMsgs, ...liveMessages];
-        combined.sort((a: any, b: any) => {
-          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return ta - tb;
-        });
-        setHistoricMessages(combined);
-        setShowChatHistory(false);
-        setTimeout(() => textareaRef.current?.focus(), 0);
-        return;
-      }
-
-      // Task completed/failed — load persisted messages from ALL runs
-      const allMsgs: Awaited<ReturnType<typeof ipc.getAgentTodoRunMessages>> = [];
-      for (const run of allRuns) {
-        const runMsgs = await ipc.getAgentTodoRunMessages(run.id);
-        allMsgs.push(...runMsgs);
-      }
-      const msgs = allMsgs;
+      // Load messages from AgentTodoRun
+      const msgs = await ipc.getAgentTodoRunMessages(session.runId);
       const parsed = msgs.map((m) => ({
         ...m,
         content: typeof m.content === 'string' ? JSON.parse(m.content) : m.content,
@@ -911,16 +791,11 @@ export function ReaderPage() {
         }
       }
 
-      // Clean up old user messages that may contain injected paper context
-      for (const m of merged) {
-        if (m.role === 'user' && m.type === 'text') {
-          const text = (m.content as { text: string }).text;
-          const match = text.match(/(?:用户问题:\s*)([\s\S]*?)$/);
-          if (match) {
-            (m.content as { text: string }).text = match[1].trim();
-          }
-        }
-      }
+      // Set the loaded messages and update state
+      agentTodoIdRef.current = session.id;
+      setAgentTodoId(session.id);
+      setAgentRunId(session.runId);
+      agentRunIdRef.current = session.runId;
       setHistoricMessages(merged);
       setShowChatHistory(false);
       setTimeout(() => textareaRef.current?.focus(), 0);
@@ -1007,7 +882,6 @@ export function ReaderPage() {
       role: 'user' as const,
       content: { text },
       status: null,
-      createdAt: new Date().toISOString(),
     };
     setLocalUserMessages((prev) => [...prev, userMsg]);
 
@@ -1088,7 +962,6 @@ export function ReaderPage() {
         role: 'user' as const,
         content: { text: prompt },
         status: null,
-        createdAt: new Date().toISOString(),
       },
     ]);
     const cwd = paperDir ?? undefined;
@@ -1364,29 +1237,6 @@ export function ReaderPage() {
               <StickyNote size={14} />
             </button>
             <button
-              onClick={async () => {
-                if (!paper) return;
-                try {
-                  const result = await ipc.exportHighlightsMarkdown(paper.id);
-                  if (
-                    !result.markdown.includes('## Highlights') &&
-                    !result.markdown.includes('## Reading Notes')
-                  ) {
-                    toast.info(t('reader.noHighlightsToExport'));
-                    return;
-                  }
-                  await navigator.clipboard.writeText(result.markdown);
-                  toast.success(t('reader.exportCopied'));
-                } catch {
-                  toast.error('Export failed');
-                }
-              }}
-              title={t('reader.exportHighlights')}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
-            >
-              <ClipboardCopy size={14} />
-            </button>
-            <button
               onClick={() => setFocusMode(true)}
               title={t('reader.focusMode') + ' (F)'}
               className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
@@ -1482,15 +1332,6 @@ export function ReaderPage() {
                                     setChatSessions((prev) =>
                                       prev.filter((s) => s.id !== session.id),
                                     );
-                                    // If the deleted session is currently displayed, clear chat state
-                                    if (agentTodoId === session.id) {
-                                      setAgentTodoId(null);
-                                      setAgentRunId(null);
-                                      setLocalUserMessages([]);
-                                      setHistoricMessages([]);
-                                      agentRunIdRef.current = null;
-                                      agentTodoIdRef.current = '';
-                                    }
                                   }
                                 }}
                                 className="flex-shrink-0 rounded p-1 text-notion-text-tertiary hover:bg-red-50 hover:text-red-500"
@@ -1881,17 +1722,7 @@ export function ReaderPage() {
                 paperId={paper?.id}
                 cachedReferences={cachedReferences}
                 onReferencesExtracted={(refs) => setCachedReferences(refs)}
-                initialPage={
-                  (location.state as { initialPage?: number } | null)?.initialPage ??
-                  paper?.lastReadPage ??
-                  undefined
-                }
-                forceInitialPage={
-                  (location.state as { initialPage?: number } | null)?.initialPage != null
-                }
-                initialPageYOffset={
-                  (location.state as { initialPageYOffset?: number } | null)?.initialPageYOffset
-                }
+                initialPage={paper?.lastReadPage ?? undefined}
                 onFileNotFound={() =>
                   setPaper((prev) => (prev ? { ...prev, pdfPath: undefined } : prev))
                 }

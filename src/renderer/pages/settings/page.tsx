@@ -976,17 +976,11 @@ function EditorSettings() {
 // ─── Storage Settings ─────────────────────────────────────────────────────────
 
 function StorageSettings() {
-  const { t } = useTranslation();
   const [storageDir, setStorageDir] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDir, setPendingDir] = useState('');
   const [error, setError] = useState<string | null>(null);
-  // Backup state
-  const [backingUp, setBackingUp] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [backupResult, setBackupResult] = useState<string | null>(null);
-  const [backupError, setBackupError] = useState<string | null>(null);
 
   useEffect(() => {
     ipc
@@ -1107,70 +1101,6 @@ function StorageSettings() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Backup & Restore */}
-      <div className="mt-6 rounded-xl border border-notion-border bg-white p-5">
-        <h3 className="mb-3 text-sm font-semibold text-notion-text">
-          {t('settings.backup.title')}
-        </h3>
-        <p className="mb-4 text-xs text-notion-text-tertiary">{t('settings.backup.description')}</p>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={async () => {
-              setBackingUp(true);
-              setBackupResult(null);
-              setBackupError(null);
-              try {
-                const result = await ipc.createBackup();
-                if (result) {
-                  const sizeMB = (result.sizeBytes / 1024 / 1024).toFixed(1);
-                  setBackupResult(
-                    t('settings.backup.success', {
-                      papers: result.paperCount,
-                      size: sizeMB,
-                    }),
-                  );
-                }
-              } catch (e) {
-                setBackupError(e instanceof Error ? e.message : String(e));
-              } finally {
-                setBackingUp(false);
-              }
-            }}
-            disabled={backingUp || restoring}
-            className="inline-flex items-center gap-2 rounded-lg bg-notion-text px-4 py-2 text-sm font-medium text-white hover:opacity-80 disabled:opacity-50"
-          >
-            {backingUp ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            {backingUp ? t('settings.backup.creating') : t('settings.backup.create')}
-          </button>
-          <button
-            onClick={async () => {
-              setRestoring(true);
-              setBackupResult(null);
-              setBackupError(null);
-              try {
-                const result = await ipc.restoreBackup();
-                if (result) {
-                  setBackupResult(
-                    t('settings.backup.restoreSuccess', { papers: result.paperCount }),
-                  );
-                }
-              } catch (e) {
-                setBackupError(e instanceof Error ? e.message : String(e));
-              } finally {
-                setRestoring(false);
-              }
-            }}
-            disabled={backingUp || restoring}
-            className="inline-flex items-center gap-2 rounded-lg border border-notion-border px-4 py-2 text-sm font-medium text-notion-text-secondary hover:bg-notion-sidebar disabled:opacity-50"
-          >
-            {restoring ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
-            {restoring ? t('settings.backup.restoring') : t('settings.backup.restore')}
-          </button>
-        </div>
-        {backupResult && <p className="mt-3 text-xs text-green-600">{backupResult}</p>}
-        {backupError && <p className="mt-3 text-xs text-red-600">{backupError}</p>}
-      </div>
     </div>
   );
 }
