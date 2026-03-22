@@ -22,7 +22,9 @@
     "active": "Active",
     "setActive": "Set Active",
     "restart": "Restart",
-    "clear": "Clear"
+    "clear": "Clear",
+    "retry": "Retry",
+    "confirm": "Confirm"
   },
   "sidebar": {
     "dashboard": "Dashboard",
@@ -148,7 +150,16 @@
       "testConnection": "Test Connection",
       "testing": "Testing…",
       "success": "Connection successful",
-      "failed": "Connection failed"
+      "failed": "Connection failed",
+      "httpSocksProxy": "HTTP / SOCKS Proxy",
+      "applyProxyTo": "Apply Proxy To",
+      "connectivityCheck": "Connectivity Check",
+      "scopePdfDownloads": "PDF Downloads",
+      "scopePdfDownloadsDesc": "Fetch papers via proxy",
+      "scopeAiApi": "AI API Calls",
+      "scopeAiApiDesc": "Route LLM requests via proxy",
+      "scopeAgents": "Agents",
+      "scopeAgentsDesc": "Inject proxy env into CLI agents"
     },
     "editor": {
       "title": "Editor",
@@ -191,6 +202,13 @@
       "saveChanges": "Save Changes",
       "addConfig": "Add Config",
       "testConnection": "Test Connection",
+      "test": "Test",
+      "testing": "Testing…",
+      "connected": "Connected",
+      "connectedWithLatency": "Connected ({{ms}}ms)",
+      "connectionFailed": "Connection failed",
+      "activate": "Activate",
+      "active": "Active",
       "provider": "Provider",
       "name": "Name",
       "namePlaceholder": "e.g. Claude Code",
@@ -258,7 +276,9 @@
   "search": {
     "placeholder": "Search papers…",
     "noResults": "No results for \"{{query}}\"",
-    "title": "Search"
+    "title": "Search",
+    "heroReading": "What are you reading today?",
+    "heroCurious": "What are you curious about?"
   },
   "papers": {
     "library": "Library",
@@ -289,11 +309,13 @@
   "importModal": {
     "title": "Import Papers",
     "tabs": {
-      "chrome": "Chrome History",
+      "search": "Search",
+      "chrome": "Browser",
       "local": "PDF · DOI",
       "zotero": "Zotero",
       "bibtex": "BibTeX"
     },
+    "searchDesc": "Search by paper title, arXiv ID, or DOI to import",
     "importCount": "{{count}} papers to import",
     "importing": "Importing...",
     "imported": "Imported {{count}} papers",
@@ -362,7 +384,14 @@
     "title": "Projects",
     "description": "Manage your research projects, tasks, code repos, and paper-linked ideas",
     "newProject": "New Project",
-    "noProjects": "No projects yet"
+    "noProjects": "No projects yet",
+    "noProjectsHint": "Create a project to track todos, repos, and paper-linked ideas",
+    "createFormTitle": "New project",
+    "projectNamePlaceholder": "Project name",
+    "descriptionPlaceholder": "Description (optional)",
+    "workingDirLabel": "Working Directory (optional — default cwd for Agent Tasks)",
+    "remoteAgentLabel": "Remote Agent (optional — run agents on remote server)",
+    "create": "Create"
   },
   "modelCombobox": {
     "placeholder": "Select or enter model ID",

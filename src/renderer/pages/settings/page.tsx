@@ -1229,6 +1229,7 @@ function AddModelModal({
   ) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const backend = KIND_BACKEND[defaultKind];
   const [name, setName] = useState('');
   const [provider, setProvider] = useState<'anthropic' | 'openai' | 'gemini' | 'custom'>('openai');
@@ -1244,6 +1245,7 @@ function AddModelModal({
     success: boolean;
     error?: string;
     output?: string;
+    latencyMs?: number;
     diagnostics?: CliTestDiagnostics;
     logFile?: string;
   } | null>(null);
@@ -1526,8 +1528,11 @@ function AddModelModal({
                   )}
                   <span className="leading-snug">
                     {testResult.success
-                      ? testResult.output || 'Connection successful!'
-                      : testResult.error || 'Connection failed'}
+                      ? testResult.output ||
+                        (testResult.latencyMs
+                          ? t('settings.models.connectedWithLatency', { ms: testResult.latencyMs })
+                          : t('settings.models.connected'))
+                      : testResult.error || t('settings.models.connectionFailed')}
                   </span>
                 </motion.div>
               </AnimatePresence>
@@ -1554,10 +1559,10 @@ function AddModelModal({
                 {testing ? (
                   <span className="flex items-center gap-1.5">
                     <Loader2 size={14} className="animate-spin" />
-                    Testing...
+                    {t('settings.models.testing')}
                   </span>
                 ) : (
-                  'Test Connection'
+                  t('settings.models.testConnection')
                 )}
               </button>
             )}
@@ -1587,6 +1592,7 @@ function EditModelModal({
   onSave: (config: Omit<ModelConfig, 'hasApiKey'> & { apiKey?: string }) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const backend = model.backend;
   const [name, setName] = useState(model.name);
   const [provider, setProvider] = useState<'anthropic' | 'openai' | 'gemini' | 'custom'>(
@@ -1604,6 +1610,7 @@ function EditModelModal({
     success: boolean;
     error?: string;
     output?: string;
+    latencyMs?: number;
     diagnostics?: CliTestDiagnostics;
     logFile?: string;
   } | null>(null);
@@ -1923,8 +1930,11 @@ function EditModelModal({
                   )}
                   <span className="leading-snug">
                     {testResult.success
-                      ? testResult.output || 'Connection successful!'
-                      : testResult.error || 'Connection failed'}
+                      ? testResult.output ||
+                        (testResult.latencyMs
+                          ? t('settings.models.connectedWithLatency', { ms: testResult.latencyMs })
+                          : t('settings.models.connected'))
+                      : testResult.error || t('settings.models.connectionFailed')}
                   </span>
                 </motion.div>
               </AnimatePresence>
@@ -1951,10 +1961,10 @@ function EditModelModal({
                 {testing ? (
                   <span className="flex items-center gap-1.5">
                     <Loader2 size={14} className="animate-spin" />
-                    Testing...
+                    {t('settings.models.testing')}
                   </span>
                 ) : (
-                  'Test Connection'
+                  t('settings.models.testConnection')
                 )}
               </button>
             )}
@@ -1986,11 +1996,13 @@ function ModelCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     error?: string;
     output?: string;
+    latencyMs?: number;
     diagnostics?: CliTestDiagnostics;
     logFile?: string;
   } | null>(null);
@@ -2031,7 +2043,7 @@ function ModelCard({
             <span className="text-sm font-semibold text-notion-text truncate">{model.name}</span>
             {isActive && (
               <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-2xs font-medium text-blue-700">
-                Active
+                {t('settings.models.active')}
               </span>
             )}
           </div>
@@ -2048,10 +2060,10 @@ function ModelCard({
               {testing ? (
                 <span className="flex items-center gap-1">
                   <Loader2 size={12} className="animate-spin" />
-                  Testing...
+                  {t('settings.models.testing')}
                 </span>
               ) : (
-                'Test'
+                t('settings.models.test')
               )}
             </button>
           )}
@@ -2060,7 +2072,7 @@ function ModelCard({
               onClick={onSetActive}
               className="rounded-lg border border-notion-border px-3 py-1.5 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar hover:text-notion-text"
             >
-              Activate
+              {t('settings.models.activate')}
             </button>
           )}
           <button
@@ -2102,8 +2114,11 @@ function ModelCard({
               )}
               <span className="leading-snug">
                 {testResult.success
-                  ? testResult.output || 'Connection successful!'
-                  : testResult.error || 'Connection failed'}
+                  ? testResult.output ||
+                    (testResult.latencyMs
+                      ? t('settings.models.connectedWithLatency', { ms: testResult.latencyMs })
+                      : t('settings.models.connected'))
+                  : testResult.error || t('settings.models.connectionFailed')}
               </span>
             </motion.div>
           </AnimatePresence>
@@ -2718,10 +2733,10 @@ const PROXY_SCOPE_OPTIONS: Array<{
   desc: string;
   Icon: React.ElementType;
 }> = [
-  { key: 'pdfDownload', label: 'PDF Downloads', desc: 'Fetch papers via proxy', Icon: HardDrive },
-  { key: 'aiApi', label: 'AI API Calls', desc: 'Route LLM requests via proxy', Icon: Cpu },
-  { key: 'cliTools', label: 'Agents', desc: 'Inject proxy env into CLI agents', Icon: Bot },
-];
+  { key: 'pdfDownload' as keyof ProxyScope, labelKey: 'settings.proxy.scopePdfDownloads' as const, descKey: 'settings.proxy.scopePdfDownloadsDesc' as const, Icon: HardDrive },
+  { key: 'aiApi' as keyof ProxyScope, labelKey: 'settings.proxy.scopeAiApi' as const, descKey: 'settings.proxy.scopeAiApiDesc' as const, Icon: Cpu },
+  { key: 'cliTools' as keyof ProxyScope, labelKey: 'settings.proxy.scopeAgents' as const, descKey: 'settings.proxy.scopeAgentsDesc' as const, Icon: Bot },
+] as const;
 
 const PROXY_SCHEMES = ['http', 'https', 'socks5'] as const;
 type ProxyScheme = (typeof PROXY_SCHEMES)[number];
@@ -2744,6 +2759,7 @@ function buildProxyUrl(scheme: ProxyScheme, host: string, port: string): string 
 }
 
 function ProxySettings() {
+  const { t } = useTranslation();
   const [proxyEnabled, setProxyEnabled] = useState(false);
   const [scheme, setScheme] = useState<ProxyScheme>('http');
   const [host, setHost] = useState('127.0.0.1');
@@ -2837,7 +2853,7 @@ function ProxySettings() {
       >
         <div className="mb-3 flex items-center justify-between">
           <label className="text-xs font-medium text-notion-text-secondary">
-            HTTP / SOCKS Proxy
+            {t('settings.proxy.httpSocksProxy')}
           </label>
           {/* Pill toggle */}
           <button
@@ -2946,9 +2962,9 @@ function ProxySettings() {
 
       {/* Proxy Scope */}
       <div className="rounded-xl border border-notion-border bg-white p-5">
-        <p className="mb-3 text-xs font-medium text-notion-text-secondary">Apply Proxy To</p>
+        <p className="mb-3 text-xs font-medium text-notion-text-secondary">{t('settings.proxy.applyProxyTo')}</p>
         <div className="grid grid-cols-3 gap-2">
-          {PROXY_SCOPE_OPTIONS.map(({ key, label, desc, Icon }) => (
+          {PROXY_SCOPE_OPTIONS.map(({ key, labelKey, descKey, Icon }) => (
             <button
               key={key}
               type="button"
@@ -2966,7 +2982,7 @@ function ProxySettings() {
               <span
                 className={`min-w-0 flex-1 truncate text-sm font-medium ${proxyScope[key] ? 'text-blue-700' : 'text-notion-text'}`}
               >
-                {label}
+                {t(labelKey)}
               </span>
               <div
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
@@ -2982,7 +2998,7 @@ function ProxySettings() {
 
       {/* Test site cards — always visible */}
       <div className="rounded-xl border border-notion-border bg-white p-5">
-        <p className="mb-3 text-xs font-medium text-notion-text-secondary">Connectivity Check</p>
+        <p className="mb-3 text-xs font-medium text-notion-text-secondary">{t('settings.proxy.connectivityCheck')}</p>
         <div className="grid grid-cols-3 gap-2">
           {Object.entries(SITE_ICONS).map(([name, SiteIcon]) => {
             const result = testResults?.find((r) => r.name === name);
@@ -3045,7 +3061,7 @@ function ProxySettings() {
           className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-notion-border bg-white px-4 py-2 text-sm font-medium text-notion-text shadow-sm transition-all hover:border-notion-text-tertiary hover:shadow disabled:cursor-not-allowed disabled:opacity-40"
         >
           {testing ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />}
-          {testing ? 'Testing…' : 'Test Connection'}
+          {testing ? t('settings.proxy.testing') : t('settings.proxy.testConnection')}
         </button>
       </div>
     </div>
@@ -3225,6 +3241,7 @@ function EmbeddingCard({
   onDelete: () => void;
   readOnly?: boolean;
 }) {
+  const { t } = useTranslation();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<SemanticEmbeddingTestResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -3269,7 +3286,7 @@ function EmbeddingCard({
             <span className="text-sm font-semibold text-notion-text truncate">{config.name}</span>
             {isActive && (
               <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                Active
+                {t('settings.models.active')}
               </span>
             )}
           </div>
@@ -3285,10 +3302,10 @@ function EmbeddingCard({
             {testing ? (
               <span className="flex items-center gap-1">
                 <Loader2 size={12} className="animate-spin" />
-                Testing...
+                {t('settings.models.testing')}
               </span>
             ) : (
-              'Test'
+              t('settings.models.test')
             )}
           </button>
           {!isActive && (
@@ -3296,7 +3313,7 @@ function EmbeddingCard({
               onClick={onSetActive}
               className="rounded-lg border border-notion-border px-3 py-1.5 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar hover:text-notion-text"
             >
-              Activate
+              {t('settings.models.activate')}
             </button>
           )}
           {!readOnly && (

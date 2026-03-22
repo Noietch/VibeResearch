@@ -934,11 +934,11 @@ export function ImportModal({
               <div className="flex border-b border-notion-border">
                 {(
                   [
-                    { key: 'search' as Tab, icon: Search, label: 'Search' },
-                    { key: 'chrome' as Tab, icon: Chrome, label: 'Browser' },
-                    { key: 'local' as Tab, icon: FileText, label: 'PDF · DOI' },
-                    { key: 'zotero' as Tab, icon: BookOpen, label: 'Zotero' },
-                    { key: 'bibtex' as Tab, icon: FileCode, label: 'BibTeX' },
+                    { key: 'search' as Tab, icon: Search, label: t('importModal.tabs.search') },
+                    { key: 'chrome' as Tab, icon: Chrome, label: t('importModal.tabs.chrome') },
+                    { key: 'local' as Tab, icon: FileText, label: t('importModal.tabs.local') },
+                    { key: 'zotero' as Tab, icon: BookOpen, label: t('importModal.tabs.zotero') },
+                    { key: 'bibtex' as Tab, icon: FileCode, label: t('importModal.tabs.bibtex') },
                     { key: 'overleaf' as Tab, icon: Leaf, label: 'Overleaf' },
                   ] as const
                 ).map(({ key, icon: Icon, label }) => (

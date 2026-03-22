@@ -474,8 +474,8 @@ export function SearchContent() {
                 }`}
               >
                 {searchMode === 'agentic'
-                  ? 'What are you curious about?'
-                  : 'What are you reading today?'}
+                  ? t('search.heroCurious')
+                  : t('search.heroReading')}
               </motion.p>
             )}
           </AnimatePresence>

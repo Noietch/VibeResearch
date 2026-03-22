@@ -22,7 +22,9 @@
     "active": "当前激活",
     "setActive": "设为激活",
     "restart": "重启",
-    "clear": "清除"
+    "clear": "清除",
+    "retry": "重试",
+    "confirm": "确认"
   },
   "sidebar": {
     "dashboard": "主页",
@@ -148,7 +150,16 @@
       "testConnection": "测试连接",
       "testing": "测试中…",
       "success": "连接成功",
-      "failed": "连接失败"
+      "failed": "连接失败",
+      "httpSocksProxy": "HTTP / SOCKS 代理",
+      "applyProxyTo": "代理应用范围",
+      "connectivityCheck": "连通性检查",
+      "scopePdfDownloads": "PDF 下载",
+      "scopePdfDownloadsDesc": "通过代理获取论文",
+      "scopeAiApi": "AI API 调用",
+      "scopeAiApiDesc": "通过代理路由 LLM 请求",
+      "scopeAgents": "代理工具",
+      "scopeAgentsDesc": "为 CLI 代理注入代理环境变量"
     },
     "editor": {
       "title": "编辑器",
@@ -191,6 +202,13 @@
       "saveChanges": "保存更改",
       "addConfig": "添加配置",
       "testConnection": "测试连接",
+      "test": "测试",
+      "testing": "测试中…",
+      "connected": "已连接",
+      "connectedWithLatency": "已连接 ({{ms}}ms)",
+      "connectionFailed": "连接失败",
+      "activate": "激活",
+      "active": "使用中",
       "provider": "服务商",
       "name": "名称",
       "namePlaceholder": "例如 Claude Code",
@@ -258,7 +276,9 @@
   "search": {
     "placeholder": "搜索论文…",
     "noResults": "未找到「{{query}}」相关结果",
-    "title": "搜索"
+    "title": "搜索",
+    "heroReading": "今天读什么？",
+    "heroCurious": "你在好奇什么？"
   },
   "papers": {
     "library": "文献库",
@@ -289,11 +309,13 @@
   "importModal": {
     "title": "导入论文",
     "tabs": {
-      "chrome": "Chrome 历史",
+      "search": "搜索",
+      "chrome": "浏览器",
       "local": "PDF · DOI",
       "zotero": "Zotero",
       "bibtex": "BibTeX"
     },
+    "searchDesc": "通过论文标题、arXiv ID 或 DOI 搜索导入",
     "importCount": "导入 {{count}} 篇论文",
     "importing": "导入中...",
     "imported": "已导入 {{count}} 篇论文",
@@ -362,7 +384,14 @@
     "title": "项目",
     "description": "管理您的研究项目、任务、代码仓库和论文相关想法",
     "newProject": "新建项目",
-    "noProjects": "暂无项目"
+    "noProjects": "暂无项目",
+    "noProjectsHint": "创建项目以跟踪待办事项、代码仓库和论文相关想法",
+    "createFormTitle": "新建项目",
+    "projectNamePlaceholder": "项目名称",
+    "descriptionPlaceholder": "描述（可选）",
+    "workingDirLabel": "工作目录（可选 — Agent 任务的默认工作目录）",
+    "remoteAgentLabel": "远程 Agent（可选 — 在远程服务器上运行 Agent）",
+    "create": "创建"
   },
   "modelCombobox": {
     "placeholder": "选择或输入模型ID",
