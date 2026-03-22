@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-22 (61)
+
+### feat: AlphaXiv Trending Papers in Discovery page
+
+- **AlphaXiv Hot source**: Discovery page now has a source tab switcher (arXiv / AlphaXiv Hot) to browse trending papers from AlphaXiv
+- **SSR data extraction**: New `alphaxiv-trending.service.ts` scrapes AlphaXiv's explore page and extracts paper data from SSR-embedded TanStack Router dehydrated state
+- **Trending metrics display**: Paper cards show AlphaXiv-specific metrics (views, votes, GitHub stars) when viewing trending papers
+- **Extended DiscoveredPaper type**: Added optional `alphaxivMetrics` and `source` fields to support both arXiv and AlphaXiv data sources
+- **IPC handler**: New `discovery:fetchTrending` handler in `discovery.ipc.ts`
+- **i18n**: Added `discovery.alphaxivHot`, `discovery.fetchTrending`, `discovery.fetchingTrending`, `discovery.views`, `discovery.votes`, `discovery.githubStars` keys
+- **New files**: `alphaxiv-trending.service.ts`
+- **Modified**: `arxiv-discovery.service.ts`, `discovery.ipc.ts`, `use-ipc.ts`, `discovery/page.tsx`, `en.json`, `zh.json`, `changelog.md`
+
 ## 2026-03-22 (60)
 
 ### feat: Text-to-Speech (TTS) for PDF reader using Microsoft Edge TTS
