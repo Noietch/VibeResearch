@@ -209,6 +209,7 @@ export function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [retryingPaperId, setRetryingPaperId] = useState<string | null>(null);
   const [searchMode, setSearchMode] = useState<SearchMode>('search');
   const [agenticSteps, setAgenticSteps] = useState<AgenticSearchStep[]>([]);
@@ -381,25 +382,30 @@ export function SearchContent() {
     [reloadPapers],
   );
 
-  const handleDelete = useCallback(async (paperId: string, title: string) => {
-    if (!confirm(`Delete "${title}"? This action cannot be undone.`)) return;
-    setDeleting(paperId);
+  const handleDeleteRequest = useCallback((paperId: string, title: string) => {
+    setDeleteTarget({ id: paperId, title });
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id);
     try {
-      await ipc.deletePaper(paperId);
+      await ipc.deletePaper(deleteTarget.id);
       setAllPapers((prev) => {
-        const next = prev.filter((p) => p.id !== paperId);
+        const next = prev.filter((p) => p.id !== deleteTarget.id);
         fuseRef.current = new Fuse(next, FUSE_OPTIONS);
         return next;
       });
-      setPapers((prev) => prev.filter((p) => p.id !== paperId));
-      setAgenticPapers((prev) => prev.filter((p) => p.id !== paperId));
-      setSemanticPapers((prev) => prev.filter((p) => p.id !== paperId));
+      setPapers((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setAgenticPapers((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setSemanticPapers((prev) => prev.filter((p) => p.id !== deleteTarget.id));
     } catch {
-      alert('Failed to delete paper');
+      // silent
     } finally {
       setDeleting(null);
+      setDeleteTarget(null);
     }
-  }, []);
+  }, [deleteTarget]);
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -801,7 +807,7 @@ export function SearchContent() {
                               paper={paper}
                               deleting={deleting}
                               retryingPaperId={retryingPaperId}
-                              onDelete={handleDelete}
+                              onDelete={handleDeleteRequest}
                               onRetry={handleRetryProcessing}
                             />
                           ))
@@ -812,7 +818,7 @@ export function SearchContent() {
                                 paper={paper}
                                 deleting={deleting}
                                 retryingPaperId={retryingPaperId}
-                                onDelete={handleDelete}
+                                onDelete={handleDeleteRequest}
                                 onRetry={handleRetryProcessing}
                               />
                             ))
@@ -822,7 +828,7 @@ export function SearchContent() {
                                 paper={paper}
                                 deleting={deleting}
                                 retryingPaperId={retryingPaperId}
-                                onDelete={handleDelete}
+                                onDelete={handleDeleteRequest}
                                 onRetry={handleRetryProcessing}
                               />
                             ))}
@@ -848,6 +854,60 @@ export function SearchContent() {
                 )
               )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirmation modal */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+            onClick={() => setDeleteTarget(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setDeleteTarget(null);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="mx-4 max-w-sm rounded-xl bg-white p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-notion-text">
+                {t('papers.deleteConfirmTitle')}
+              </h3>
+              <p className="mt-2 text-sm font-medium text-notion-text">
+                {cleanArxivTitle(deleteTarget.title)}
+              </p>
+              <p className="mt-2 text-sm text-notion-text-secondary">
+                {t('papers.deleteConfirmMessage')}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting === deleteTarget.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deleting === deleteTarget.id && (
+                    <Loader2 size={14} className="animate-spin" />
+                  )}
+                  {t('common.delete')}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
