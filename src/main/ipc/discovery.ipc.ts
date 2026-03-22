@@ -39,7 +39,7 @@ interface LegacyCachedDiscovery {
   categories: string[];
 }
 
-const HISTORY_MAX_DAYS = 7;
+const HISTORY_MAX_DAYS = 14;
 
 /**
  * Get the date key (YYYY-MM-DD) from an ISO date string
@@ -175,21 +175,49 @@ export function setupDiscoveryIpc() {
         daysBack?: number;
       },
     ) => {
-      const { categories, maxResults = 50, daysBack = 7 } = params;
+      const { categories, maxResults = 50, daysBack = 14 } = params;
 
       try {
         const result = await fetchNewPapers(categories, maxResults, daysBack);
-        lastDiscoveryResult = result;
-        evaluatedPapers = []; // Reset evaluated papers
+
+        // Incremental merge: keep existing papers with their scores,
+        // only add genuinely new papers
+        if (lastDiscoveryResult && lastDiscoveryResult.papers.length > 0) {
+          const existingMap = new Map(lastDiscoveryResult.papers.map((p) => [p.arxivId, p]));
+          let newCount = 0;
+          for (const paper of result.papers) {
+            if (!existingMap.has(paper.arxivId)) {
+              lastDiscoveryResult.papers.push(paper);
+              newCount++;
+            }
+            // Existing papers keep their qualityScore/relevanceScore/alphaxivMetrics
+          }
+          lastDiscoveryResult.fetchedAt = result.fetchedAt;
+          lastDiscoveryResult.categories = categories;
+          lastDiscoveryResult.total = lastDiscoveryResult.papers.length;
+          console.log(
+            `[discovery:fetch] ${newCount} new papers added, ${lastDiscoveryResult.papers.length} total`,
+          );
+        } else {
+          lastDiscoveryResult = result;
+        }
+
+        // Prune papers older than daysBack
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - daysBack);
+        lastDiscoveryResult.papers = lastDiscoveryResult.papers.filter(
+          (p) => new Date(p.publishedAt) >= cutoff,
+        );
+        lastDiscoveryResult.total = lastDiscoveryResult.papers.length;
 
         // Save to cache
         saveCache();
 
         return {
           success: true,
-          papers: result.papers,
-          total: result.total,
-          fetchedAt: result.fetchedAt.toISOString(),
+          papers: lastDiscoveryResult.papers,
+          total: lastDiscoveryResult.total,
+          fetchedAt: lastDiscoveryResult.fetchedAt.toISOString(),
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -255,13 +283,20 @@ export function setupDiscoveryIpc() {
 
       try {
         const papers = lastDiscoveryResult?.papers ?? [];
-        const toEvaluate =
+        let candidates =
           params.paperIds && params.paperIds.length > 0
             ? papers.filter((p) => params.paperIds!.includes(p.arxivId))
             : papers;
 
+        // Skip papers that already have quality scores (incremental evaluation)
+        const toEvaluate = candidates.filter((p) => !p.qualityScore);
+        const alreadyEvaluated = candidates.length - toEvaluate.length;
+        if (alreadyEvaluated > 0) {
+          console.log(`[discovery:evaluate] Skipping ${alreadyEvaluated} already-evaluated papers`);
+        }
+
         if (toEvaluate.length === 0) {
-          return { success: true, papers: [] };
+          return { success: true, papers: lastDiscoveryResult?.papers ?? [] };
         }
 
         const language = getLanguage();
@@ -325,32 +360,39 @@ export function setupDiscoveryIpc() {
         return { success: true, papers: [] };
       }
 
-      const papersWithRelevance = await calculateRelevanceScores(
-        papers,
+      // Only calculate for papers without existing relevance scores
+      const needsRelevance = papers.filter(
+        (p) => p.relevanceScore === null || p.relevanceScore === undefined,
+      );
+      const alreadyScored = papers.length - needsRelevance.length;
+      if (alreadyScored > 0) {
+        console.log(
+          `[discovery:calculateRelevance] Skipping ${alreadyScored} already-scored papers`,
+        );
+      }
+
+      if (needsRelevance.length === 0) {
+        return { success: true, papers };
+      }
+
+      const scored = await calculateRelevanceScores(
+        needsRelevance,
         relevanceAbortController.signal,
       );
 
-      // Update stored papers with relevance scores
-      lastDiscoveryResult = {
-        ...lastDiscoveryResult!,
-        papers: papersWithRelevance,
-      };
-
-      // Also update evaluated papers if they exist
-      if (evaluatedPapers.length > 0) {
-        const relevanceMap = new Map(papersWithRelevance.map((p) => [p.arxivId, p]));
-        evaluatedPapers = evaluatedPapers.map((p) => {
-          const withRel = relevanceMap.get(p.arxivId);
-          return withRel ?? p;
-        });
-      }
+      // Merge scores back into all papers
+      const scoredMap = new Map(scored.map((p) => [p.arxivId, p]));
+      lastDiscoveryResult!.papers = papers.map((p) => {
+        const withScore = scoredMap.get(p.arxivId);
+        return withScore ?? p;
+      });
 
       // Save to cache
       saveCache();
 
       return {
         success: true,
-        papers: papersWithRelevance,
+        papers: lastDiscoveryResult!.papers,
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

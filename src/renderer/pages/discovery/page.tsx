@@ -156,7 +156,7 @@ export function DiscoveryPage() {
   const [daysBack, setDaysBack] = useState(() => {
     const stored = localStorage.getItem('researchclaw-discovery-days-back');
     const num = stored ? Number(stored) : NaN;
-    return [1, 3, 7, 14].includes(num) ? num : 7;
+    return [1, 3, 7, 14].includes(num) ? num : 14;
   });
   const [sortMode, setSortMode] = useState<'default' | 'relevance' | 'quality' | 'views' | 'votes'>(
     'default',
@@ -228,13 +228,9 @@ export function DiscoveryPage() {
           }
           setImportedIds(importedSet);
 
-          // Auto-refresh if data is older than 6 hours
-          if (cached.fetchedAt) {
-            const staleMs = Date.now() - new Date(cached.fetchedAt).getTime();
-            if (staleMs > 6 * 60 * 60 * 1000) {
-              // Silently trigger a refresh in background
-              handleFetch();
-            }
+          // Auto-refresh only if cached data is NOT from today
+          if (!cached.isFromToday) {
+            handleFetch();
           }
         }
       } catch (e) {
@@ -244,64 +240,49 @@ export function DiscoveryPage() {
     loadCached();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleFetch = useCallback(async () => {
-    if (selectedCategories.length === 0) return;
+  const handleFetch = useCallback(
+    async (force = false) => {
+      if (selectedCategories.length === 0) return;
 
-    setLoading(true);
-    setError(null);
-    setLastFailedOp(null);
-    setPapers([]);
+      // Skip if we already have today's data (unless forced)
+      if (!force && isFromToday && papers.length > 0) return;
 
-    try {
-      // Fetch arXiv first (sets lastDiscoveryResult in main process)
-      const arxivResult = await ipc.fetchDiscoveryPapers({
-        categories: selectedCategories,
-        maxResults: 30,
-        daysBack,
-      });
+      setLoading(true);
+      setError(null);
+      setLastFailedOp(null);
 
-      let allPapers: DiscoveredPaper[] = [];
+      try {
+        // Fetch arXiv (main process does incremental merge, returns full set)
+        const arxivResult = await ipc.fetchDiscoveryPapers({
+          categories: selectedCategories,
+          maxResults: 50,
+          daysBack,
+        });
 
-      if (arxivResult.success && arxivResult.papers) {
-        allPapers = arxivResult.papers.map((p) => ({ ...p, source: 'arxiv' as const }));
-      }
+        // Also fetch AlphaXiv trending (merges into main process state)
+        await ipc.fetchTrendingPapers().catch(() => null);
 
-      // Then fetch trending (merges into lastDiscoveryResult in main process)
-      const trendingResult = await ipc.fetchTrendingPapers().catch(() => null);
+        // Reload the full merged result from main process
+        const merged = await ipc.getLastDiscoveryResult();
 
-      if (trendingResult?.success && trendingResult.papers) {
-        const existingIds = new Set(allPapers.map((p) => p.arxivId));
-        for (const paper of trendingResult.papers) {
-          if (!existingIds.has(paper.arxivId)) {
-            allPapers.push(paper);
-          } else {
-            // Merge AlphaXiv metrics into existing paper
-            const existing = allPapers.find((p) => p.arxivId === paper.arxivId);
-            if (existing && paper.alphaxivMetrics) {
-              existing.alphaxivMetrics = paper.alphaxivMetrics;
-              existing.source = 'alphaxiv-trending';
-            }
-          }
+        if (merged && merged.papers.length > 0) {
+          setPapers(merged.papers);
+          setFetchedAt(merged.fetchedAt);
+          setIsFromToday(true);
+          setViewingHistoryDate(null);
+        } else if (!arxivResult.success) {
+          setError(classifyError(arxivResult.error || 'Failed to fetch papers', t));
+          setLastFailedOp('fetch');
         }
-      }
-
-      if (allPapers.length > 0) {
-        setPapers(allPapers);
-        setFetchedAt(arxivResult.fetchedAt ?? new Date().toISOString());
-        setIsFromToday(true);
-        setSortMode('default');
-        setViewingHistoryDate(null);
-      } else if (!arxivResult.success) {
-        setError(classifyError(arxivResult.error || 'Failed to fetch papers', t));
+      } catch (e) {
+        setError(classifyError(e, t));
         setLastFailedOp('fetch');
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      setError(classifyError(e, t));
-      setLastFailedOp('fetch');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedCategories, daysBack, t]);
+    },
+    [selectedCategories, daysBack, isFromToday, papers.length, t],
+  );
 
   // Merge updated papers (from evaluate/relevance) into existing state,
   // preserving source and alphaxivMetrics that the main process doesn't track.
@@ -762,7 +743,7 @@ export function DiscoveryPage() {
 
             {/* Fetch Button */}
             <button
-              onClick={handleFetch}
+              onClick={() => handleFetch(true)}
               disabled={loading || selectedCategories.length === 0}
               className="flex items-center gap-2 rounded-lg bg-notion-accent px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-notion-accent/90 disabled:opacity-50"
             >

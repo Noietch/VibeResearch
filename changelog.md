@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-23 (62)
+
+### feat: Incremental discovery with persistent scores
+
+- **Default 14 days**: Changed default fetch range from 7 to 14 days, history retention to 14 days
+- **Incremental fetch**: arXiv fetch now merges new papers into existing results instead of replacing — papers with existing quality/relevance scores are preserved
+- **Incremental evaluation**: AI evaluation and relevance calculation skip papers that already have scores, only processing new additions
+- **Same-day skip**: Auto-refresh only triggers if cached data is not from today; manual Fetch button always forces refresh
+- **Persistent scores**: All scores (quality, relevance, AlphaXiv metrics) are saved to disk cache and survive app restarts
+- **Modified**: `discovery.ipc.ts`, `discovery/page.tsx`, `changelog.md`
+
 ## 2026-03-22 (61)
 
 ### feat: AlphaXiv Trending Papers in Discovery page
