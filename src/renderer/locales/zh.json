@@ -282,7 +282,16 @@
     "agenticTimeout": "智能搜索超时，已切换为文本搜索结果。",
     "agenticFailed": "智能搜索失败，已切换为文本搜索结果。",
     "agenticSearching": "AI 正在搜索你的文献库...",
-    "cancelSearch": "取消"
+    "cancelSearch": "取消",
+    "onlineResults": "在线搜索结果",
+    "onlineSearching": "正在搜索在线数据库…",
+    "importToLibrary": "导入",
+    "importing": "导入中…",
+    "imported": "已导入",
+    "citations": "{{count}} 次引用",
+    "noCitations": "无引用数据",
+    "onlineNoResults": "未找到在线结果",
+    "libraryResults": "本地文献库结果"
   },
   "papers": {
     "library": "文献库",

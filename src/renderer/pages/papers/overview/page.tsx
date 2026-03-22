@@ -591,6 +591,7 @@ function ProjectAdder({ paperId }: { paperId: string }) {
 // ─── Overview Page ────────────────────────────────────────────────────────────
 
 export function OverviewPage() {
+  const { t } = useTranslation();
   const { id: shortId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();

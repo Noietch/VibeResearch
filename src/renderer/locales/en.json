@@ -282,7 +282,16 @@
     "agenticTimeout": "Agentic search timed out. Showing text search results instead.",
     "agenticFailed": "Agentic search failed. Showing text search results instead.",
     "agenticSearching": "AI is searching your library...",
-    "cancelSearch": "Cancel"
+    "cancelSearch": "Cancel",
+    "onlineResults": "Online Results",
+    "onlineSearching": "Searching online databases…",
+    "importToLibrary": "Import",
+    "importing": "Importing…",
+    "imported": "Imported",
+    "citations": "{{count}} citations",
+    "noCitations": "No citation data",
+    "onlineNoResults": "No online results found",
+    "libraryResults": "Library Results"
   },
   "papers": {
     "library": "Library",
