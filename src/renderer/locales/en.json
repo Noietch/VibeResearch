@@ -35,6 +35,7 @@
     "tasks": "Tasks",
     "settings": "Settings",
     "recent": "Recent",
+    "highlights": "Highlights",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar"
   },
@@ -89,6 +90,17 @@
     "general_overleaf": {
       "title": "Overleaf",
       "description": "Connect to Overleaf to import your LaTeX projects as PDFs."
+    },
+    "backup": {
+      "title": "Backup & Restore",
+      "description": "Create a backup of your library (database, papers, and config) or restore from a previous backup.",
+      "create": "Create Backup",
+      "creating": "Creating…",
+      "restore": "Restore from Backup",
+      "restoring": "Restoring…",
+      "success": "Backup created successfully ({{papers}} papers, {{size}} MB)",
+      "restoreSuccess": "Restored {{papers}} papers. Please restart the app.",
+      "restoreConfirm": "This will overwrite your current data. Are you sure?"
     },
     "overleaf": {
       "description": "Connect to Overleaf to import your LaTeX projects as PDFs.",
@@ -282,7 +294,16 @@
     "agenticTimeout": "Agentic search timed out. Showing text search results instead.",
     "agenticFailed": "Agentic search failed. Showing text search results instead.",
     "agenticSearching": "AI is searching your library...",
-    "cancelSearch": "Cancel"
+    "cancelSearch": "Cancel",
+    "onlineResults": "Online Results",
+    "onlineSearching": "Searching online databases…",
+    "importToLibrary": "Import",
+    "importing": "Importing…",
+    "imported": "Imported",
+    "citations": "{{count}} citations",
+    "noCitations": "No citation data",
+    "onlineNoResults": "No online results found",
+    "libraryResults": "Library Results"
   },
   "papers": {
     "library": "Library",
@@ -313,7 +334,17 @@
     "deleteConfirmMessage": "This will permanently delete this paper and all associated notes.",
     "deleteConfirmBatchTitle": "Delete Papers",
     "deleteConfirmBatchMessage": "Are you sure you want to delete {{count}} paper(s)? This action cannot be undone.",
-    "deleteFailed": "Failed to delete paper"
+    "deleteFailed": "Failed to delete paper",
+    "openReader": "Open in reader",
+    "openDetail": "Open details",
+    "duplicates": {
+      "found": "{{count}} potential duplicate group(s) detected in your library",
+      "review": "Review",
+      "title": "Potential Duplicates",
+      "description": "These papers appear to be duplicates based on their titles. You can remove duplicates by clicking the delete button.",
+      "reasonTitle": "Similar titles",
+      "deleteConfirm": "Are you sure you want to delete this paper?"
+    }
   },
   "importModal": {
     "title": "Import Papers",
@@ -584,6 +615,18 @@
     "method": "Method",
     "topic": "Topic"
   },
+  "highlights": {
+    "title": "Highlights",
+    "search": "Search highlights…",
+    "noResults": "No highlights found. Start highlighting text in the reader!",
+    "allColors": "All",
+    "page": "p.{{page}}"
+  },
+  "reader": {
+    "exportHighlights": "Export highlights",
+    "exportCopied": "Highlights copied to clipboard",
+    "noHighlightsToExport": "No highlights to export"
+  },
   "papersByTag": {
     "timeFilter": {
       "all": "All time",
@@ -608,6 +651,13 @@
       "lastRead": "Last Read",
       "importDate": "Import Date",
       "title": "Title"
+    },
+    "readingStatus": {
+      "label": "Progress",
+      "all": "All",
+      "unread": "Unread",
+      "reading": "Reading",
+      "finished": "Finished"
     },
     "importedAt": "Imported",
     "pageInfo": "Page {{current}} / {{total}} · {{count}} papers",

@@ -8,6 +8,8 @@ interface PdfViewerProps {
   onReferencesExtracted?: (refs: CachedReference[]) => void;
   onFileNotFound?: () => void;
   initialPage?: number;
+  forceInitialPage?: boolean;
+  initialPageYOffset?: number;
   onPageChange?: (page: number, total: number) => void;
   onAskAI?: (text: string) => void;
   highlights?: HighlightItem[];
@@ -37,6 +39,8 @@ export function PdfViewer({
   onReferencesExtracted,
   onFileNotFound,
   initialPage,
+  forceInitialPage,
+  initialPageYOffset,
   onPageChange,
   onAskAI,
   highlights,
@@ -60,6 +64,8 @@ export function PdfViewer({
       onReferencesExtracted={onReferencesExtracted}
       onFileNotFound={onFileNotFound}
       initialPage={initialPage}
+      forceInitialPage={forceInitialPage}
+      initialPageYOffset={initialPageYOffset}
       onPageChange={onPageChange}
       onAskAI={onAskAI}
       highlights={highlights}

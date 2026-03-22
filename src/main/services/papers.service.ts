@@ -11,6 +11,7 @@ import { scheduleAutoPaperEnrichment } from './auto-paper-enrichment.service';
 import { scheduleReferenceExtraction } from './reference-extraction-bg.service';
 import * as paperEmbeddingService from './paper-embedding.service';
 import { getPaperText } from './paper-text.service';
+import { extractTextFromPdf } from './pdf-extractor.service';
 import { extractPaperMetadata } from './paper-metadata.service';
 import { tagPaper } from './tagging.service';
 
@@ -46,6 +47,56 @@ export class PapersService {
     const ts = Date.now().toString(36);
     const rand = crypto.randomBytes(3).toString('hex');
     return `local-${ts}-${rand}`;
+  }
+
+  /**
+   * Try to find an existing paper by extracting DOI or title from PDF content.
+   * Returns the existing paper if a match is found, null otherwise.
+   */
+  private async findExistingByPdfContent(pdfPath: string) {
+    try {
+      const { text } = await extractTextFromPdf(pdfPath, { maxChars: 3000 });
+      if (!text) return null;
+
+      // Try to extract DOI from the first few pages
+      const doiMatch = text.match(/\b(10\.\d{4,}\/[^\s,;]+)/);
+      if (doiMatch) {
+        const doi = doiMatch[1].replace(/[.)]+$/, ''); // strip trailing punctuation
+        const existing = await this.papersRepository.findByDoi(doi);
+        if (existing) {
+          console.log(`[dedup] Found existing paper by DOI: ${doi}`);
+          return existing;
+        }
+      }
+
+      // Try to extract arXiv ID
+      const arxivMatch = text.match(/arXiv:(\d{4}\.\d{4,5})/i);
+      if (arxivMatch) {
+        const arxivId = arxivMatch[1];
+        const existing = await this.papersRepository.findByShortId(arxivId);
+        if (existing) {
+          console.log(`[dedup] Found existing paper by arXiv ID: ${arxivId}`);
+          return existing;
+        }
+      }
+
+      // Try title-based matching: extract first meaningful line as potential title
+      const lines = text.split('\n').filter((l) => l.trim().length > 10);
+      if (lines.length > 0) {
+        // Use first non-trivial line as candidate title
+        const candidateTitle = lines[0].trim().substring(0, 200);
+        const existing = await this.papersRepository.findByNormalizedTitle(candidateTitle);
+        if (existing) {
+          console.log(`[dedup] Found existing paper by title match: "${candidateTitle}"`);
+          return existing;
+        }
+      }
+
+      return null;
+    } catch {
+      // If extraction fails, skip dedup and proceed with import
+      return null;
+    }
   }
 
   private getPaperFolder(shortId: string): string {
@@ -127,6 +178,15 @@ export class PapersService {
       if (existing) return existing;
     }
 
+    // Deduplicate by normalized title
+    if (input.title && input.title.length > 10) {
+      const existing = await this.papersRepository.findByNormalizedTitle(input.title);
+      if (existing) {
+        console.log(`[upsertFromIngest] Duplicate detected by title: "${input.title}"`);
+        return existing;
+      }
+    }
+
     return this.create({
       title: input.title,
       source: input.source,
@@ -147,6 +207,24 @@ export class PapersService {
     importedWithin?: 'today' | 'week' | 'month' | 'all';
   }) {
     return this.papersRepository.list(query);
+  }
+
+  async getCounts() {
+    return this.papersRepository.getCounts();
+  }
+
+  async listPaginated(query: {
+    q?: string;
+    year?: number;
+    tag?: string;
+    importedWithin?: 'today' | 'week' | 'month' | 'all';
+    temporary?: boolean;
+    page?: number;
+    pageSize?: number;
+    sortBy?: 'lastRead' | 'importDate' | 'title';
+    readingStatus?: 'all' | 'unread' | 'reading' | 'finished';
+  }) {
+    return this.papersRepository.listPaginated(query);
   }
 
   async listToday() {
@@ -171,6 +249,15 @@ export class PapersService {
     const sourceStats = await fs.stat(resolvedPath).catch(() => null);
     if (!sourceStats?.isFile()) {
       throw new Error('Selected PDF file was not found');
+    }
+
+    // Check for duplicates by extracting DOI/title from PDF content
+    const existing = await this.findExistingByPdfContent(resolvedPath);
+    if (existing) {
+      console.log(
+        `[importLocalPdf] Duplicate detected, returning existing paper: ${existing.shortId}`,
+      );
+      return existing;
     }
 
     const title =

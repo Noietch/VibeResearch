@@ -1,67 +1,67 @@
 import { useEffect, useRef, useCallback, type KeyboardEvent } from 'react';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { usePdfSearch } from './use-pdf-search';
+import type { SearchMatch } from './use-pdf-search';
 
 interface PdfSearchBarProps {
-  document: PDFDocumentProxy | null;
-  onGoToPage: (page: number) => void;
+  query: string;
+  currentMatchIndex: number;
+  totalMatches: number;
+  isSearching: boolean;
+  onSearch: (query: string) => void;
+  onNext: () => SearchMatch | null;
+  onPrev: () => SearchMatch | null;
+  onClear: () => void;
+  onGoToMatch: (match: SearchMatch | null) => void;
   onClose: () => void;
 }
 
-export function PdfSearchBar({ document, onGoToPage, onClose }: PdfSearchBarProps) {
+export function PdfSearchBar({
+  query,
+  currentMatchIndex,
+  totalMatches,
+  isSearching,
+  onSearch,
+  onNext,
+  onPrev,
+  onClear,
+  onGoToMatch,
+  onClose,
+}: PdfSearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const {
-    query,
-    currentMatchIndex,
-    totalMatches,
-    isSearching,
-    search,
-    searchNext,
-    searchPrev,
-    clearSearch,
-  } = usePdfSearch(document);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-
-  const goToMatch = useCallback(
-    (match: { pageNumber: number } | null) => {
-      if (match) onGoToPage(match.pageNumber);
-    },
-    [onGoToPage],
-  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.nativeEvent.isComposing) return;
 
       if (e.key === 'Escape') {
-        clearSearch();
+        onClear();
         onClose();
       } else if (e.key === 'Enter') {
         if (e.shiftKey) {
-          goToMatch(searchPrev());
+          onGoToMatch(onPrev());
         } else {
-          goToMatch(searchNext());
+          onGoToMatch(onNext());
         }
       }
     },
-    [clearSearch, onClose, searchNext, searchPrev, goToMatch],
+    [onClear, onClose, onNext, onPrev, onGoToMatch],
   );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      search(e.target.value);
+      onSearch(e.target.value);
     },
-    [search],
+    [onSearch],
   );
 
   const handleClose = useCallback(() => {
-    clearSearch();
+    onClear();
     onClose();
-  }, [clearSearch, onClose]);
+  }, [onClear, onClose]);
 
   return (
     <div className="flex h-9 items-center gap-2 border-b border-notion-border bg-white px-3">
@@ -89,7 +89,7 @@ export function PdfSearchBar({ document, onGoToPage, onClose }: PdfSearchBarProp
 
       <div className="flex items-center gap-0.5">
         <button
-          onClick={() => goToMatch(searchPrev())}
+          onClick={() => onGoToMatch(onPrev())}
           disabled={totalMatches === 0}
           className="flex h-6 w-6 items-center justify-center rounded hover:bg-notion-sidebar disabled:opacity-50"
           title="Previous match"
@@ -97,7 +97,7 @@ export function PdfSearchBar({ document, onGoToPage, onClose }: PdfSearchBarProp
           <ChevronUp size={14} className="text-notion-text-secondary" />
         </button>
         <button
-          onClick={() => goToMatch(searchNext())}
+          onClick={() => onGoToMatch(onNext())}
           disabled={totalMatches === 0}
           className="flex h-6 w-6 items-center justify-center rounded hover:bg-notion-sidebar disabled:opacity-50"
           title="Next match"

@@ -35,6 +35,7 @@
     "tasks": "任务",
     "settings": "设置",
     "recent": "最近访问",
+    "highlights": "高亮批注",
     "expandSidebar": "展开侧边栏",
     "collapseSidebar": "收起侧边栏"
   },
@@ -89,6 +90,17 @@
     "general_overleaf": {
       "title": "Overleaf",
       "description": "连接 Overleaf 以导入 LaTeX 项目为 PDF。"
+    },
+    "backup": {
+      "title": "备份与恢复",
+      "description": "创建文献库备份（数据库、论文文件、配置）或从备份恢复。",
+      "create": "创建备份",
+      "creating": "备份中…",
+      "restore": "从备份恢复",
+      "restoring": "恢复中…",
+      "success": "备份创建成功（{{papers}} 篇论文，{{size}} MB）",
+      "restoreSuccess": "已恢复 {{papers}} 篇论文，请重启应用。",
+      "restoreConfirm": "此操作将覆盖当前数据，确定继续吗？"
     },
     "overleaf": {
       "description": "连接 Overleaf 以导入您的 LaTeX 项目为 PDF。",
@@ -282,7 +294,16 @@
     "agenticTimeout": "智能搜索超时，已切换为文本搜索结果。",
     "agenticFailed": "智能搜索失败，已切换为文本搜索结果。",
     "agenticSearching": "AI 正在搜索你的文献库...",
-    "cancelSearch": "取消"
+    "cancelSearch": "取消",
+    "onlineResults": "在线搜索结果",
+    "onlineSearching": "正在搜索在线数据库…",
+    "importToLibrary": "导入",
+    "importing": "导入中…",
+    "imported": "已导入",
+    "citations": "{{count}} 次引用",
+    "noCitations": "无引用数据",
+    "onlineNoResults": "未找到在线结果",
+    "libraryResults": "本地文献库结果"
   },
   "papers": {
     "library": "文献库",
@@ -313,7 +334,17 @@
     "deleteConfirmMessage": "这将永久删除该论文及所有相关笔记。",
     "deleteConfirmBatchTitle": "删除论文",
     "deleteConfirmBatchMessage": "确定要删除 {{count}} 篇论文吗？此操作无法撤销。",
-    "deleteFailed": "删除论文失败"
+    "deleteFailed": "删除论文失败",
+    "openReader": "在阅读器中打开",
+    "openDetail": "查看详情",
+    "duplicates": {
+      "found": "检测到 {{count}} 组可能重复的论文",
+      "review": "查看",
+      "title": "可能重复的论文",
+      "description": "以下论文的标题高度相似，可能是重复导入。点击删除按钮可移除重复项。",
+      "reasonTitle": "标题相似",
+      "deleteConfirm": "确定要删除这篇论文吗？"
+    }
   },
   "importModal": {
     "title": "导入论文",
@@ -584,6 +615,18 @@
     "method": "方法",
     "topic": "主题"
   },
+  "highlights": {
+    "title": "高亮批注",
+    "search": "搜索高亮内容…",
+    "noResults": "暂无高亮批注。在阅读器中选中文本即可创建高亮！",
+    "allColors": "全部",
+    "page": "第{{page}}页"
+  },
+  "reader": {
+    "exportHighlights": "导出高亮",
+    "exportCopied": "高亮已复制到剪贴板",
+    "noHighlightsToExport": "没有可导出的高亮"
+  },
   "papersByTag": {
     "timeFilter": {
       "all": "全部时间",
@@ -608,6 +651,13 @@
       "lastRead": "最近阅读",
       "importDate": "导入时间",
       "title": "标题"
+    },
+    "readingStatus": {
+      "label": "进度",
+      "all": "全部",
+      "unread": "未读",
+      "reading": "阅读中",
+      "finished": "已完成"
     },
     "importedAt": "导入于",
     "pageInfo": "第 {{current}} / {{total}} 页 · 共 {{count}} 篇",
