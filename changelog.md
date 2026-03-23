@@ -1,5 +1,6 @@
 # Changelog
 
+<<<<<<< HEAD
 ## 0.0.4 (2026-03-23)
 
 ### test: Skip Windows-specific tests on macOS and Linux
@@ -43,6 +44,17 @@
 **Test validation**: Passed `npm run lint`, development server starts successfully, Electron app launches without module resolution errors.
 
 **Modified**: `scripts/build-main.mjs`
+
+### fix: PDF zoom now centers on mouse cursor position
+
+**Summary**: Fixed PDF pinch-to-zoom (Ctrl+wheel) to zoom toward the mouse cursor instead of the page center, matching the expected behavior of map/image viewers.
+
+**Changes**:
+
+1. Modified `handleWheel` in `PdfDocument.tsx` to calculate the document position under the cursor and adjust `scrollLeft`/`scrollTop` after scaling so the point under the cursor stays fixed.
+2. Added `cursorZoomInProgress` ref to prevent the generic scroll-preserve effect from overriding cursor-based scroll adjustments.
+
+**Test validation**: Manual verification — Ctrl+wheel zoom anchors to cursor position in both horizontal and vertical directions.
 
 ## 2026-03-23 (68)
 

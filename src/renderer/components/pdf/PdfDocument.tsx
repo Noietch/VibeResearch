@@ -216,6 +216,7 @@ export function PdfDocument({
   const onPageChangeRef = useRef(onPageChange);
   const initialPageScrolled = useRef(false); // prevents restore from running twice
   const savesEnabled = useRef(false); // prevents saves from overwriting restore target
+  const cursorZoomInProgress = useRef(false); // skip generic scroll-preserve during cursor zoom
   const pageChangeDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleToggleTts = useCallback(() => {
@@ -336,14 +337,18 @@ export function PdfDocument({
   ]);
 
   // Preserve scroll position when scale changes due to container resize
+  // (skipped when cursor-based zoom already handled scroll adjustment)
   useEffect(() => {
     const prevScale = prevScaleRef.current;
     if (prevScale !== actualScale && prevScale > 0 && savesEnabled.current) {
-      const scrollEl = scrollRef.current;
-      if (scrollEl && scrollEl.scrollTop > 0) {
-        const ratio = actualScale / prevScale;
-        scrollEl.scrollTop = scrollEl.scrollTop * ratio;
+      if (!cursorZoomInProgress.current) {
+        const scrollEl = scrollRef.current;
+        if (scrollEl && scrollEl.scrollTop > 0) {
+          const ratio = actualScale / prevScale;
+          scrollEl.scrollTop = scrollEl.scrollTop * ratio;
+        }
       }
+      cursorZoomInProgress.current = false;
     }
     prevScaleRef.current = actualScale;
   }, [actualScale]);
@@ -582,16 +587,36 @@ export function PdfDocument({
     return () => saveRef.current();
   }, []);
 
-  // Pinch-to-zoom via trackpad (ctrl+wheel)
+  // Pinch-to-zoom via trackpad (ctrl+wheel) — zooms toward mouse cursor
   useEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer) return;
     const handleWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
+      const oldScale = actualScaleRef.current;
       const delta = -e.deltaY * 0.01;
-      const newScale = Math.min(5, Math.max(0.25, actualScaleRef.current + delta));
+      const newScale = Math.min(5, Math.max(0.25, oldScale + delta));
+      if (newScale === oldScale) return;
+
+      const rect = scrollContainer.getBoundingClientRect();
+      // Mouse position relative to the container viewport
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      // Mouse position in document coordinates (before zoom)
+      const docX = scrollContainer.scrollLeft + mouseX;
+      const docY = scrollContainer.scrollTop + mouseY;
+      // Scale ratio
+      const ratio = newScale / oldScale;
+
+      cursorZoomInProgress.current = true;
       viewport.setCustomScale(newScale);
+
+      // Adjust scroll so the point under the cursor stays fixed
+      requestAnimationFrame(() => {
+        scrollContainer.scrollLeft = docX * ratio - mouseX;
+        scrollContainer.scrollTop = docY * ratio - mouseY;
+      });
     };
     scrollContainer.addEventListener('wheel', handleWheel, { passive: false });
     return () => scrollContainer.removeEventListener('wheel', handleWheel);
