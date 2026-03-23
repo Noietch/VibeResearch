@@ -146,17 +146,77 @@ function isCacheFromToday(fetchedAt: string): boolean {
 }
 
 export function setupDiscoveryIpc() {
-  // Load cached results on startup
+  // Load cached results on startup, merging scores from all history entries
   const cached = loadCache();
   if (cached) {
+    // Build a score map from ALL history entries so scores survive across days
+    const allHistory = loadAllHistory();
+    const scoreMap = new Map<
+      string,
+      {
+        qualityScore?: number | null;
+        qualityReason?: string | null;
+        qualityRecommendation?: string | null;
+        relevanceScore?: number | null;
+        alphaxivMetrics?: DiscoveredPaper['alphaxivMetrics'];
+        source?: DiscoveredPaper['source'];
+      }
+    >();
+    // Iterate oldest-first so newer scores overwrite older ones
+    for (let i = allHistory.length - 1; i >= 0; i--) {
+      for (const p of allHistory[i].papers) {
+        const existing = scoreMap.get(p.arxivId);
+        scoreMap.set(p.arxivId, {
+          qualityScore: p.qualityScore ?? existing?.qualityScore ?? null,
+          qualityReason: p.qualityReason ?? existing?.qualityReason ?? null,
+          qualityRecommendation: p.qualityRecommendation ?? existing?.qualityRecommendation ?? null,
+          relevanceScore: p.relevanceScore ?? existing?.relevanceScore ?? null,
+          alphaxivMetrics: p.alphaxivMetrics ?? existing?.alphaxivMetrics,
+          source: p.source ?? existing?.source,
+        });
+      }
+    }
+
+    // Merge scores into the most recent entry's papers
+    const papers = cached.papers.map((p) => {
+      const scores = scoreMap.get(p.arxivId);
+      if (!scores) return p;
+      return {
+        ...p,
+        qualityScore: p.qualityScore ?? scores.qualityScore,
+        qualityReason: p.qualityReason ?? scores.qualityReason,
+        qualityRecommendation: p.qualityRecommendation ?? scores.qualityRecommendation,
+        relevanceScore: p.relevanceScore ?? scores.relevanceScore,
+        alphaxivMetrics: p.alphaxivMetrics ?? scores.alphaxivMetrics,
+        source: p.source ?? scores.source,
+      };
+    });
+
+    const restoredScores = papers.filter(
+      (p) =>
+        (p.relevanceScore != null || p.qualityScore != null) &&
+        !cached.papers.find(
+          (cp) =>
+            cp.arxivId === p.arxivId && (cp.relevanceScore != null || cp.qualityScore != null),
+        ),
+    ).length;
+    if (restoredScores > 0) {
+      console.log(`[discovery] Restored scores for ${restoredScores} papers from history`);
+    }
+
     lastDiscoveryResult = {
-      papers: cached.papers,
-      total: cached.papers.length,
+      papers,
+      total: papers.length,
       fetchedAt: new Date(cached.fetchedAt),
       categories: cached.categories,
     };
     evaluatedPapers = cached.evaluatedPapers ?? [];
     console.log('[discovery] Loaded cached results from', cached.fetchedAt);
+
+    // Persist restored scores back to cache
+    if (restoredScores > 0) {
+      saveCache();
+    }
   }
 
   // Get available categories
@@ -202,11 +262,11 @@ export function setupDiscoveryIpc() {
           lastDiscoveryResult = result;
         }
 
-        // Prune papers older than daysBack
+        // Prune arXiv papers older than daysBack (keep trending papers regardless of date)
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - daysBack);
         lastDiscoveryResult.papers = lastDiscoveryResult.papers.filter(
-          (p) => new Date(p.publishedAt) >= cutoff,
+          (p) => p.source === 'alphaxiv-trending' || new Date(p.publishedAt) >= cutoff,
         );
         lastDiscoveryResult.total = lastDiscoveryResult.papers.length;
 
@@ -234,6 +294,8 @@ export function setupDiscoveryIpc() {
       const withSource = papers.map((p) => ({ ...p, source: 'alphaxiv-trending' as const }));
 
       // Merge into existing result (append new papers, skip duplicates)
+      // Trending papers are NOT date-filtered — they represent current popularity,
+      // not recency. Date filtering only applies to arXiv papers in discovery:fetch.
       if (lastDiscoveryResult) {
         const existingIds = new Set(lastDiscoveryResult.papers.map((p) => p.arxivId));
         for (const paper of withSource) {
@@ -338,6 +400,15 @@ export function setupDiscoveryIpc() {
           papers: evaluatedPapers,
         };
       } catch (error) {
+        // Persist any partial results on error
+        if (lastDiscoveryResult && evaluatedPapers.length > 0) {
+          const evaluatedMap = new Map(evaluatedPapers.map((p) => [p.arxivId, p]));
+          lastDiscoveryResult.papers = lastDiscoveryResult.papers.map((p) => {
+            const evaluated = evaluatedMap.get(p.arxivId);
+            return evaluated ?? p;
+          });
+          saveCache();
+        }
         const message = error instanceof Error ? error.message : String(error);
         return { success: false, error: message };
       } finally {
@@ -346,8 +417,8 @@ export function setupDiscoveryIpc() {
     },
   );
 
-  // Calculate relevance scores based on user's library
-  ipcMain.handle('discovery:calculateRelevance', async () => {
+  // Calculate relevance scores based on user's library (batch-streamed)
+  ipcMain.handle('discovery:calculateRelevance', async (event) => {
     // Cancel any existing relevance calculation
     if (relevanceAbortController) {
       relevanceAbortController.abort();
@@ -375,29 +446,45 @@ export function setupDiscoveryIpc() {
         return { success: true, papers };
       }
 
-      const scored = await calculateRelevanceScores(
-        needsRelevance,
-        relevanceAbortController.signal,
-      );
+      // Process in batches and stream results back
+      const BATCH_SIZE = 10;
+      const allScored: DiscoveredPaper[] = [];
 
-      // Merge scores back into all papers
-      const scoredMap = new Map(scored.map((p) => [p.arxivId, p]));
-      lastDiscoveryResult!.papers = papers.map((p) => {
-        const withScore = scoredMap.get(p.arxivId);
-        return withScore ?? p;
-      });
+      for (let i = 0; i < needsRelevance.length; i += BATCH_SIZE) {
+        if (relevanceAbortController.signal.aborted) break;
 
-      // Save to cache
-      saveCache();
+        const batch = needsRelevance.slice(i, i + BATCH_SIZE);
+        const scored = await calculateRelevanceScores(batch, relevanceAbortController.signal);
+        allScored.push(...scored);
+
+        // Merge batch scores into lastDiscoveryResult immediately
+        const batchMap = new Map(scored.map((p) => [p.arxivId, p]));
+        lastDiscoveryResult!.papers = lastDiscoveryResult!.papers.map((p) => {
+          const withScore = batchMap.get(p.arxivId);
+          return withScore ?? p;
+        });
+
+        // Persist each batch immediately so scores survive errors/crashes
+        saveCache();
+
+        // Send progress + partial results to renderer
+        event.sender.send('discovery:relevanceProgress', {
+          scored: allScored.length + alreadyScored,
+          total: papers.length,
+          batchPapers: scored,
+        });
+      }
 
       return {
         success: true,
         papers: lastDiscoveryResult!.papers,
       };
     } catch (error) {
+      // Always persist partial results even on error
+      saveCache();
       if (error instanceof Error && error.name === 'AbortError') {
         console.log('[discovery:calculateRelevance] Cancelled by user');
-        return { success: false, error: 'cancelled' };
+        return { success: true, papers: lastDiscoveryResult?.papers ?? [], cancelled: true };
       }
       const message = error instanceof Error ? error.message : String(error);
       console.error('[discovery:calculateRelevance] Error:', message);

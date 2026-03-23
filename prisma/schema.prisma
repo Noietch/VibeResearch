@@ -114,8 +114,10 @@ model PaperHighlight {
   pageNumber Int
   rectsJson  String // [{x, y, w, h}] normalized to 0-1 page coords
   text       String // selected text content
-  note       String?
-  color      String   @default("yellow") // yellow|green|blue|pink|purple
+  note       String? // legacy single note (migrated to notes JSON array)
+  aiNote     String? // AI-generated annotation note
+  notes      String  @default("[]") // JSON array of { id, text, createdAt }
+  color      String  @default("yellow") // yellow|green|blue|pink|purple
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

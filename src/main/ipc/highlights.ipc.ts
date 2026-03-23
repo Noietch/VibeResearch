@@ -44,10 +44,46 @@ export function setupHighlightsIpc() {
     async (
       _,
       id: string,
-      params: { note?: string; color?: string },
+      params: { note?: string; aiNote?: string; color?: string },
     ): Promise<IpcResult<unknown>> => {
       try {
         const highlight = await getRepo().update(id, params);
+        return ok(highlight);
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'highlights:addNote',
+    async (_, id: string, text: string): Promise<IpcResult<unknown>> => {
+      try {
+        const highlight = await getRepo().addNote(id, text);
+        return ok(highlight);
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'highlights:updateNote',
+    async (_, id: string, noteId: string, text: string): Promise<IpcResult<unknown>> => {
+      try {
+        const highlight = await getRepo().updateNote(id, noteId, text);
+        return ok(highlight);
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'highlights:deleteNote',
+    async (_, id: string, noteId: string): Promise<IpcResult<unknown>> => {
+      try {
+        const highlight = await getRepo().deleteNote(id, noteId);
         return ok(highlight);
       } catch (e) {
         return err(e instanceof Error ? e.message : String(e));
@@ -132,9 +168,23 @@ export function setupHighlightsIpc() {
             lines.push('');
             for (const h of items) {
               lines.push(`> ${h.text.trim()} — *[${h.color}]*`);
-              if (h.note) {
+              if (h.aiNote) {
                 lines.push(`>  `);
-                lines.push(`> **Note**: ${h.note}`);
+                lines.push(`> **AI Note**: ${h.aiNote}`);
+              }
+              // Multi-note entries
+              try {
+                const noteEntries = JSON.parse(h.notes || '[]') as { text: string }[];
+                for (const ne of noteEntries) {
+                  lines.push(`>  `);
+                  lines.push(`> **Note**: ${ne.text}`);
+                }
+              } catch {
+                // fallback to legacy single note
+                if (h.note) {
+                  lines.push(`>  `);
+                  lines.push(`> **Note**: ${h.note}`);
+                }
               }
               lines.push('');
             }

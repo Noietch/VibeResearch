@@ -2,6 +2,55 @@
 
 ## 0.0.4 (2026-03-23)
 
+### feat: Multi-note annotations with AI note separation
+
+**Summary**: Completely redesigned annotation cards to support multiple notes per highlight and separate AI-generated notes. Previously a highlight had a single `note` field where AI suggestions and manual notes would overwrite each other. Now:
+
+- **AI Note** (`aiNote` field): displayed with sparkle icon, can be regenerated on demand
+- **User Notes** (`notes` JSON array): supports adding, editing, and deleting multiple notes per highlight
+- Expandable highlight text (show full text / collapse toggle)
+- Legacy single `note` field auto-migrates into the notes array display
+
+**Changes**:
+
+1. Added `aiNote` and `notes` fields to `PaperHighlight` schema
+2. Added `addNote`, `updateNote`, `deleteNote` methods to `HighlightsRepository`
+3. Added IPC handlers: `highlights:addNote`, `highlights:updateNote`, `highlights:deleteNote`
+4. Updated `HighlightItem` type and `ipc` wrapper in renderer
+5. Rewrote `AnnotationCard` with multi-note UI, AI note display, expand/collapse
+6. Updated markdown export to include both AI notes and multi-notes
+7. Added i18n strings for all new UI elements
+
+**Test validation**: Passed `npm run lint` and `npm run test` (58 passed, 1 skipped; 626 tests passed).
+**DB sync**: Ran `npx prisma db push` to add new columns.
+
+### fix: Discovery score persistence and AlphaXiv coverage
+
+**Summary**: Fixed discovery feature issues: (1) relevance/quality scores lost across app restarts — now restored from history cache; (2) arXiv papers missing `source: 'arxiv'` field; (3) AlphaXiv trending only ~20 papers — now fetches Hot+Likes+Recent (~50); (4) relevance scoring now streams results in batches with progress bar; (5) fixed pre-existing TS errors across 5 files.
+
+**Changes**:
+
+1. `discovery.ipc.ts`: On startup, scan all history cache entries and restore relevance/quality scores for papers that lost them across sessions
+2. `discovery.ipc.ts`: Relevance calculation now streams results in batches of 10 with progress bar
+3. `arxiv-discovery.service.ts`: Set `source: 'arxiv'` on all arXiv-fetched papers
+4. `alphaxiv-trending.service.ts`: Fetch from 3 AlphaXiv sort views (Hot, Likes, Recent) and merge unique papers (~50)
+5. `discovery/page.tsx`: Added relevance progress bar with batch count
+6. Fixed pre-existing TS errors across `discovery/page.tsx`, `search-content.tsx`, `use-ipc.ts`, `highlights/page.tsx`, `reader/page.tsx`
+
+**Test validation**: Passed `npm run lint` and `npm run test` (58 passed, 1 skipped; 626 tests passed).
+
+### feat: Q&A index navigation in paper chat
+
+**Summary**: Added a Q&A jump navigation dropdown in the paper reader chat panel. Users can now click the index button in the chat header to see a list of all questions asked, and click any question to instantly scroll to that Q&A pair. A brief highlight ring effect shows which message was jumped to.
+
+**Changes**:
+
+1. Added `id` attributes (`qa-user-N`) to user message elements in `MessageStream.tsx`
+2. Added Q&A index dropdown with question list in reader chat header (`page.tsx`)
+3. Added i18n strings for both English and Chinese (`en.json`, `zh.json`)
+
+**Test validation**: Passed `npm run lint` and `npm run test` (58 passed, 1 skipped; 626 tests passed).
+
 ### fix: Chat only showing most recent Q&A instead of full history
 
 **Summary**: Fixed paper reader chat displaying only the latest round of conversation. Previous messages were lost when the agent streamed new responses because `agentMessages` replaced `historicMessages` entirely.

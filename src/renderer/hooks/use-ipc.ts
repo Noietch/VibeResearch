@@ -99,6 +99,8 @@ declare global {
       once: (channel: string, listener: (...args: unknown[]) => void) => void;
       readLocalFile: (path: string) => Promise<string>;
       openBrowser: (url: string, title?: string) => Promise<boolean>;
+      // Streaming port for MessagePort-based chunk streaming
+      onStreamingPort?: (callback: (tag: string, port: MessagePort) => void) => () => void;
       // Window controls
       windowClose: () => Promise<void>;
       windowMinimize: () => Promise<void>;
@@ -215,6 +217,8 @@ export interface HighlightItem {
   rectsJson: string;
   text: string;
   note?: string | null;
+  aiNote?: string | null;
+  notes: string; // JSON array of { id: string, text: string, createdAt: string }
   color: string;
   createdAt: string;
   updatedAt: string;
@@ -1662,8 +1666,14 @@ export const ipc = {
     note?: string;
     color?: string;
   }) => invoke<HighlightItem>('highlights:create', params),
-  updateHighlight: (id: string, updates: { note?: string; color?: string }) =>
+  updateHighlight: (id: string, updates: { note?: string; aiNote?: string; color?: string }) =>
     invoke<HighlightItem>('highlights:update', id, updates),
+  addHighlightNote: (id: string, text: string) =>
+    invoke<HighlightItem>('highlights:addNote', id, text),
+  updateHighlightNote: (id: string, noteId: string, text: string) =>
+    invoke<HighlightItem>('highlights:updateNote', id, noteId, text),
+  deleteHighlightNote: (id: string, noteId: string) =>
+    invoke<HighlightItem>('highlights:deleteNote', id, noteId),
   deleteHighlight: (id: string) => invoke<void>('highlights:delete', id),
   listHighlights: (paperId: string, pageNumber?: number) =>
     invoke<HighlightItem[]>('highlights:listByPaper', paperId, pageNumber),

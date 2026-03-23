@@ -18,7 +18,7 @@ type HighlightResult = {
   id: string;
   paperId: string;
   pageNumber: number;
-  rectsJson: string;
+  rectsJson?: string;
   text: string;
   note: string | null;
   color: string;
@@ -175,7 +175,7 @@ export function HighlightsPage() {
                         // Extract y-offset from the first rect for precise scroll positioning
                         let pageYOffset: number | undefined;
                         try {
-                          const rects = JSON.parse(h.rectsJson) as Array<{ y: number }>;
+                          const rects = JSON.parse(h.rectsJson!) as Array<{ y: number }>;
                           if (rects.length > 0) pageYOffset = rects[0].y;
                         } catch {
                           // ignore
