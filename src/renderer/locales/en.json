@@ -825,7 +825,9 @@
       "detectedFormula": "Formula",
       "detectedFigure": "Figure",
       "detectedTable": "Table",
-      "summarizePage": "Summarize page"
+      "summarizePage": "Summarize page",
+      "qaIndex": "Jump to Q&A",
+      "qaIndexTitle": "Questions"
     },
     "tts": {
       "title": "Reading aloud",

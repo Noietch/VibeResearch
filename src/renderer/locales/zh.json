@@ -825,7 +825,9 @@
       "detectedFormula": "公式",
       "detectedFigure": "图表",
       "detectedTable": "表格",
-      "summarizePage": "总结本页"
+      "summarizePage": "总结本页",
+      "qaIndex": "跳转到问答",
+      "qaIndexTitle": "问题列表"
     },
     "tts": {
       "title": "正在朗读",

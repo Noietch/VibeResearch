@@ -69,6 +69,7 @@ function dedupeMessages(messages: Message[]): Message[] {
 function buildRenderItems(messages: Message[], lastTextMsgId: string | null): React.ReactNode[] {
   const items: React.ReactNode[] = [];
   let toolBuffer: Message[] = [];
+  let userQIndex = 0;
 
   function flushToolBuffer() {
     if (toolBuffer.length === 0) return;
@@ -100,8 +101,9 @@ function buildRenderItems(messages: Message[], lastTextMsgId: string | null): Re
 
     if (msg.type === 'text' && msg.role === 'user') {
       const content = msg.content as { text: string };
+      userQIndex++;
       items.push(
-        <div key={msg.id} className="flex justify-end my-4">
+        <div key={msg.id} id={`qa-user-${userQIndex}`} className="flex justify-end my-4">
           <div className="bg-[#f0f0ef] rounded-2xl px-4 py-2.5 max-w-[80%]">
             <p className="text-sm text-notion-text leading-relaxed m-0">{content.text}</p>
           </div>

@@ -41,6 +41,8 @@ import {
   StickyNote,
   Sparkles,
   ClipboardCopy,
+  List,
+  ChevronsUpDown,
 } from 'lucide-react';
 import type { AgentConfigItem } from '@shared';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -358,6 +360,10 @@ export function ReaderPage() {
   const [showChatHistory, setShowChatHistory] = useState(false);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
 
+  // Q&A index dropdown state
+  const [showQaIndex, setShowQaIndex] = useState(false);
+  const qaIndexRef = useRef<HTMLDivElement>(null);
+
   // Local user messages injected before the agent stream arrives
   const [localUserMessages, setLocalUserMessages] = useState<
     { id: string; msgId: string; type: string; role: string; content: unknown; status: null }[]
@@ -487,6 +493,18 @@ export function ReaderPage() {
       displayMessages: displayMessages.length,
     });
   }
+
+  // Extract user questions for Q&A index navigation
+  const qaQuestions = useMemo(() => {
+    let idx = 0;
+    return displayMessages
+      .filter((m: any) => m.type === 'text' && m.role === 'user')
+      .map((m: any) => {
+        idx++;
+        const text = (m.content as { text: string }).text;
+        return { index: idx, text: text.slice(0, 80), msgId: m.msgId };
+      });
+  }, [displayMessages]);
 
   // Rating
   const [rating, setRating] = useState<number | null>(null);
@@ -798,11 +816,14 @@ export function ReaderPage() {
       .catch(() => undefined);
   }, [paper?.id]);
 
-  // Close chat history dropdown on outside click
+  // Close chat history / Q&A index dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (chatHistoryRef.current && !chatHistoryRef.current.contains(e.target as Node)) {
         setShowChatHistory(false);
+      }
+      if (qaIndexRef.current && !qaIndexRef.current.contains(e.target as Node)) {
+        setShowQaIndex(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1511,6 +1532,70 @@ export function ReaderPage() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Q&A Index Dropdown */}
+              {agentTodoId && qaQuestions.length > 0 && (
+                <div ref={qaIndexRef} className="relative ml-auto">
+                  <button
+                    onClick={() => setShowQaIndex(!showQaIndex)}
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-notion-text-secondary transition-colors hover:bg-notion-sidebar hover:text-notion-text"
+                    title={t('reader.ai.qaIndex', 'Jump to Q&A')}
+                  >
+                    <List size={14} />
+                    <span className="tabular-nums">{qaQuestions.length}</span>
+                    <ChevronsUpDown size={12} />
+                  </button>
+
+                  <AnimatePresence>
+                    {showQaIndex && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-notion-border bg-white shadow-lg"
+                      >
+                        <div className="border-b border-notion-border px-3 py-2">
+                          <p className="text-xs font-medium text-notion-text-secondary">
+                            {t('reader.ai.qaIndexTitle', 'Questions')} ({qaQuestions.length})
+                          </p>
+                        </div>
+                        <div className="max-h-72 overflow-y-auto notion-scrollbar p-1">
+                          {qaQuestions.map((q) => (
+                            <button
+                              key={q.index}
+                              onClick={() => {
+                                const el = document.getElementById(`qa-user-${q.index}`);
+                                if (el) {
+                                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                  // Brief highlight effect
+                                  el.classList.add('ring-2', 'ring-notion-accent/40', 'rounded-lg');
+                                  setTimeout(() => {
+                                    el.classList.remove(
+                                      'ring-2',
+                                      'ring-notion-accent/40',
+                                      'rounded-lg',
+                                    );
+                                  }, 1500);
+                                }
+                                setShowQaIndex(false);
+                              }}
+                              className="flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-notion-sidebar"
+                            >
+                              <span className="flex-shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded bg-notion-sidebar text-[10px] font-semibold text-notion-text-secondary tabular-nums">
+                                {q.index}
+                              </span>
+                              <span className="line-clamp-2 text-xs text-notion-text leading-relaxed">
+                                {q.text}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
 
             {/* Messages */}
