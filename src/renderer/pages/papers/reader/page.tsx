@@ -478,7 +478,6 @@ export function ReaderPage() {
       agentMessages: agentMessages.length,
       historicMessages: historicMessages.length,
       streamBased: streamBased.length,
-      streamHasUserMessages,
       displayMessages: displayMessages.length,
     });
   }
