@@ -262,11 +262,11 @@ export function setupDiscoveryIpc() {
           lastDiscoveryResult = result;
         }
 
-        // Prune papers older than daysBack
+        // Prune arXiv papers older than daysBack (keep trending papers regardless of date)
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - daysBack);
         lastDiscoveryResult.papers = lastDiscoveryResult.papers.filter(
-          (p) => new Date(p.publishedAt) >= cutoff,
+          (p) => p.source === 'alphaxiv-trending' || new Date(p.publishedAt) >= cutoff,
         );
         lastDiscoveryResult.total = lastDiscoveryResult.papers.length;
 
@@ -294,6 +294,8 @@ export function setupDiscoveryIpc() {
       const withSource = papers.map((p) => ({ ...p, source: 'alphaxiv-trending' as const }));
 
       // Merge into existing result (append new papers, skip duplicates)
+      // Trending papers are NOT date-filtered — they represent current popularity,
+      // not recency. Date filtering only applies to arXiv papers in discovery:fetch.
       if (lastDiscoveryResult) {
         const existingIds = new Set(lastDiscoveryResult.papers.map((p) => p.arxivId));
         for (const paper of withSource) {
@@ -398,6 +400,15 @@ export function setupDiscoveryIpc() {
           papers: evaluatedPapers,
         };
       } catch (error) {
+        // Persist any partial results on error
+        if (lastDiscoveryResult && evaluatedPapers.length > 0) {
+          const evaluatedMap = new Map(evaluatedPapers.map((p) => [p.arxivId, p]));
+          lastDiscoveryResult.papers = lastDiscoveryResult.papers.map((p) => {
+            const evaluated = evaluatedMap.get(p.arxivId);
+            return evaluated ?? p;
+          });
+          saveCache();
+        }
         const message = error instanceof Error ? error.message : String(error);
         return { success: false, error: message };
       } finally {
@@ -453,6 +464,9 @@ export function setupDiscoveryIpc() {
           return withScore ?? p;
         });
 
+        // Persist each batch immediately so scores survive errors/crashes
+        saveCache();
+
         // Send progress + partial results to renderer
         event.sender.send('discovery:relevanceProgress', {
           scored: allScored.length + alreadyScored,
@@ -461,18 +475,15 @@ export function setupDiscoveryIpc() {
         });
       }
 
-      // Save to cache
-      saveCache();
-
       return {
         success: true,
         papers: lastDiscoveryResult!.papers,
       };
     } catch (error) {
+      // Always persist partial results even on error
+      saveCache();
       if (error instanceof Error && error.name === 'AbortError') {
         console.log('[discovery:calculateRelevance] Cancelled by user');
-        // Save partial results
-        saveCache();
         return { success: true, papers: lastDiscoveryResult?.papers ?? [], cancelled: true };
       }
       const message = error instanceof Error ? error.message : String(error);
