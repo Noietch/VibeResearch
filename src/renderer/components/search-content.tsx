@@ -843,7 +843,7 @@ export function SearchContent() {
                   <span className="text-amber-500">&#x26A0;&#xFE0F;</span>
                   <div>
                     <p className="text-sm font-medium text-amber-700">
-                      {t(agenticFallbackMessage)}
+                      {t(agenticFallbackMessage as any)}
                     </p>
                   </div>
                 </div>
