@@ -24,7 +24,15 @@
 
 **ResearchClaw** 是一个独立的 **Electron 桌面应用**，专为科研工作者设计。它将 AI 驱动的论文管理、交互式阅读和创意生成整合在一个简洁的界面中 — 无需浏览器、无需服务器、无需插件。
 
-## 界面截图
+## 🚀 参与贡献
+
+CitationClaw 由社区驱动，欢迎提交 PR。
+
+- 提交 Issue：<https://github.com/VisionXLab/CitationClaw/issues>
+- 提交 PR：<https://github.com/VisionXLab/CitationClaw/pulls>
+- 推荐入门任务：文档完善、UI 优化、skill 元数据、重试机制
+
+## 功能截图
 
 ### 主界面
 
@@ -145,14 +153,6 @@ scripts/      # build-main.mjs, build-release.sh
 ## 许可证
 
 [CC BY-NC 4.0](LICENSE) — 免费用于非商业用途，需注明来源，禁止商业使用。
-
-## 🚀 参与贡献
-
-CitationClaw 由社区驱动，欢迎提交 PR。
-
-- 提交 Issue：<https://github.com/VisionXLab/CitationClaw/issues>
-- 提交 PR：<https://github.com/VisionXLab/CitationClaw/pulls>
-- 推荐入门任务：文档完善、UI 优化、skill 元数据、重试机制
 
 ## Star History
 
