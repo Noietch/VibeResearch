@@ -3,6 +3,28 @@
  * No dependencies on pdfjs, Node.js, or Electron - framework-agnostic.
  */
 
+/**
+ * Check if two titles are similar using word overlap.
+ * Normalizes text and computes Jaccard similarity on word sets.
+ * Returns true if similarity > 60%.
+ */
+export function isTitleSimilar(a: string, b: string): boolean {
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const wordsA = new Set(na.split(/\s+/));
+  const wordsB = new Set(nb.split(/\s+/));
+  const intersection = [...wordsA].filter((w) => wordsB.has(w));
+  const unionSize = new Set([...wordsA, ...wordsB]).size;
+  return unionSize > 0 && intersection.length / unionSize > 0.6;
+}
+
 export interface Reference {
   number: number;
   text: string;

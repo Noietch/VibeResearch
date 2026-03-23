@@ -697,6 +697,7 @@ Rules:
     ): Promise<IpcResult<unknown>> => {
       try {
         const { getPrismaClient } = await import('@db');
+        const { isTitleSimilar } = await import('@shared');
         const prisma = getPrismaClient();
 
         // Only match papers that have a local PDF
@@ -725,11 +726,13 @@ Rules:
           }
         }
 
-        // 2. Try matching by title (case-insensitive contains)
-        if (ref.title) {
+        // 2. Try matching by DOI
+        if (ref.doi) {
+          // DOI is stored in shortId with format: doi-{normalized}
+          const doiShortId = `doi-${ref.doi.replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 80)}`;
           const paper = await prisma.paper.findFirst({
             where: {
-              title: { contains: ref.title },
+              OR: [{ shortId: doiShortId }, { sourceUrl: { contains: ref.doi } }],
               ...pdfFilter,
             },
             include: { tags: { include: { tag: true } } },
@@ -748,6 +751,45 @@ Rules:
               tagNames: paper.tags.map((pt) => pt.tag.name),
               year: paper.submittedAt ? paper.submittedAt.getFullYear() : null,
             });
+          }
+        }
+
+        // 3. Try matching by title similarity (fetch all papers and compare)
+        if (ref.title) {
+          // Get all papers with PDFs
+          const allPapers = await prisma.paper.findMany({
+            where: pdfFilter,
+            select: {
+              id: true,
+              shortId: true,
+              title: true,
+              authorsJson: true,
+              submittedAt: true,
+              abstract: true,
+              pdfUrl: true,
+              pdfPath: true,
+              sourceUrl: true,
+              tags: { include: { tag: true } },
+            },
+          });
+
+          // Find first paper with similar title
+          for (const paper of allPapers) {
+            if (isTitleSimilar(paper.title, ref.title)) {
+              return ok({
+                id: paper.id,
+                shortId: paper.shortId,
+                title: paper.title,
+                authors: paper.authorsJson ? JSON.parse(paper.authorsJson) : [],
+                submittedAt: paper.submittedAt?.toISOString(),
+                abstract: paper.abstract,
+                pdfUrl: paper.pdfUrl,
+                pdfPath: paper.pdfPath,
+                sourceUrl: paper.sourceUrl,
+                tagNames: paper.tags.map((pt) => pt.tag.name),
+                year: paper.submittedAt ? paper.submittedAt.getFullYear() : null,
+              });
+            }
           }
         }
 

@@ -2,6 +2,20 @@
 
 ## 0.0.4 (2026-03-23)
 
+### fix: Improved citation reference matching accuracy
+
+**Summary**: Fixed citation reference matching logic that was producing too many false positives. The previous implementation used simple SQLite `contains` query for title matching, which would match "Attention" to any title containing that word. Now uses fuzzy title similarity matching with 60% word overlap threshold.
+
+**Changes**:
+
+1. Extracted `isTitleSimilar` function to `@shared/utils/reference-parser.ts` for reuse
+2. Updated `papers:matchReference` IPC handler to use similarity matching instead of `contains`
+3. Added DOI matching support (checks both shortId format and sourceUrl)
+4. Matching order: arXiv ID (exact) → DOI (exact) → title (fuzzy similarity)
+5. Fetches all papers and compares titles using Jaccard similarity (>60% word overlap)
+
+**Test validation**: Passed `npm run lint`.
+
 ### refactor: Unified color system with Tailwind blue
 
 **Summary**: Systematically replaced all Notion design system colors (notion-accent, notion-accent-light, notion-accent/N) with Tailwind default blue colors (blue-50 through blue-600) across the entire renderer. This standardizes the color system to use Tailwind's built-in blue palette for all interactive elements, badges, buttons, borders, and focus states.

@@ -9,6 +9,7 @@ import { getPrismaClient } from '@db';
 import { getProxy, getProxyEnabled, getProxyScope } from '../store/app-settings-store';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import type { Agent } from 'node:http';
+import { isTitleSimilar } from '@shared';
 
 const OPENALEX_BASE = 'https://api.openalex.org';
 const OPENALEX_HEADERS = {
@@ -33,23 +34,6 @@ export class CitationExtractionError extends Error {
     this.retryable = options?.retryable ?? false;
     this.status = options?.status;
   }
-}
-
-function isTitleSimilar(a: string, b: string): boolean {
-  const normalize = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .trim();
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (na === nb) return true;
-  if (na.includes(nb) || nb.includes(na)) return true;
-  const wordsA = new Set(na.split(/\s+/));
-  const wordsB = new Set(nb.split(/\s+/));
-  const intersection = [...wordsA].filter((w) => wordsB.has(w));
-  const unionSize = new Set([...wordsA, ...wordsB]).size;
-  return unionSize > 0 && intersection.length / unionSize > 0.6;
 }
 
 /**
