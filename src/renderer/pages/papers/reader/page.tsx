@@ -182,76 +182,265 @@ const HIGHLIGHT_COLOR_BG: Record<string, string> = {
   purple: 'bg-purple-100 border-purple-300',
 };
 
+interface NoteEntry {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 function AnnotationCard({
   highlight,
-  onUpdateNote,
+  onAddNote,
+  onUpdateNoteEntry,
+  onDeleteNoteEntry,
   onDelete,
   onJumpToPage,
+  onGenerateAiNote,
 }: {
   highlight: HighlightItem;
-  onUpdateNote: (note: string) => void;
+  onAddNote: (text: string) => void;
+  onUpdateNoteEntry: (noteId: string, text: string) => void;
+  onDeleteNoteEntry: (noteId: string) => void;
   onDelete: () => void;
   onJumpToPage?: (page: number) => void;
+  onGenerateAiNote?: () => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [noteText, setNoteText] = useState(highlight.note ?? '');
+  const [addingNote, setAddingNote] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteText, setEditNoteText] = useState('');
+  const [aiNoteLoading, setAiNoteLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [isClamped, setIsClamped] = useState(false);
+  const { t } = useTranslation();
   const colorClass = HIGHLIGHT_COLOR_BG[highlight.color] ?? 'bg-yellow-100 border-yellow-300';
+
+  const noteEntries: NoteEntry[] = useMemo(() => {
+    try {
+      const parsed = JSON.parse(highlight.notes || '[]');
+      // Migrate legacy single note into array if notes array is empty
+      if (parsed.length === 0 && highlight.note) {
+        return [{ id: '_legacy', text: highlight.note, createdAt: highlight.createdAt }];
+      }
+      return parsed;
+    } catch {
+      return [];
+    }
+  }, [highlight.notes, highlight.note, highlight.createdAt]);
+
+  // Detect whether the text is actually clamped (overflows 3 lines)
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (el) {
+      setIsClamped(el.scrollHeight > el.clientHeight + 1);
+    }
+  }, [highlight.text, expanded]);
 
   return (
     <div
-      className={`group mx-2 my-1.5 cursor-pointer rounded-md border-l-2 px-2.5 py-2 transition-colors hover:brightness-95 ${colorClass}`}
-      onClick={() => onJumpToPage?.(highlight.pageNumber)}
+      className={`group mx-2 my-1.5 rounded-md border-l-2 px-2.5 py-2 transition-colors hover:brightness-95 ${colorClass}`}
     >
-      <p className="line-clamp-3 text-xs leading-relaxed text-notion-text">
+      {/* Highlight text — click to jump, expandable */}
+      <p
+        ref={textRef}
+        className={`cursor-pointer text-xs leading-relaxed text-notion-text ${expanded ? '' : 'line-clamp-3'}`}
+        onClick={() => onJumpToPage?.(highlight.pageNumber)}
+      >
         &ldquo;{highlight.text}&rdquo;
       </p>
-      {editing ? (
+      {/* Expand / Collapse toggle */}
+      {(isClamped || expanded) && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          className="mt-0.5 text-[10px] font-medium text-notion-accent hover:underline"
+        >
+          {expanded
+            ? t('reader.annotation.collapse', 'Collapse ▲')
+            : t('reader.annotation.expand', 'Show full text ▼')}
+        </button>
+      )}
+
+      {/* AI Note (read-only display with regenerate button) */}
+      {(highlight.aiNote || aiNoteLoading) && (
+        <div className="mt-1.5 rounded-md bg-white/60 px-2 py-1.5">
+          <div className="flex items-start gap-1">
+            {aiNoteLoading ? (
+              <Loader2 size={10} className="mt-0.5 flex-shrink-0 animate-spin text-notion-accent" />
+            ) : (
+              <Sparkles size={10} className="mt-0.5 flex-shrink-0 text-notion-accent" />
+            )}
+            <p className="flex-1 text-[10px] leading-relaxed text-notion-text-secondary">
+              {aiNoteLoading && !highlight.aiNote
+                ? t('reader.annotation.aiNoteLoading', 'Generating…')
+                : highlight.aiNote}
+            </p>
+            {onGenerateAiNote && (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (aiNoteLoading) return;
+                  setAiNoteLoading(true);
+                  try {
+                    await onGenerateAiNote();
+                  } finally {
+                    setAiNoteLoading(false);
+                  }
+                }}
+                disabled={aiNoteLoading}
+                title={t('reader.annotation.regenerateAiNote', 'Regenerate AI Note')}
+                className="flex-shrink-0 rounded p-0.5 text-notion-text-tertiary opacity-0 transition-opacity hover:text-notion-accent group-hover:opacity-100 disabled:opacity-50"
+              >
+                {aiNoteLoading ? (
+                  <Loader2 size={9} className="animate-spin" />
+                ) : (
+                  <Sparkles size={9} />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* User notes list (multiple notes) */}
+      {noteEntries.length > 0 && (
+        <div className="mt-1.5 space-y-1">
+          {noteEntries.map((entry) =>
+            editingNoteId === entry.id ? (
+              <div key={entry.id}>
+                <textarea
+                  autoFocus
+                  value={editNoteText}
+                  onChange={(e) => setEditNoteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (editNoteText.trim()) onUpdateNoteEntry(entry.id, editNoteText.trim());
+                      setEditingNoteId(null);
+                    }
+                    if (e.key === 'Escape') setEditingNoteId(null);
+                  }}
+                  onBlur={() => {
+                    if (editNoteText.trim()) onUpdateNoteEntry(entry.id, editNoteText.trim());
+                    setEditingNoteId(null);
+                  }}
+                  placeholder="Edit note…"
+                  className="w-full resize-none rounded border border-notion-border bg-white px-2 py-1 text-xs text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-accent"
+                  rows={2}
+                />
+              </div>
+            ) : (
+              <div key={entry.id} className="group/note flex items-start gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingNoteId(entry.id);
+                    setEditNoteText(entry.text);
+                  }}
+                  className="flex-1 min-w-0 text-left text-[10px] italic leading-relaxed text-notion-text-secondary hover:text-notion-text"
+                >
+                  <StickyNote size={9} className="mr-0.5 inline-block align-middle opacity-60" />
+                  {entry.text}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteNoteEntry(entry.id);
+                  }}
+                  className="flex-shrink-0 rounded p-0.5 text-notion-text-tertiary opacity-0 transition-opacity hover:text-red-500 group-hover/note:opacity-100"
+                >
+                  <X size={9} />
+                </button>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+
+      {/* Add new note textarea */}
+      {addingNote && (
         <div className="mt-1.5">
           <textarea
             autoFocus
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
+            value={newNoteText}
+            onChange={(e) => setNewNoteText(e.target.value)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                onUpdateNote(noteText);
-                setEditing(false);
+                if (newNoteText.trim()) {
+                  onAddNote(newNoteText.trim());
+                  setNewNoteText('');
+                }
+                setAddingNote(false);
               }
               if (e.key === 'Escape') {
-                setNoteText(highlight.note ?? '');
-                setEditing(false);
+                setNewNoteText('');
+                setAddingNote(false);
               }
             }}
             onBlur={() => {
-              onUpdateNote(noteText);
-              setEditing(false);
+              if (newNoteText.trim()) {
+                onAddNote(newNoteText.trim());
+                setNewNoteText('');
+              }
+              setAddingNote(false);
             }}
             placeholder="Add a note…"
             className="w-full resize-none rounded border border-notion-border bg-white px-2 py-1 text-xs text-notion-text placeholder:text-notion-text-tertiary focus:outline-none focus:ring-1 focus:ring-notion-accent"
             rows={2}
           />
         </div>
-      ) : (
+      )}
+
+      {/* Action buttons */}
+      {!addingNote && (
         <div className="mt-1 flex items-center gap-1">
-          {highlight.note ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setAddingNote(true);
+            }}
+            className="text-[10px] text-notion-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            + note
+          </button>
+          {!highlight.aiNote && onGenerateAiNote && (
             <button
-              onClick={() => setEditing(true)}
-              className="text-left text-[10px] italic text-notion-text-secondary hover:text-notion-text"
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (aiNoteLoading) return;
+                setAiNoteLoading(true);
+                try {
+                  await onGenerateAiNote();
+                } finally {
+                  setAiNoteLoading(false);
+                }
+              }}
+              disabled={aiNoteLoading}
+              title={t('reader.annotation.aiNote', 'AI Note')}
+              className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-notion-accent opacity-0 transition-opacity hover:bg-notion-accent-light group-hover:opacity-100 disabled:opacity-50"
             >
-              {highlight.note}
-            </button>
-          ) : (
-            <button
-              onClick={() => setEditing(true)}
-              className="text-[10px] text-notion-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              + note
+              {aiNoteLoading ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : (
+                <Sparkles size={10} />
+              )}
+              {aiNoteLoading
+                ? t('reader.annotation.aiNoteLoading', 'Generating…')
+                : t('reader.annotation.aiNote', 'AI Note')}
             </button>
           )}
           <button
-            onClick={onDelete}
-            className="ml-auto rounded p-0.5 text-notion-text-tertiary opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="ml-auto flex-shrink-0 rounded p-0.5 text-notion-text-tertiary opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
           >
             <X size={10} />
           </button>
@@ -1398,16 +1587,16 @@ export function ReaderPage() {
                     !result.markdown.includes('## Highlights') &&
                     !result.markdown.includes('## Reading Notes')
                   ) {
-                    toast.info(t('reader.noHighlightsToExport'));
+                    showInfo(t('reader.noHighlightsToExport' as any));
                     return;
                   }
                   await navigator.clipboard.writeText(result.markdown);
-                  toast.success(t('reader.exportCopied'));
+                  showSuccess(t('reader.exportCopied' as any));
                 } catch {
-                  toast.error('Export failed');
+                  showError('Export failed');
                 }
               }}
-              title={t('reader.exportHighlights')}
+              title={t('reader.exportHighlights' as any)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-sidebar/50"
             >
               <ClipboardCopy size={14} />
@@ -2017,7 +2206,7 @@ export function ReaderPage() {
                                 .then((aiResult) => {
                                   if (aiResult?.result) {
                                     ipc
-                                      .updateHighlight(h.id, { note: aiResult.result })
+                                      .updateHighlight(h.id, { aiNote: aiResult.result })
                                       .then((updated) => {
                                         setHighlights((prev) =>
                                           prev.map((x) => (x.id === h.id ? updated : x)),
@@ -2372,9 +2561,29 @@ export function ReaderPage() {
                             key={h.id}
                             highlight={h}
                             onJumpToPage={(page) => goToPageRef.current?.(page)}
-                            onUpdateNote={(note) => {
+                            onAddNote={(text) => {
                               ipc
-                                .updateHighlight(h.id, { note })
+                                .addHighlightNote(h.id, text)
+                                .then((updated) =>
+                                  setHighlights((prev) =>
+                                    prev.map((x) => (x.id === h.id ? updated : x)),
+                                  ),
+                                )
+                                .catch(() => undefined);
+                            }}
+                            onUpdateNoteEntry={(noteId, text) => {
+                              ipc
+                                .updateHighlightNote(h.id, noteId, text)
+                                .then((updated) =>
+                                  setHighlights((prev) =>
+                                    prev.map((x) => (x.id === h.id ? updated : x)),
+                                  ),
+                                )
+                                .catch(() => undefined);
+                            }}
+                            onDeleteNoteEntry={(noteId) => {
+                              ipc
+                                .deleteHighlightNote(h.id, noteId)
                                 .then((updated) =>
                                   setHighlights((prev) =>
                                     prev.map((x) => (x.id === h.id ? updated : x)),
@@ -2390,6 +2599,31 @@ export function ReaderPage() {
                                 )
                                 .catch(() => undefined);
                             }}
+                            onGenerateAiNote={
+                              paper
+                                ? async () => {
+                                    try {
+                                      const aiResult = await ipc.readerInlineAI({
+                                        paperId: paper.id,
+                                        action: 'suggestNote',
+                                        selectedText: h.text,
+                                        language: i18n.language,
+                                      });
+                                      if (aiResult?.result) {
+                                        const updated = await ipc.updateHighlight(h.id, {
+                                          aiNote: aiResult.result,
+                                        });
+                                        setHighlights((prev) =>
+                                          prev.map((x) => (x.id === h.id ? updated : x)),
+                                        );
+                                        showSuccess(t('reader.ai.noteSuggested'));
+                                      }
+                                    } catch {
+                                      // silently ignore
+                                    }
+                                  }
+                                : undefined
+                            }
                           />
                         ))}
                       </div>

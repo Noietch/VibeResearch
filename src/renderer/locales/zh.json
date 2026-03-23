@@ -789,6 +789,13 @@
     "page": "第",
     "focusMode": "专注模式",
     "exitFocusMode": "退出专注模式",
+    "annotation": {
+      "expand": "展开全文 ▼",
+      "collapse": "收起 ▲",
+      "aiNote": "AI 笔记",
+      "regenerateAiNote": "重新生成 AI 笔记",
+      "aiNoteLoading": "生成中…"
+    },
     "ai": {
       "explain": "解释",
       "simplify": "简化",

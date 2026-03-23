@@ -789,6 +789,13 @@
     "page": "Page",
     "focusMode": "Focus mode",
     "exitFocusMode": "Exit focus mode",
+    "annotation": {
+      "expand": "Show full text ▼",
+      "collapse": "Collapse ▲",
+      "aiNote": "AI Note",
+      "regenerateAiNote": "Regenerate AI Note",
+      "aiNoteLoading": "Generating…"
+    },
     "ai": {
       "explain": "Explain",
       "simplify": "Simplify",

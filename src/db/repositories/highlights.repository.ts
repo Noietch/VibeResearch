@@ -1,5 +1,11 @@
 import { getPrismaClient } from '../client';
 
+export interface HighlightNoteEntry {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 export class HighlightsRepository {
   private prisma = getPrismaClient();
 
@@ -23,10 +29,56 @@ export class HighlightsRepository {
     });
   }
 
-  async update(id: string, params: { note?: string; color?: string }) {
+  async update(
+    id: string,
+    params: { note?: string; aiNote?: string; notes?: string; color?: string },
+  ) {
     return this.prisma.paperHighlight.update({
       where: { id },
       data: params,
+    });
+  }
+
+  /** Add a note entry to the notes JSON array */
+  async addNote(
+    id: string,
+    text: string,
+  ): Promise<ReturnType<typeof this.prisma.paperHighlight.update>> {
+    const highlight = await this.prisma.paperHighlight.findUniqueOrThrow({ where: { id } });
+    const existing: HighlightNoteEntry[] = JSON.parse(highlight.notes || '[]');
+    const entry: HighlightNoteEntry = {
+      id: crypto.randomUUID(),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    existing.push(entry);
+    return this.prisma.paperHighlight.update({
+      where: { id },
+      data: { notes: JSON.stringify(existing) },
+    });
+  }
+
+  /** Update a specific note entry in the notes JSON array */
+  async updateNote(id: string, noteId: string, text: string) {
+    const highlight = await this.prisma.paperHighlight.findUniqueOrThrow({ where: { id } });
+    const existing: HighlightNoteEntry[] = JSON.parse(highlight.notes || '[]');
+    const idx = existing.findIndex((n) => n.id === noteId);
+    if (idx === -1) throw new Error('Note not found');
+    existing[idx].text = text;
+    return this.prisma.paperHighlight.update({
+      where: { id },
+      data: { notes: JSON.stringify(existing) },
+    });
+  }
+
+  /** Delete a specific note entry from the notes JSON array */
+  async deleteNote(id: string, noteId: string) {
+    const highlight = await this.prisma.paperHighlight.findUniqueOrThrow({ where: { id } });
+    const existing: HighlightNoteEntry[] = JSON.parse(highlight.notes || '[]');
+    const filtered = existing.filter((n) => n.id !== noteId);
+    return this.prisma.paperHighlight.update({
+      where: { id },
+      data: { notes: JSON.stringify(filtered) },
     });
   }
 
