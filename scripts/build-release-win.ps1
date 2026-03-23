@@ -4,10 +4,15 @@ $ErrorActionPreference = "Stop"
 $ROOT_DIR = Split-Path -Parent $PSScriptRoot
 
 Write-Host "==> Building ResearchClaw (Windows release)"
+Set-Location $ROOT_DIR
+
+# Step 0: Regenerate Windows ICO from the checked-in iconset
+Write-Host "==> Step 0: Regenerate Windows icon"
+node scripts/generate-win-icon.mjs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Step 1: Build JS bundles
 Write-Host "==> Step 1: Build JS bundles"
-Set-Location $ROOT_DIR
 
 # Clean leftover electron-builder artifacts
 $cleanPaths = @(
@@ -19,7 +24,7 @@ foreach ($p in $cleanPaths) {
   if (Test-Path $full) { Remove-Item -Recurse -Force $full }
 }
 
-npm run build
+npm.cmd run build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Step 2: Copy Prisma native engine to dist/native/
@@ -50,7 +55,8 @@ if (Test-Path $prismaClientDir) {
 # Step 4: Package Windows NSIS installer (x64)
 Write-Host "==> Step 4: Package Windows NSIS installer (x64)"
 $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
-npx electron-builder --win --x64 --publish never
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+npx.cmd electron-builder --win --x64 --publish never
 $exitCode = $LASTEXITCODE
 
 # Cleanup: remove the temporary _prisma directory after packaging

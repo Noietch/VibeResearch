@@ -86,6 +86,7 @@ win:
       arch:
         - x64
   icon: assets/icon.ico
+  signAndEditExecutable: false
   electronLanguages:
     - en
     - zh_CN

@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { existsSync, copyFileSync, readFileSync, unlinkSync } from 'fs';
+import { existsSync, copyFileSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
 import path from 'path';
 import os from 'os';
 import { BrowserWindow } from 'electron';
@@ -108,16 +108,19 @@ function getAvailableBrowsers(): BrowserInfo[] {
         'History',
       ),
       win32: path.join(
-        home,
-        'AppData',
-        'Local',
+        process.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local'),
         'Google',
         'Chrome',
         'User Data',
         'Default',
         'History',
       ),
-      linux: path.join(home, '.config', 'google-chrome', 'Default', 'History'),
+      linux: path.join(
+        process.env.XDG_CONFIG_HOME ?? path.join(home, '.config'),
+        'google-chrome',
+        'Default',
+        'History',
+      ),
     },
     {
       name: 'Edge',
@@ -204,6 +207,89 @@ function getChromeHistoryPath(): string {
   return browsers[0].path;
 }
 
+function getDatabaseSyncCtor() {
+  // node:sqlite can read WAL-backed browser history snapshots directly from disk.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+  return DatabaseSync;
+}
+
+function createChromeHistorySnapshot(historyPath: string): {
+  tempDir: string;
+  tempHistoryPath: string;
+} {
+  const tempDir = path.join(
+    os.tmpdir(),
+    `researchclaw-chrome-history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  mkdirSync(tempDir, { recursive: true });
+
+  const tempHistoryPath = path.join(tempDir, 'History');
+  copyFileSync(historyPath, tempHistoryPath);
+
+  for (const suffix of ['-wal', '-shm']) {
+    const sourcePath = `${historyPath}${suffix}`;
+    if (existsSync(sourcePath)) {
+      copyFileSync(sourcePath, `${tempHistoryPath}${suffix}`);
+    }
+  }
+
+  return { tempDir, tempHistoryPath };
+}
+
+export async function readChromeHistoryEntries(
+  historyPath: string,
+  days: number | null = 1,
+): Promise<Array<{ title: string; url: string }>> {
+  if (!existsSync(historyPath)) {
+    throw new Error(`Chrome History not found at: ${historyPath}`);
+  }
+
+  const { tempDir, tempHistoryPath } = createChromeHistorySnapshot(historyPath);
+  const DatabaseSync = getDatabaseSyncCtor();
+  let db: InstanceType<ReturnType<typeof getDatabaseSyncCtor>> | null = null;
+
+  try {
+    db = new DatabaseSync(tempHistoryPath, { readOnly: true });
+
+    const hasUrlsTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'urls' LIMIT 1")
+      .get() as { name?: string } | undefined;
+
+    if (!hasUrlsTable?.name) {
+      throw new Error(
+        `Chrome history database is invalid or incomplete at: ${historyPath} (missing urls table). If Chrome is open, close it completely and try again.`,
+      );
+    }
+
+    let sql = 'SELECT title, url FROM urls WHERE url LIKE ?';
+    const params: Array<string | number> = ['%arxiv.org%'];
+
+    if (days !== null) {
+      const since = daysToSince(days);
+      sql += ' AND last_visit_time >= ?';
+      params.push(toChromeTime(since));
+    }
+
+    sql += ' ORDER BY last_visit_time DESC LIMIT 500';
+
+    const rows = db.prepare(sql).all(...params) as Array<{
+      title?: string | null;
+      url?: string | null;
+    }>;
+
+    return rows
+      .map((row) => ({
+        title: String(row.title ?? '').trim(),
+        url: String(row.url ?? '').trim(),
+      }))
+      .filter((row) => row.url.includes('arxiv.org'));
+  } finally {
+    db?.close();
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 /**
  * Scan Chrome history for arXiv papers without importing.
  * Returns list of papers with info about which are new vs existing.
@@ -239,47 +325,17 @@ export async function scanChromeHistory(days: number | null = 1): Promise<ScanRe
       throw new Error('No supported browser found (Chrome, Edge, Brave, Vivaldi, Arc)');
     }
 
-    const SQL = await initSqlJs({
-      locateFile: (file: string) => require.resolve(`sql.js/dist/${file}`),
-    });
-
     const entries: Array<{ title: string; url: string }> = [];
     const seenUrls = new Set<string>();
 
     for (const browser of browsers) {
       try {
         console.log(`[ingest] Scanning ${browser.name} history...`);
-        const tmpPath = path.join(os.tmpdir(), `browser-history-${Date.now()}.db`);
-        copyFileSync(browser.path, tmpPath);
-
-        try {
-          let whereClause = `url LIKE '%arxiv.org%'`;
-          if (days !== null) {
-            const since = daysToSince(days);
-            whereClause += ` AND last_visit_time >= ${toChromeTime(since)}`;
-          }
-          const sql = `SELECT title, url FROM urls WHERE ${whereClause} ORDER BY last_visit_time DESC LIMIT 500;`;
-
-          const dbBuffer = readFileSync(tmpPath);
-          const db = new SQL.Database(dbBuffer);
-          const result = db.exec(sql);
-          db.close();
-
-          if (result.length > 0 && result[0].values) {
-            for (const row of result[0].values) {
-              const title = String(row[0] || '');
-              const url = String(row[1] || '');
-              if (url.includes('arxiv.org') && !seenUrls.has(url)) {
-                seenUrls.add(url);
-                entries.push({ title: title.trim() || url.trim(), url: url.trim() });
-              }
-            }
-          }
-        } finally {
-          try {
-            unlinkSync(tmpPath);
-          } catch {
-            /* ignore */
+        const browserEntries = await readChromeHistoryEntries(browser.path, days);
+        for (const entry of browserEntries) {
+          if (!seenUrls.has(entry.url)) {
+            seenUrls.add(entry.url);
+            entries.push(entry);
           }
         }
       } catch (browserErr) {
@@ -548,42 +604,11 @@ export async function importChromeHistoryAuto(days: number | null = 1) {
   let entries: Array<{ title: string; url: string; abstract?: string }> = [];
   try {
     const historyPath = getChromeHistoryPath();
-    if (!existsSync(historyPath)) {
-      throw new Error(`Chrome History not found at: ${historyPath}`);
-    }
-    // Copy DB first (Chrome locks it while running)
-    const tmpPath = path.join(os.tmpdir(), `chrome-history-${Date.now()}.db`);
-    copyFileSync(historyPath, tmpPath);
-
-    try {
-      let whereClause = `url LIKE '%arxiv.org%'`;
-      if (days !== null) {
-        const since = daysToSince(days);
-        whereClause += ` AND last_visit_time >= ${toChromeTime(since)}`;
-      }
-      const sql = `SELECT title, url FROM urls WHERE ${whereClause} ORDER BY last_visit_time DESC LIMIT 500;`;
-
-      // Use sql.js (pure JS SQLite) instead of system sqlite3 CLI
-      const SQL = await initSqlJs({
-        locateFile: (file: string) => require.resolve(`sql.js/dist/${file}`),
-      });
-      const dbBuffer = readFileSync(tmpPath);
-      const db = new SQL.Database(dbBuffer);
-      const result = db.exec(sql);
-      db.close();
-
-      if (result.length > 0 && result[0].values) {
-        for (const row of result[0].values) {
-          const title = String(row[0] || '');
-          const url = String(row[1] || '');
-          if (url.includes('arxiv.org')) {
-            entries.push({ title: title.trim() || url.trim(), url: url.trim() });
-          }
-        }
-      }
-    } finally {
-      await fs.unlink(tmpPath).catch(() => undefined);
-    }
+    const historyEntries = await readChromeHistoryEntries(historyPath, days);
+    entries = historyEntries.map((entry) => ({
+      title: entry.title || entry.url,
+      url: entry.url,
+    }));
   } catch (err) {
     currentStatus = { ...currentStatus, active: false, phase: 'failed', message: String(err) };
     broadcastStatus();

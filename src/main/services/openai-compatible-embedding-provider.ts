@@ -5,6 +5,7 @@ import type {
 } from './embedding-provider';
 import type { SemanticSearchSettings } from '../store/app-settings-store';
 import { proxyFetch } from './proxy-fetch';
+import { getProxyAgentForScope } from '../utils/proxy-env';
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -76,6 +77,7 @@ export class OpenAICompatibleEmbeddingProvider implements EmbeddingProvider {
         model: this.settings.embeddingModel,
         input: texts,
       }),
+      agent: getProxyAgentForScope('aiApi'),
       timeoutMs: 120_000,
     });
 

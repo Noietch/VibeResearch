@@ -33,6 +33,56 @@ const SHELL_INHERITED_ENV_VARS = [
 /** Cache for shell environment (loaded once per session) */
 let cachedShellEnv: Record<string, string> | null = null;
 
+function uniqueStrings(values: Array<string | undefined | null>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (!trimmed) continue;
+    const key = process.platform === 'win32' ? trimmed.toLowerCase() : trimmed;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+function getWindowsRootCandidates(env: Record<string, string | undefined>): string[] {
+  const systemDriveCandidates = uniqueStrings([
+    env.SystemDrive,
+    env.SYSTEMDRIVE,
+    process.env.SystemDrive,
+    process.env.SYSTEMDRIVE,
+  ]).map((drive) => path.join(drive, 'Windows'));
+
+  return uniqueStrings([
+    env.SystemRoot,
+    env.SYSTEMROOT,
+    env.windir,
+    env.WINDIR,
+    process.env.SystemRoot,
+    process.env.SYSTEMROOT,
+    process.env.windir,
+    process.env.WINDIR,
+    ...systemDriveCandidates,
+    'C:\\Windows',
+  ]);
+}
+
+function getWindowsSystemPathEntries(env: Record<string, string | undefined>): string[] {
+  if (process.platform !== 'win32') return [];
+
+  const candidates = getWindowsRootCandidates(env).flatMap((root) => [
+    root,
+    path.join(root, 'System32'),
+    path.join(root, 'System32', 'Wbem'),
+    path.join(root, 'System32', 'WindowsPowerShell', 'v1.0'),
+    path.join(root, 'Sysnative'),
+  ]);
+
+  return uniqueStrings(candidates).filter((candidate) => existsSync(candidate));
+}
+
 /**
  * Load environment variables from user's login shell.
  * Captures variables set in .bashrc, .zshrc, .bash_profile, etc.
@@ -135,7 +185,17 @@ export function getEnhancedEnv(customEnv?: Record<string, string>): Record<strin
   const shellEnv = loadShellEnvironment();
 
   // Merge PATH from both sources (shell env may miss nvm/fnm paths in dev mode)
-  const mergedPath = mergePaths(process.env.PATH, shellEnv.PATH);
+  let mergedPath = mergePaths(process.env.PATH, shellEnv.PATH);
+  if (process.platform === 'win32') {
+    mergedPath = mergePaths(
+      mergedPath,
+      getWindowsSystemPathEntries({
+        ...process.env,
+        ...shellEnv,
+        ...customEnv,
+      }).join(';'),
+    );
+  }
 
   return {
     ...process.env,
@@ -199,6 +259,57 @@ export function resolveNpxPath(env: Record<string, string | undefined>): string 
     // Fall through to bare name
   }
   return npxName;
+}
+
+export function resolveWindowsShellPath(
+  env: Record<string, string | undefined> = {},
+  platform: NodeJS.Platform = process.platform,
+): string | null {
+  if (platform !== 'win32') return null;
+
+  const candidates = uniqueStrings([
+    env.ComSpec,
+    env.COMSPEC,
+    process.env.ComSpec,
+    process.env.COMSPEC,
+    ...getWindowsRootCandidates(env).flatMap((root) => [
+      path.join(root, 'System32', 'cmd.exe'),
+      path.join(root, 'Sysnative', 'cmd.exe'),
+    ]),
+    ...(env.PATH ?? process.env.PATH ?? '')
+      .split(';')
+      .filter(Boolean)
+      .map((dir) => path.join(dir, 'cmd.exe')),
+  ]);
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  try {
+    const output = execFileSync('where.exe', ['cmd.exe'], {
+      env: {
+        ...process.env,
+        ...env,
+        PATH: mergePaths(process.env.PATH, (env.PATH ?? '') || undefined),
+      } as NodeJS.ProcessEnv,
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const resolved = uniqueStrings(output.split(/\r?\n/));
+    for (const candidate of resolved) {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  } catch {
+    // Ignore failures and let callers fall back to cmd.exe name lookup.
+  }
+
+  return null;
 }
 
 // ── Command resolution helpers ───────────────────────────────────────────────
@@ -293,12 +404,16 @@ export function resolveCommandPath(cmd: string, customEnv?: Record<string, strin
   // Try to find in PATH
   for (const dir of pathDirs) {
     const fullPath = path.join(dir, cmd);
+    if (process.platform === 'win32' && !path.extname(cmd)) {
+      for (const extension of ['.exe', '.cmd', '.bat', '.com']) {
+        const candidate = `${fullPath}${extension}`;
+        if (existsSync(candidate)) {
+          return candidate;
+        }
+      }
+    }
     if (existsSync(fullPath)) {
       return fullPath;
-    }
-    // On Windows, also try with .exe extension
-    if (process.platform === 'win32' && existsSync(`${fullPath}.exe`)) {
-      return `${fullPath}.exe`;
     }
   }
 

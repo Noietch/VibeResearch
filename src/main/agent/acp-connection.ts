@@ -9,9 +9,16 @@ import {
   type RequestPermissionResponse,
 } from '@agentclientprotocol/sdk';
 import { Readable, Writable } from 'node:stream';
+import path from 'node:path';
 import type { SshConnectConfig } from '@shared';
 import { SshConnectionService, type SshSpawnHandle } from '../services/ssh-connection.service';
-import { getEnhancedEnv, resolveCommandPath, resolveNpxPath } from '../utils/shell-env';
+import {
+  getEnhancedEnv,
+  resolveCommandPath,
+  resolveNpxPath,
+  resolveWindowsShellPath,
+} from '../utils/shell-env';
+import { getCliProxyEnv } from '../utils/proxy-env';
 
 /**
  * Map from backend name to the _meta key used for session resume in newSession().
@@ -25,6 +32,37 @@ const RESUME_META_KEY: Record<string, string> = {
   qwen: 'qwen',
   openclaw: 'openclaw',
 };
+
+export function shouldUseWindowsShellSpawn(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (platform !== 'win32') return false;
+
+  const extension = path.extname(command).toLowerCase();
+  return extension === '' || extension === '.cmd' || extension === '.bat';
+}
+
+function formatSpawnTarget(command: string, args: string[], shell: boolean | string): string {
+  const rendered = [command, ...args].join(' ').trim();
+  if (!shell) return rendered;
+  if (typeof shell === 'string') {
+    return `${shell} /c ${rendered}`.trim();
+  }
+  return rendered;
+}
+
+function toSpawnError(
+  error: unknown,
+  command: string,
+  args: string[],
+  shell: boolean | string,
+): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `Failed to start ACP agent (${formatSpawnTarget(command, args, shell)}): ${message}`,
+  );
+}
 
 /**
  * ACP client connection that spawns an agent process and communicates
@@ -58,10 +96,13 @@ export class AcpConnection extends EventEmitter {
     env?: Record<string, string>,
     resumeArgs?: string[],
   ): Promise<void> {
+    const cliProxyEnv = getCliProxyEnv();
+
     // Use enhanced environment that includes shell PATH (for npx, node, etc.)
     // This is critical when Electron is launched from Finder/launchd instead of terminal
     const cleanEnv: Record<string, string | undefined> = {
       ...getEnhancedEnv(),
+      ...cliProxyEnv,
       ...env,
       NODE_OPTIONS: undefined,
       NODE_INSPECT: undefined,
@@ -91,69 +132,147 @@ export class AcpConnection extends EventEmitter {
     const resolvedCmd =
       rawCmd === 'npx' ? resolveNpxPath(cleanEnv) : resolveCommandPath(rawCmd, cleanEnv);
     console.log(`[AcpConnection] Spawning: ${rawCmd} -> ${resolvedCmd}`);
+    const useShell = shouldUseWindowsShellSpawn(resolvedCmd);
+    const windowsShell =
+      useShell && process.platform === 'win32'
+        ? (resolveWindowsShellPath(cleanEnv) ?? 'cmd.exe')
+        : null;
+    if (windowsShell) {
+      cleanEnv.ComSpec ??= windowsShell;
+      cleanEnv.COMSPEC ??= windowsShell;
+    }
+    const shell = useShell ? true : false;
+    const shellDisplay = useShell ? (windowsShell ?? 'cmd.exe') : false;
 
-    this.child = spawn(resolvedCmd, finalArgs, {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv as NodeJS.ProcessEnv,
-      detached: process.platform !== 'win32',
+    const spawnTarget = formatSpawnTarget(resolvedCmd, finalArgs, shellDisplay);
+    let child: ChildProcess;
+
+    try {
+      child = spawn(resolvedCmd, finalArgs, {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: cleanEnv as NodeJS.ProcessEnv,
+        shell,
+        detached: process.platform !== 'win32',
+      });
+    } catch (error) {
+      throw toSpawnError(error, resolvedCmd, finalArgs, shellDisplay);
+    }
+
+    this.child = child;
+
+    let startupFinished = false;
+    const startupFailure = new Promise<never>((_, reject) => {
+      const rejectStartup = (error: Error) => {
+        if (startupFinished) return;
+        startupFinished = true;
+        reject(error);
+      };
+
+      child.once('error', (error) => {
+        rejectStartup(toSpawnError(error, resolvedCmd, finalArgs, shellDisplay));
+      });
+
+      child.once('exit', (code, signal) => {
+        rejectStartup(
+          new Error(
+            `ACP agent exited before startup (${spawnTarget}): code=${code ?? 'null'} signal=${signal ?? 'null'}`,
+          ),
+        );
+      });
     });
 
-    this.child.stderr!.on('data', (data: Buffer) => {
+    child.on('error', (error) => {
+      this.emit('stderr', toSpawnError(error, resolvedCmd, finalArgs, shellDisplay).message);
+    });
+    child.stderr?.on('data', (data: Buffer) => {
       const text = data.toString().trim();
       if (text) this.emit('stderr', text);
     });
-    this.child.on('exit', (code, signal) => {
+    child.on('exit', (code, signal) => {
       this.emit('exit', code, signal);
     });
 
     // Convert Node.js streams → Web Streams for the SDK
-    const readable = nodeReadableToWeb(this.child.stdout!);
-    const writable = nodeWritableToWeb(this.child.stdin!);
-    const stream = ndJsonStream(writable, readable);
+    try {
+      const spawnReady = new Promise<void>((resolve) => {
+        child.once('spawn', () => {
+          resolve();
+        });
+      });
 
-    // Build the ClientSideConnection with our Client handler
-    this.conn = new ClientSideConnection((_agent) => {
-      return {
-        // Agent → Client: real-time session updates (notifications)
-        sessionUpdate: async (params: SessionNotification) => {
-          this.emit('session:update', params.sessionId, params.update);
-        },
+      await Promise.race([spawnReady, startupFailure]);
 
-        // Agent → Client: permission requests
-        requestPermission: (
-          params: RequestPermissionRequest,
-        ): Promise<RequestPermissionResponse> => {
-          return new Promise((resolve) => {
-            const requestId = Symbol('permission');
-            const sessionId =
-              (params as RequestPermissionRequest & { sessionId?: string }).sessionId ?? '';
-            this.emit('session:permission', requestId, sessionId, params, resolve);
-          });
-        },
+      if (!child.stdout || !child.stdin || !child.stderr) {
+        startupFinished = true;
+        throw new Error(`ACP agent did not expose stdio streams (${spawnTarget})`);
+      }
 
-        // Agent → Client: file system access
-        readTextFile: async ({ path: filePath }) => {
-          const fs = await import('node:fs/promises');
-          const content = await fs.readFile(filePath, 'utf-8');
-          return { content };
-        },
+      const readable = nodeReadableToWeb(child.stdout);
+      const writable = nodeWritableToWeb(child.stdin);
+      const stream = ndJsonStream(writable, readable);
 
-        writeTextFile: async ({ path: filePath, content }) => {
-          const fs = await import('node:fs/promises');
-          await fs.writeFile(filePath, content, 'utf-8');
-          return {};
-        },
-      };
-    }, stream);
+      // Build the ClientSideConnection with our Client handler
+      this.conn = new ClientSideConnection((_agent) => {
+        return {
+          // Agent → Client: real-time session updates (notifications)
+          sessionUpdate: async (params: SessionNotification) => {
+            this.emit('session:update', params.sessionId, params.update);
+          },
 
-    // Initialize the ACP connection
-    await this.conn.initialize({
-      protocolVersion: 1,
-      clientCapabilities: {
-        fs: { readTextFile: true, writeTextFile: true },
-      },
-    });
+          // Agent → Client: permission requests
+          requestPermission: (
+            params: RequestPermissionRequest,
+          ): Promise<RequestPermissionResponse> => {
+            return new Promise((resolve) => {
+              const requestId = Symbol('permission');
+              const sessionId =
+                (params as RequestPermissionRequest & { sessionId?: string }).sessionId ?? '';
+              this.emit('session:permission', requestId, sessionId, params, resolve);
+            });
+          },
+
+          // Agent → Client: file system access
+          readTextFile: async ({ path: filePath }) => {
+            const fs = await import('node:fs/promises');
+            const content = await fs.readFile(filePath, 'utf-8');
+            return { content };
+          },
+
+          writeTextFile: async ({ path: filePath, content }) => {
+            const fs = await import('node:fs/promises');
+            await fs.writeFile(filePath, content, 'utf-8');
+            return {};
+          },
+        };
+      }, stream);
+
+      // Initialize the ACP connection
+      await Promise.race([
+        this.conn.initialize({
+          protocolVersion: 1,
+          clientCapabilities: {
+            fs: { readTextFile: true, writeTextFile: true },
+          },
+        }),
+        startupFailure,
+      ]);
+
+      startupFinished = true;
+    } catch (error) {
+      this.conn = null;
+      if (this.child === child) {
+        this.child = null;
+      }
+      if (!child.killed) {
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // Ignore cleanup errors for failed startups.
+        }
+      }
+      throw error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   /**

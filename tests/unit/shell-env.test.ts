@@ -1,5 +1,8 @@
+import path from 'node:path';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getEnhancedEnv, mergePaths, clearShellEnvCache } from '../../src/main/utils/shell-env';
+
+const delimiter = path.delimiter;
 
 describe('shell-env', () => {
   beforeEach(() => {
@@ -8,8 +11,8 @@ describe('shell-env', () => {
 
   describe('mergePaths', () => {
     it('should merge two PATH strings and remove duplicates', () => {
-      const path1 = '/usr/local/bin:/usr/bin';
-      const path2 = '/opt/homebrew/bin:/usr/bin';
+      const path1 = ['/usr/local/bin', '/usr/bin'].join(delimiter);
+      const path2 = ['/opt/homebrew/bin', '/usr/bin'].join(delimiter);
       const result = mergePaths(path1, path2);
 
       // Should have all unique paths
@@ -18,7 +21,7 @@ describe('shell-env', () => {
       expect(result).toContain('/opt/homebrew/bin');
 
       // /usr/bin should appear only once (from path1, since path1 comes first)
-      const parts = result.split(':');
+      const parts = result.split(delimiter);
       const usrBinCount = parts.filter((p) => p === '/usr/bin').length;
       expect(usrBinCount).toBe(1);
     });
@@ -36,11 +39,11 @@ describe('shell-env', () => {
     });
 
     it('should preserve order from first path then second', () => {
-      const path1 = '/first:/second';
-      const path2 = '/third:/fourth';
+      const path1 = ['/first', '/second'].join(delimiter);
+      const path2 = ['/third', '/fourth'].join(delimiter);
       const result = mergePaths(path1, path2);
 
-      const parts = result.split(':');
+      const parts = result.split(delimiter);
       expect(parts[0]).toBe('/first');
       expect(parts[1]).toBe('/second');
       expect(parts[2]).toBe('/third');

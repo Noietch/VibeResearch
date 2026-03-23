@@ -40,6 +40,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message?: string): Prom
   ]);
 }
 
+const AGENT_TEST_TIMEOUT_MS = 20_000;
+
 export function AgentSettings() {
   const { error: showError, success: showSuccess } = useToast();
   const [agents, setAgents] = useState<AgentConfigItem[]>([]);
@@ -345,8 +347,8 @@ export function AgentSettings() {
     try {
       const result = await withTimeout(
         ipc.testAgentAcp(agent.id),
-        5000,
-        'Agent test timed out after 5 seconds',
+        AGENT_TEST_TIMEOUT_MS,
+        'Agent test timed out after 20 seconds',
       );
       if (result && 'sessionId' in result) {
         setTestResult({

@@ -287,6 +287,6 @@ describe('Zotero DB scan logic', () => {
     const rawPath = 'storage:ABC12345/paper.pdf';
     const storageDir = '/Users/test/Zotero/storage';
     const resolved = path.join(storageDir, rawPath.replace('storage:', ''));
-    expect(resolved).toBe('/Users/test/Zotero/storage/ABC12345/paper.pdf');
+    expect(resolved).toBe(path.join(storageDir, 'ABC12345', 'paper.pdf'));
   });
 });

@@ -7,7 +7,12 @@ import { TEST_DB_PATH, TEST_STORAGE_DIR } from './test-env';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
-const prismaBin = path.join(repoRoot, 'node_modules', '.bin', 'prisma');
+const prismaBin = path.join(
+  repoRoot,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'prisma.cmd' : 'prisma',
+);
 const testDbPath = TEST_DB_PATH;
 
 let initialized = false;
@@ -34,23 +39,25 @@ export const ensureTestDatabaseSchema = () => {
   rmSync(TEST_STORAGE_DIR, { recursive: true, force: true });
   mkdirSync(TEST_STORAGE_DIR, { recursive: true });
 
-  const prismaEnv = {
+  const env = {
     ...process.env,
     DATABASE_URL: `file:${testDbPath}`,
   };
   // Prisma 6.4.1 schema engine crashes on db push when RUST_LOG=warn is inherited.
-  delete prismaEnv.RUST_LOG;
-
-  execFileSync(prismaBin, ['db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate'], {
+  delete env.RUST_LOG;
+  const prismaArgs = ['db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate'];
+  execFileSync(prismaBin, prismaArgs, {
     cwd: repoRoot,
     stdio: 'pipe',
-    env: prismaEnv,
+    env,
+    shell: process.platform === 'win32',
   });
 
   initialized = true;
 };
 
 export const resetTestDatabase = async () => {
+  ensureTestDatabaseSchema();
   ensureDatabaseUrl();
   const prisma = getPrismaClient();
 

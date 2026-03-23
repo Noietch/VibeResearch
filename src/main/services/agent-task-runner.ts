@@ -30,6 +30,7 @@ export interface TaskRunnerConfig {
   resumeSessionId?: string;
   extraEnv?: Record<string, string>;
   sshConfig?: SshConnectConfig; // If set, run agent remotely via SSH
+  cleanup?: () => void;
 }
 
 interface PendingPermission {
@@ -44,6 +45,7 @@ export class AgentTaskRunner extends EventEmitter {
   private sessionId: string | null = null;
   private currentMsgId: string = '';
   private accumulatedText: string = '';
+  private cleanedUp = false;
   // Key is a string ID (safe to pass over IPC); mapped from the Symbol in the event
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private symbolToKey: Map<symbol, string> = new Map();
@@ -136,6 +138,8 @@ export class AgentTaskRunner extends EventEmitter {
         this.setStatus('failed');
         this.pushEvent('error', { todoId: this.config.todoId, message: (error as Error).message });
       }
+      this.connection.kill();
+      this.cleanupResources();
       throw error;
     }
   }
@@ -148,6 +152,7 @@ export class AgentTaskRunner extends EventEmitter {
       message: 'Task cancelled by user',
     });
     this.connection.kill();
+    this.cleanupResources();
   }
 
   async sendMessage(text: string): Promise<void> {
@@ -183,6 +188,8 @@ export class AgentTaskRunner extends EventEmitter {
         this.setStatus('failed');
         this.pushEvent('error', { todoId: this.config.todoId, message: (error as Error).message });
       }
+      this.connection.kill();
+      this.cleanupResources();
       throw error;
     }
   }
@@ -250,6 +257,7 @@ export class AgentTaskRunner extends EventEmitter {
           message: `Agent process exited unexpectedly (code: ${code})`,
         });
       }
+      this.cleanupResources();
     });
 
     this.connection.on('stderr', (text: string) => {
@@ -393,7 +401,12 @@ export class AgentTaskRunner extends EventEmitter {
   }
 
   private pushEvent(event: string, data: unknown): void {
-    this.emit(event, data);
+    // EventEmitter treats "error" specially and throws if nobody is listening.
+    // Task failures are still broadcast over BrowserWindow IPC, so only emit the
+    // internal error event when a listener explicitly opted in.
+    if (event !== 'error' || this.listenerCount('error') > 0) {
+      this.emit(event, data);
+    }
     const channel = `agent-todo:${event}`;
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send(channel, data);
@@ -402,5 +415,16 @@ export class AgentTaskRunner extends EventEmitter {
 
   private generateMsgId(): string {
     return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  private cleanupResources(): void {
+    if (this.cleanedUp) return;
+    this.cleanedUp = true;
+
+    try {
+      this.config.cleanup?.();
+    } catch (error) {
+      console.error('[AgentTaskRunner] cleanup failed:', error);
+    }
   }
 }

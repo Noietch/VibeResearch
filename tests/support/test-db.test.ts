@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+function normalizePath(value: string | undefined): string {
+  return (value ?? '').replaceAll('\\', '/');
+}
+
 const execFileSync = vi.fn();
 
 vi.mock('node:child_process', () => ({
@@ -45,7 +49,7 @@ describe('test-db helpers', () => {
 
     expect(execFileSync).toHaveBeenCalledTimes(1);
     const options = execFileSync.mock.calls[0]?.[2];
-    expect(options?.env?.DATABASE_URL).toContain('tests/tmp/integration.sqlite');
+    expect(normalizePath(options?.env?.DATABASE_URL)).toContain('tests/tmp/integration.sqlite');
     expect(options?.env?.RUST_LOG).toBeUndefined();
   });
 });
