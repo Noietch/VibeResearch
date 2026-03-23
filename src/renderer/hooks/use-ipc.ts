@@ -23,6 +23,22 @@ import type {
 
 export type { TaskResultItem, ExperimentReportItem };
 
+/** Auto-updater status */
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; info: { version: string; releaseDate?: string; releaseNotes?: string } }
+  | {
+      state: 'not-available';
+      info: { version: string; releaseDate?: string; releaseNotes?: string };
+    }
+  | {
+      state: 'downloading';
+      progress: { percent: number; bytesPerSecond: number; transferred: number; total: number };
+    }
+  | { state: 'downloaded'; info: { version: string; releaseDate?: string; releaseNotes?: string } }
+  | { state: 'error'; message: string };
+
 /** Discovered paper from arXiv */
 export interface DiscoveredPaper {
   arxivId: string;
@@ -869,6 +885,8 @@ export const ipc = {
   // Zotero import
   zoteroDetect: (customDbPath?: string) =>
     invoke<{ found: boolean; dbPath?: string; storageDir?: string }>('zotero:detect', customDbPath),
+  zoteroCollections: (dbPath?: string) =>
+    invoke<Array<{ name: string; itemCount: number }>>('zotero:collections', dbPath),
   zoteroScan: (opts?: { dbPath?: string; collection?: string }) =>
     invoke<ZoteroScanResult>('zotero:scan', opts),
   zoteroImport: (items: ZoteroScannedItem[]) =>
@@ -1748,6 +1766,12 @@ export const ipc = {
     ),
   ttsDefaultVoice: (language: string) => invoke<{ voice: string }>('tts:defaultVoice', language),
   ttsCleanCache: () => invoke<{ success: boolean }>('tts:cleanCache'),
+
+  // Auto-updater
+  updaterGetStatus: () => invoke<UpdateStatus>('updater:getStatus'),
+  updaterCheckForUpdates: () => invoke<UpdateStatus>('updater:checkForUpdates'),
+  updaterDownloadUpdate: () => invoke<{ success: boolean }>('updater:downloadUpdate'),
+  updaterQuitAndInstall: () => invoke<void>('updater:quitAndInstall'),
 };
 
 /** Subscribe to IPC events from main process */

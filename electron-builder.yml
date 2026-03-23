@@ -2,6 +2,12 @@ appId: com.researchclaw.app
 productName: ResearchClaw
 copyright: Copyright © 2026 ResearchClaw
 
+# Auto-update: publish to GitHub Releases
+publish:
+  provider: github
+  owner: Noietch
+  repo: VibeResearch
+
 directories:
   output: release
   buildResources: assets

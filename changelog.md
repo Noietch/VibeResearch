@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.5 (2026-03-23)
+
+### feat: Auto-update from GitHub Releases
+
+Added in-app auto-update support using `electron-updater`. The app now checks for new versions from GitHub Releases on startup and provides a Settings UI to check, download, and install updates without leaving the app.
+
+**Changes**:
+
+1. Added `electron-updater` dependency
+2. `electron-builder.yml`: Added `publish` config pointing to GitHub (`Noietch/VibeResearch`)
+3. `src/main/services/auto-updater.service.ts`: New service wrapping `electron-updater` (check, download, quit-and-install), broadcasts status to renderer via IPC
+4. `src/main/ipc/updater.ipc.ts`: IPC handlers for `updater:getStatus`, `updater:checkForUpdates`, `updater:downloadUpdate`, `updater:quitAndInstall`
+5. `src/main/index.ts`: Integrated updater service and IPC setup
+6. `src/renderer/hooks/use-ipc.ts`: Added `UpdateStatus` type and updater IPC client methods
+7. `src/renderer/pages/settings/`: Added "Update" section in Settings with version display, check/download/install buttons, progress bar
+8. `vite.config.ts`: Inject `__APP_VERSION__` from package.json
+9. i18n: Added English and Chinese translations for all update UI strings
+10. Updated `settings-nav.test.ts` to account for the new section
+
+**Test validation**: `npm run lint` passed. All tests pass (38/38 settings-nav tests).
+
 ## 0.0.4 (2026-03-23)
 
 ### perf: Optimize trackpad pinch-to-zoom for smooth 60fps rendering
@@ -155,6 +176,28 @@
 4. Removed all custom notion-accent color references
 
 **Test validation**: Passed `npm run lint` — all files formatted correctly.
+
+### fix: Zotero import mass failure due to SQLite concurrency
+
+**Summary**: Fixed Zotero import where all items would fail (e.g. 655/655 failed). Root causes:
+
+1. **SQLite BUSY errors**: `CONCURRENCY=8` workers writing simultaneously to SQLite caused database lock contention. Prisma doesn't retry on `SQLITE_BUSY`. Reduced to `CONCURRENCY=1` with exponential backoff retry (3 attempts).
+2. **ShortId mismatch**: Dedup check in `zotero.service.ts` used `zotero-{key}` format, but `papers.service.ts` generated `local-{ts}-{rand}` for the same paper. Now passes explicit `shortId` through `upsertFromIngest` → `create` to keep IDs consistent.
+3. **Silent failures**: Import errors only logged to console. Now tracks `failedItems` with error messages and exposes them in `ZoteroImportStatus`.
+4. **Chrome import concurrency**: Also reduced `ingest.service.ts` from `CONCURRENCY=8` to `2` as a preventive measure.
+5. **Collection pre-selection**: Added `zotero:collections` IPC to list Zotero collections before scan. Users can now select a specific collection before scanning, avoiding loading the entire library.
+
+**Changes**:
+
+1. `zotero.service.ts`: CONCURRENCY 8→1, added `withRetry()`, track `failedItems` in status, added `listZoteroCollections()`
+2. `papers.service.ts`: Added optional `shortId` param to `CreatePaperInput` and `upsertFromIngest`
+3. `ingest.service.ts`: CONCURRENCY 8→2
+4. `zotero.ipc.ts`: Added `zotero:collections` handler
+5. `use-ipc.ts`: Added `zoteroCollections()` client method
+6. `import-modal.tsx`: Collection selector shown in initial step (before scan)
+7. `en.json` / `zh.json`: Added `selectCollection` i18n key
+
+**Test validation**: `npm run lint` and `npm run test` passed (58 files, 626 tests).
 
 ### feat: Multi-note annotations with AI note separation
 

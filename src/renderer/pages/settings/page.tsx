@@ -21,6 +21,7 @@ import {
   type SemanticSearchSettings,
   type SemanticEmbeddingTestResult,
   type EmbeddingConfig,
+  type UpdateStatus,
 } from '../../hooks/use-ipc';
 import {
   Settings,
@@ -3902,6 +3903,164 @@ type SearchableItem = {
   keywords: string[];
 };
 
+// ─── Update Settings ──────────────────────────────────────────────────────────
+
+function UpdateSettings() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' });
+
+  useEffect(() => {
+    ipc
+      .updaterGetStatus()
+      .then(setStatus)
+      .catch(() => {});
+    const unsub = onIpc('updater:status', (newStatus: unknown) => {
+      setStatus(newStatus as UpdateStatus);
+    });
+    return unsub;
+  }, []);
+
+  const handleCheck = async () => {
+    try {
+      const result = await ipc.updaterCheckForUpdates();
+      setStatus(result);
+    } catch {
+      setStatus({ state: 'error', message: 'Failed to check for updates' });
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      await ipc.updaterDownloadUpdate();
+    } catch {
+      setStatus({ state: 'error', message: 'Failed to download update' });
+    }
+  };
+
+  const handleInstall = () => {
+    ipc.updaterQuitAndInstall();
+  };
+
+  const versionInfo =
+    status.state === 'available' ||
+    status.state === 'not-available' ||
+    status.state === 'downloaded'
+      ? status.info
+      : null;
+
+  return (
+    <div>
+      <p className="mb-5 text-sm text-notion-text-secondary">{t('settings.update.description')}</p>
+
+      <div className="rounded-lg border border-notion-border bg-white p-4">
+        {/* Current version */}
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-sm text-notion-text-tertiary">
+            {t('settings.update.currentVersion')}:
+          </span>
+          <span className="text-sm font-medium text-notion-text">{__APP_VERSION__}</span>
+        </div>
+
+        {/* Status display */}
+        <div className="mb-4">
+          {status.state === 'idle' && (
+            <p className="text-sm text-notion-text-tertiary">{t('settings.update.idle')}</p>
+          )}
+          {status.state === 'checking' && (
+            <div className="flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin text-notion-accent" />
+              <p className="text-sm text-notion-text-secondary">{t('settings.update.checking')}</p>
+            </div>
+          )}
+          {status.state === 'not-available' && (
+            <div className="flex items-center gap-2">
+              <Check size={14} className="text-green-600" />
+              <p className="text-sm text-notion-text-secondary">{t('settings.update.upToDate')}</p>
+            </div>
+          )}
+          {status.state === 'available' && versionInfo && (
+            <div className="rounded-md border border-notion-accent/20 bg-notion-accent-light p-3">
+              <p className="text-sm font-medium text-notion-text">
+                {t('settings.update.newVersion', { version: versionInfo.version })}
+              </p>
+              {versionInfo.releaseDate && (
+                <p className="mt-1 text-xs text-notion-text-tertiary">
+                  {new Date(versionInfo.releaseDate).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          )}
+          {status.state === 'downloading' && (
+            <div>
+              <div className="flex items-center gap-2">
+                <Download size={14} className="text-notion-accent" />
+                <p className="text-sm text-notion-text-secondary">
+                  {t('settings.update.downloading')}
+                </p>
+                <span className="text-sm font-medium text-notion-text">
+                  {Math.round(status.progress.percent)}%
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-notion-border">
+                <div
+                  className="h-full rounded-full bg-notion-accent transition-all duration-300"
+                  style={{ width: `${status.progress.percent}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {status.state === 'downloaded' && (
+            <div className="rounded-md border border-green-200 bg-green-50 p-3">
+              <p className="text-sm font-medium text-green-700">
+                {t('settings.update.readyToInstall')}
+              </p>
+              <p className="mt-1 text-xs text-green-600">{t('settings.update.restartHint')}</p>
+            </div>
+          )}
+          {status.state === 'error' && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-500" />
+                <p className="text-sm text-red-600">{status.message}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
+          {(status.state === 'idle' ||
+            status.state === 'not-available' ||
+            status.state === 'error') && (
+            <button
+              onClick={handleCheck}
+              className="rounded-lg bg-notion-sidebar-hover px-3 py-1.5 text-sm text-notion-text transition-colors hover:bg-notion-border"
+            >
+              {t('settings.update.checkButton')}
+            </button>
+          )}
+          {status.state === 'available' && (
+            <button
+              onClick={handleDownload}
+              className="rounded-lg bg-notion-accent px-3 py-1.5 text-sm text-white transition-colors hover:bg-notion-accent/90"
+            >
+              {t('settings.update.downloadButton')}
+            </button>
+          )}
+          {status.state === 'downloaded' && (
+            <button
+              onClick={handleInstall}
+              className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-green-700"
+            >
+              {t('settings.update.installButton')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const SEARCH_INDEX: SearchableItem[] = NAV_GROUPS.flatMap((g) =>
   g.items.map((item) => ({
     id: item.id,
@@ -3935,6 +4094,8 @@ function renderSection(id: SectionId) {
       return <OverleafSettings />;
     case 'general.dev':
       return <DeveloperSettings />;
+    case 'general.update':
+      return <UpdateSettings />;
     case 'models':
       return <ModelsSettings />;
     case 'agents':

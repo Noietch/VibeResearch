@@ -9,6 +9,7 @@ export type SectionId =
   | 'general.semantic'
   | 'general.overleaf'
   | 'general.dev'
+  | 'general.update'
   | 'models'
   | 'agents'
   | 'storage';
@@ -46,6 +47,11 @@ export const NAV_GROUPS: NavGroup[] = [
         id: 'general.dev',
         label: 'Developer Mode',
         keywords: ['developer', 'dev', 'debug', 'welcome'],
+      },
+      {
+        id: 'general.update',
+        label: 'Update',
+        keywords: ['update', 'upgrade', 'version', 'release', '更新', '升级'],
       },
     ],
   },
@@ -108,6 +114,10 @@ export const SECTION_META: Record<SectionId, { title: string; description: strin
   'general.dev': {
     title: 'Developer Mode',
     description: 'Enable developer mode to show welcome modal on every startup.',
+  },
+  'general.update': {
+    title: 'Update',
+    description: 'Check for new versions and update the application.',
   },
   models: {
     title: 'Models & Usage',

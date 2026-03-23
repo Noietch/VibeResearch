@@ -27,6 +27,8 @@ import { setupDiscoveryIpc } from './ipc/discovery.ipc';
 import { setupBackupIpc } from './ipc/backup.ipc';
 import { setupReaderAiIpc } from './ipc/reader-ai.ipc';
 import { setupTtsIpc } from './ipc/tts.ipc';
+import { setupUpdaterIpc } from './ipc/updater.ipc';
+import { initAutoUpdater } from './services/auto-updater.service';
 import { ensureStorageDir, getDbPath, getStorageDir } from './store/storage-path';
 import {
   getSemanticSearchSettings,
@@ -506,6 +508,10 @@ app.whenReady().then(async () => {
   setupDiscoveryIpc();
   setupReaderAiIpc();
   setupTtsIpc();
+  setupUpdaterIpc();
+
+  // Initialize auto-updater (check GitHub releases)
+  initAutoUpdater();
 
   // Initialize vec index (background, non-blocking)
   void (async () => {

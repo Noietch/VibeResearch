@@ -65,7 +65,8 @@
       "general_editor": "Editor",
       "general_semantic": "Semantic Search",
       "general_overleaf": "Overleaf",
-      "general_dev": "Developer Mode"
+      "general_dev": "Developer Mode",
+      "general_update": "Update"
     },
     "general_language": {
       "title": "Language / 语言",
@@ -205,6 +206,25 @@
       "title": "Developer Mode",
       "description": "Enable developer mode to show welcome modal on every startup.",
       "toggleLabel": "Show welcome modal on every startup"
+    },
+    "update": {
+      "title": "Update",
+      "description": "Check for new versions and update the application from GitHub Releases.",
+      "currentVersion": "Current version",
+      "idle": "Click the button below to check for updates.",
+      "checking": "Checking for updates…",
+      "upToDate": "You are on the latest version.",
+      "newVersion": "New version {{version}} is available!",
+      "downloading": "Downloading update…",
+      "readyToInstall": "Update downloaded and ready to install.",
+      "restartHint": "The app will restart to apply the update.",
+      "checkButton": "Check for Updates",
+      "downloadButton": "Download Update",
+      "installButton": "Restart & Install"
+    },
+    "general_update": {
+      "title": "Update",
+      "description": "Check for new versions and update the application."
     },
     "models": {
       "title": "Models & Usage",
@@ -402,6 +422,7 @@
       "scanLibrary": "Scan library",
       "scanDesc": "Scan your Zotero library for papers",
       "scanning": "Scanning Zotero library…",
+      "selectCollection": "Collection (optional)",
       "filterByCollection": "Filter by collection",
       "allCollections": "All collections",
       "scanFailed": "Failed to scan Zotero library"

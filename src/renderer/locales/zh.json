@@ -65,7 +65,8 @@
       "general_editor": "编辑器",
       "general_semantic": "语义搜索",
       "general_overleaf": "Overleaf",
-      "general_dev": "开发者模式"
+      "general_dev": "开发者模式",
+      "general_update": "更新"
     },
     "general_language": {
       "title": "Language / 语言",
@@ -205,6 +206,25 @@
       "title": "开发者模式",
       "description": "启用开发者模式，每次启动时显示欢迎弹窗。",
       "toggleLabel": "每次启动时显示欢迎弹窗"
+    },
+    "update": {
+      "title": "更新",
+      "description": "从 GitHub Releases 检查新版本并更新应用程序。",
+      "currentVersion": "当前版本",
+      "idle": "点击下方按钮检查更新。",
+      "checking": "正在检查更新…",
+      "upToDate": "当前已是最新版本。",
+      "newVersion": "发现新版本 {{version}}！",
+      "downloading": "正在下载更新…",
+      "readyToInstall": "更新已下载，准备安装。",
+      "restartHint": "应用将重启以安装更新。",
+      "checkButton": "检查更新",
+      "downloadButton": "下载更新",
+      "installButton": "重启并安装"
+    },
+    "general_update": {
+      "title": "更新",
+      "description": "检查新版本并更新应用程序。"
     },
     "models": {
       "title": "模型与用量",
@@ -402,6 +422,7 @@
       "scanLibrary": "扫描文献库",
       "scanDesc": "扫描 Zotero 文献库中的论文",
       "scanning": "正在扫描 Zotero…",
+      "selectCollection": "选择分集目录（可选）",
       "filterByCollection": "按收藏夹筛选",
       "allCollections": "所有收藏夹",
       "scanFailed": "扫描 Zotero 文献库失败"
