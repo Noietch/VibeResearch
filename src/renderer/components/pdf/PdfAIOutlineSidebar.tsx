@@ -62,7 +62,8 @@ export function PdfAIOutlineSidebar({ paperId, shortId }: PdfAIOutlineSidebarPro
       });
       setOutline(result);
     } catch (err) {
-      setError(t('reader.ai.outlineFailed'));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`${t('reader.ai.outlineFailed')}: ${errorMessage}`);
       console.error('Failed to generate outline:', err);
     } finally {
       setLoading(false);

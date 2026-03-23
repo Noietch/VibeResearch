@@ -67,34 +67,57 @@ export async function generatePaperOutline(params: {
   const { paperId, shortId, language } = params;
   const lang = language === 'zh' ? 'zh' : 'en';
 
+  console.log('[generatePaperOutline] Starting outline generation for paper:', paperId);
+
   // Get paper info for PDF source
   const papersRepo = new PapersRepository();
   const paper = await papersRepo.findById(paperId);
+
+  if (!paper) {
+    console.error('[generatePaperOutline] Paper not found:', paperId);
+    throw new Error('Paper not found in database.');
+  }
+
+  console.log('[generatePaperOutline] Paper found:', {
+    title: paper.title,
+    hasPdfUrl: !!paper.pdfUrl,
+    hasPdfPath: !!paper.pdfPath,
+  });
 
   const pdfUrl = paper?.pdfUrl ?? undefined;
   const pdfPath = paper?.pdfPath ?? undefined;
 
   // Get paper text (cached or extracted)
+  console.log('[generatePaperOutline] Extracting paper text...');
   const paperText = await getPaperText(paperId, shortId, pdfUrl, pdfPath, {
     maxChars: 30000,
   });
 
   if (!paperText) {
+    console.error('[generatePaperOutline] Failed to extract paper text');
     throw new Error('Could not extract paper text for outline generation.');
   }
+
+  console.log('[generatePaperOutline] Paper text extracted:', paperText.length, 'characters');
 
   const systemPrompt = getPaperOutlinePrompt(lang);
   const userPrompt = `Paper text:\n\n${paperText}`;
 
+  console.log('[generatePaperOutline] Calling AI model (chat)...');
   const response = await generateWithModelKind('chat', systemPrompt, userPrompt, {
     strictSelection: true,
   });
 
+  console.log('[generatePaperOutline] AI response received:', response.substring(0, 200));
+
   const parsed = safeJsonParse<PaperOutline>(response);
 
   if (!parsed) {
+    console.error('[generatePaperOutline] Failed to parse JSON response:', response);
     throw new Error('Failed to parse paper outline response as JSON.');
   }
+
+  console.log('[generatePaperOutline] Successfully parsed outline');
 
   return {
     researchQuestions: Array.isArray(parsed.researchQuestions) ? parsed.researchQuestions : [],
