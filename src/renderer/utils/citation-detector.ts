@@ -13,6 +13,7 @@ export interface CitationMarker {
   text: string; // e.g., "[1]", "[2]", "[3-5]"
   numbers: number[]; // e.g., [1], [2], [3,4,5]
   pageNumber: number;
+  yFraction?: number; // Y position as fraction of page height (0 = top, 1 = bottom)
 }
 
 export interface CitationData {
@@ -137,10 +138,16 @@ export async function extractCitationsFromPdf(
   for (let pageNum = 1; pageNum <= document.numPages; pageNum++) {
     const page = await document.getPage(pageNum);
     const textContent = await page.getTextContent();
+    const viewport = page.getViewport({ scale: 1.0 });
+
     // Use y-position and hasEOL to detect line breaks in PDF text
     const items = textContent.items as any[];
     let text = '';
     let lastY: number | null = null;
+
+    // Build a map of citation markers with their Y positions
+    const markerPositions = new Map<string, number>(); // marker text -> Y position
+
     for (const item of items) {
       if (!item.str && !item.hasEOL) continue;
       if (item.hasEOL) {
@@ -154,14 +161,35 @@ export async function extractCitationsFromPdf(
       } else if (text.length > 0 && !text.endsWith(' ') && !text.endsWith('\n')) {
         text += ' ';
       }
+
+      // Check if this item contains a citation marker
+      if (item.str) {
+        const matches = [...item.str.matchAll(/\[(\d+(?:[,\s]*\d+|-\d+)*)\]/g)];
+        for (const match of matches) {
+          const markerText = match[0];
+          if (y !== null && !markerPositions.has(markerText)) {
+            // Convert PDF bottom-up Y to top-down fraction
+            const yFraction = 1 - y / viewport.height;
+            markerPositions.set(markerText, yFraction);
+          }
+        }
+      }
+
       text += item.str;
       if (y !== null) lastY = y;
     }
 
     allText.push(text);
 
-    // Extract citation markers from this page
+    // Extract citation markers from this page with Y positions
     const markers = extractCitationMarkersFromText(text, pageNum);
+    // Add Y positions to markers
+    for (const marker of markers) {
+      const yFraction = markerPositions.get(marker.text);
+      if (yFraction !== undefined) {
+        marker.yFraction = yFraction;
+      }
+    }
     allMarkers.push(...markers);
 
     onProgress?.(pageNum / document.numPages / 2);

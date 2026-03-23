@@ -41,6 +41,7 @@ interface PdfCitationSidebarProps {
   onReferencesExtracted?: (refs: CachedReference[]) => void;
   onSearchPaper: (query: string) => void;
   onGoToPage?: (page: number, saveHistory?: boolean, yFraction?: number) => void;
+  onHighlightCitation?: (pageNumber: number, searchText: string) => void;
 }
 
 interface CitationData {
@@ -103,6 +104,7 @@ export function PdfCitationSidebar({
   onReferencesExtracted,
   onSearchPaper,
   onGoToPage,
+  onHighlightCitation,
 }: PdfCitationSidebarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -250,7 +252,7 @@ export function PdfCitationSidebar({
 
   // Handle clicking reference text → jump to precise location in PDF
   const handleRefClick = useCallback(
-    (ref: Reference) => {
+    async (ref: Reference) => {
       if (!onGoToPage || !citationData) return;
 
       // Find all markers for this reference number (sorted by page)
@@ -273,13 +275,25 @@ export function PdfCitationSidebar({
         setJumpIndex(nextIndex);
 
         const targetMarker = allMarkers[nextIndex];
-        onGoToPage(targetMarker.pageNumber, true, 0);
+
+        // Use the pre-extracted Y position if available, otherwise jump to page
+        const yFraction = targetMarker.yFraction ?? 0;
+        onGoToPage(targetMarker.pageNumber, true, yFraction);
+
+        // Trigger highlight callback if provided
+        if (onHighlightCitation) {
+          const searchText = `[${ref.number}]`;
+          onHighlightCitation(targetMarker.pageNumber, searchText);
+        }
         return;
       }
 
       // Strategy 2: If no marker found, fall back to estimation
       const totalRefs = citationData.references.length;
       if (totalRefs === 0) return;
+
+      // Reference section is typically in the last 40% of the document
+      const refSectionStart = Math.floor(document.numPages * 0.6);
 
       // Find the page range of the reference section
       const refPages = new Set<number>();

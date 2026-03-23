@@ -2,6 +2,30 @@
 
 ## 0.0.4 (2026-03-23)
 
+### fix: Citation marker Y position extraction and precise jump
+
+**Summary**: Fixed citation marker Y position extraction during PDF parsing and simplified citation jump logic. Previously, Y positions were not being captured correctly due to regex state issues, causing citations to jump to page top (yFraction=0) instead of precise positions.
+
+**Changes**:
+
+1. Added `yFraction` field to `CitationMarker` interface to store Y position
+2. Fixed regex bug in `extractCitationsFromPdf`: replaced `test()` + `matchAll()` with single `matchAll()` call
+   - `test()` was modifying `lastIndex`, causing `matchAll()` to miss matches
+3. Extract Y positions during PDF text parsing and store in `markerPositions` map
+4. Convert PDF bottom-up Y coordinates to top-down fraction (0=top, 1=bottom)
+5. Simplified `handleRefClick` to use pre-extracted `yFraction` from markers
+   - Removed async page text search (was unreliable)
+   - Now directly uses `targetMarker.yFraction ?? 0`
+6. Citations now jump to precise pixel-level positions within pages
+
+**Technical details**:
+
+- Y position extracted from PDF text item transform matrix: `transform[5]`
+- Conversion: `yFraction = 1 - y / viewport.height`
+- Positions captured at PDF parsing time, not during click (more reliable)
+
+**Test validation**: Passed `npm run lint` and all tests.
+
 ### feat: Visual citation highlighting on jump
 
 **Summary**: Added temporary visual highlight when jumping to a citation from the sidebar. When user clicks a citation reference, the citation marker in the PDF is now highlighted with a blue pulse animation for 3 seconds, making it immediately clear where the citation is located.
