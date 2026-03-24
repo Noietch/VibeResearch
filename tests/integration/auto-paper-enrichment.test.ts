@@ -208,6 +208,9 @@ describe('papers service auto enrichment hooks', () => {
 
     vi.doMock('../../src/main/services/paper-processing.service', () => ({
       schedulePaperProcessing,
+      markPaperQueued: vi.fn().mockResolvedValue(undefined),
+      setPaperProcessingStatus: vi.fn().mockResolvedValue(undefined),
+      retryPaperProcessing: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock('../../src/main/services/citation-processing.service', () => ({
       scheduleCitationExtraction,
@@ -271,6 +274,9 @@ describe('papers service auto enrichment hooks', () => {
 
     vi.doMock('../../src/main/services/paper-processing.service', () => ({
       schedulePaperProcessing,
+      markPaperQueued: vi.fn().mockResolvedValue(undefined),
+      setPaperProcessingStatus: vi.fn().mockResolvedValue(undefined),
+      retryPaperProcessing: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock('../../src/main/services/citation-processing.service', () => ({
       scheduleCitationExtraction,
@@ -288,6 +294,9 @@ describe('papers service auto enrichment hooks', () => {
     }));
     vi.doMock('../../src/main/services/paper-metadata.service', () => ({
       extractPaperMetadata: vi.fn().mockResolvedValue({}),
+    }));
+    vi.doMock('../../src/main/services/tagging.service', () => ({
+      tagPaper: vi.fn().mockResolvedValue(undefined),
     }));
 
     const { PapersService } = await import('../../src/main/services/papers.service');
