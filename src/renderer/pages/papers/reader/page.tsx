@@ -694,7 +694,6 @@ export function ReaderPage() {
         return { index: idx, text: text.slice(0, 80), msgId: m.msgId };
       });
   }, [displayMessages]);
-
   // Rating
   const [rating, setRating] = useState<number | null>(null);
   const [showRatingPrompt, setShowRatingPrompt] = useState(false);
