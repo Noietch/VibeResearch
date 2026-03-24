@@ -390,6 +390,12 @@ export class DownloadService {
       };
     }
 
+    // Extract venue (journal/conference name) from OpenAlex
+    const venue =
+      bestMatch.primary_location?.source?.display_name ??
+      bestMatch.primary_location?.raw_source_name ??
+      undefined;
+
     await this.ensurePaperFolder(shortId);
     const paper = await this.papersRepository.create({
       shortId,
@@ -401,6 +407,7 @@ export class DownloadService {
         ? new Date(`${bestMatch.publication_year}-01-01T00:00:00Z`)
         : undefined,
       abstract,
+      venue,
       pdfUrl,
       tags,
     });
@@ -471,6 +478,8 @@ export class DownloadService {
       url?: string;
       abstract?: string;
       pdfUrl?: string;
+      journal?: string;
+      venue?: string;
     },
     doi: string | null,
     tags: string[],
@@ -506,6 +515,7 @@ export class DownloadService {
       sourceUrl: metadata.url,
       submittedAt,
       abstract: metadata.abstract,
+      venue: metadata.venue ?? metadata.journal,
       pdfUrl: metadata.pdfUrl,
       tags,
     });

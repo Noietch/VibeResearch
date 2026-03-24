@@ -27,6 +27,7 @@ model Paper {
   metadataSource       String?
   rating               Int?
   doi                  String?
+  venue                String?    // Journal, conference, or publication venue name
   citationsExtractedAt DateTime?
   isTemporary          Boolean    @default(false) // Imported temporarily from Discovery
   temporaryImportedAt  DateTime?             // When the paper was temporarily imported

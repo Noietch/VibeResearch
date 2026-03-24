@@ -24,6 +24,7 @@ export interface CreatePaperInput {
   submittedAt?: Date;
   year?: number;
   abstract?: string;
+  venue?: string;
   pdfUrl?: string;
   pdfPath?: string;
   doi?: string;
@@ -127,6 +128,7 @@ export class PapersService {
       sourceUrl: input.sourceUrl,
       submittedAt,
       abstract: input.abstract,
+      venue: input.venue,
       pdfUrl: input.pdfUrl,
       doi: input.doi,
       tags: input.tags ?? [],
