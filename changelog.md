@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-03-24 (75)
+
+### fix: Repair Windows release packaging for version 0.0.4
+
+**Changes**:
+
+1. Added `esbuild` back to `devDependencies` so `scripts/build-main.mjs` can build reliably during `npm run release:win`
+2. Updated the Windows release script to package through a temporary output directory, avoiding failures when an old `release/win-unpacked` is locked by another process
+3. Temporarily remove the optional `cpu-features` native addon before `electron-builder` rebuilds dependencies, so Windows packaging no longer requires a local Visual Studio toolchain
+4. Copy the packaged installer back into `release/` with both the default Electron Builder filename and a hyphenated `ResearchClaw-Setup-<version>.exe` alias that matches `latest.yml`
+5. Clean stale Windows installer artifacts from `release/` before copying the new build so local release folders do not mix old and new versions
+
+**Test validation**: Passed `npm.cmd run lint`, `npm.cmd run test`, and `npm.cmd run release:win`. Verified `release/latest.yml` points to `ResearchClaw-Setup-0.0.4.exe`.
+
+### fix: Add Windows artifacts to GitHub release workflow
+
+**Summary**: Extended the GitHub Actions release pipeline so tagged releases now build and publish the Windows installer alongside the existing macOS and Linux assets.
+
+**Changes**:
+
+1. Added a `build-windows` job on `windows-latest` that runs `npm run release:win`
+2. Uploaded the Windows installer, blockmap, and `latest.yml` as release artifacts for the publish job
+3. Updated the publish stage to wait for and attach Windows artifacts when creating the GitHub Release
+
+**Test validation**: Passed `npm.cmd run lint`, `npm.cmd run test`, and `npm.cmd run release:win`.
+
 ## 0.0.7 (2026-03-24)
 
 ### fix: Parallel extract/tag/index with immediate spinner feedback on import
