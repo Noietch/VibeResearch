@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron';
 
 export type IpcListener = (event: IpcRendererEvent, ...args: unknown[]) => void;
 
@@ -36,6 +36,9 @@ const electronAPI = {
 
   /** Read local file as base64 */
   readLocalFile: (path: string) => ipcRenderer.invoke('file:read', path),
+
+  /** Get the real file system path for a dropped File object (Electron 32+) */
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
   /**
    * Listen for MessagePort transfers from main process (streaming).

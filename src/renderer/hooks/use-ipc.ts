@@ -118,6 +118,8 @@ declare global {
       openBrowser: (url: string, title?: string) => Promise<boolean>;
       // Streaming port for MessagePort-based chunk streaming
       onStreamingPort?: (callback: (tag: string, port: MessagePort) => void) => () => void;
+      // Get real file system path for a dropped File (Electron 32+ webUtils)
+      getPathForFile?: (file: File) => string;
       // Window controls
       windowClose: () => Promise<void>;
       windowMinimize: () => Promise<void>;
@@ -817,7 +819,7 @@ export const ipc = {
   importLocalPdf: (filePath: string, isTemporary?: boolean) =>
     invoke<PaperItem>('papers:importLocalPdf', filePath, isTemporary),
   importLocalPdfs: (filePaths: string[]) =>
-    invoke<{ total: number; success: number; failed: number }>('papers:importLocalPdfs', filePaths),
+    invoke<{ queued: number }>('papers:importLocalPdfs', filePaths),
   scanFolderForPdfs: (folderPath: string) =>
     invoke<string[]>('papers:scanFolderForPdfs', folderPath),
   selectFolderForPdfs: () => invoke<string[] | null>('papers:selectFolderForPdfs'),
