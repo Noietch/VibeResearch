@@ -58,12 +58,14 @@ export function resolvePdfParseConstructor(moduleValue: unknown): PdfParseConstr
 }
 
 // Dynamic import for pdf-parse (ESM compatibility)
-async function parsePdf(buffer: Buffer, _options?: { max?: number }): Promise<PdfParseResult> {
+async function parsePdf(buffer: Buffer, options?: { maxPages?: number }): Promise<PdfParseResult> {
   const pdfParseModule = await import('pdf-parse');
   const PDFParse = resolvePdfParseConstructor(pdfParseModule);
   const parser = new PDFParse({ data: buffer });
 
-  const textResult: TextResult = await parser.getText();
+  // pdf-parse v2: getText({ first: N }) parses only the first N pages
+  const textOptions = options?.maxPages ? { first: options.maxPages } : {};
+  const textResult: TextResult = await parser.getText(textOptions);
   const info = (await parser.getInfo()) as unknown as InfoResult;
 
   return {
@@ -144,7 +146,7 @@ export async function extractTextFromPdf(
 ): Promise<ExtractedPdf> {
   const buffer = await fs.readFile(filePath);
 
-  const data = await parsePdf(buffer);
+  const data = await parsePdf(buffer, { maxPages: options.maxPages });
 
   let text = normalizeSpacedText(data.text);
 
@@ -168,7 +170,7 @@ export async function extractTextFromPdfUrl(
 ): Promise<ExtractedPdf> {
   const buffer = await downloadPdf(url);
 
-  const data = await parsePdf(buffer);
+  const data = await parsePdf(buffer, { maxPages: options.maxPages });
 
   let text = normalizeSpacedText(data.text);
 
