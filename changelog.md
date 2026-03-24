@@ -2,6 +2,28 @@
 
 ## 0.0.7 (2026-03-24)
 
+### fix: Parallel extract/tag/index with immediate spinner feedback on import
+
+After importing a local PDF, the three hover buttons (extract metadata, auto-tag, index) now spin immediately and run simultaneously:
+
+1. **Immediate `extracting_metadata` status**: `extractAndUpdateMetadata` now sets `processingStatus = 'extracting_metadata'` in the DB and broadcasts it to the renderer at the very start — the extract button spins as soon as import begins.
+2. **New `tagging` status**: Added `'tagging'` to `PaperProcessingStatus`. After metadata is saved, status is set to `tagging` so the tag button spins.
+3. **Parallel execution**: `tagPaper` and `retryPaperProcessing` now run simultaneously via `Promise.allSettled` instead of sequentially, cutting total post-import processing time roughly in half.
+4. **Renderer spinner conditions**: `autoTagging` prop now also triggers when `paper.processingStatus === 'tagging'`; badge labels and styles updated for `tagging` in both EN/ZH locales.
+5. **Test mocks updated**: `auto-paper-enrichment.test.ts` mocks now include `markPaperQueued`, `setPaperProcessingStatus`, `retryPaperProcessing`, and `tagPaper` to avoid "no export defined" errors.
+
+**Files changed**: `paper-processing.service.ts`, `papers.service.ts`, `papers-by-tag.tsx`, `en.json`, `zh.json`, `auto-paper-enrichment.test.ts`
+
+### fix: PDF drag & drop on macOS (Electron 32+ webUtils)
+
+On macOS with Electron 32+, `file.path` on dropped `File` objects returns an empty string — the new API is `webUtils.getPathForFile(file)`. This caused all dropped PDFs to be silently skipped, triggering the "Only PDF files are supported" error.
+
+1. **preload.ts**: Exposed `webUtils.getPathForFile` via `contextBridge` as `window.electronAPI.getPathForFile`.
+2. **use-ipc.ts**: Added `getPathForFile?` to the `Window.electronAPI` type declaration.
+3. **import-modal.tsx**: Drop handler now calls `window.electronAPI?.getPathForFile?.(file)` first, falling back to legacy `file.path`. Also added `application/pdf` MIME type check as an extra fallback.
+
+**Files changed**: `preload.ts`, `use-ipc.ts`, `import-modal.tsx`
+
 ### fix: Show background processing progress in Library to prevent duplicate actions
 
 After importing papers, background tasks (embedding indexing, enrichment, tagging) run silently — users had no feedback and might click "Index" or re-import unnecessarily.
