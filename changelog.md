@@ -24,7 +24,7 @@
 2. Uploaded the Windows installer, blockmap, and `latest.yml` as release artifacts for the publish job
 3. Updated the publish stage to wait for and attach Windows artifacts when creating the GitHub Release
 
-**Test validation**: Passed `npm.cmd run lint`. `npm.cmd run test` failed on the existing `tests/integration/ingest.test.ts` case `handles network timeout gracefully when fetching arXiv metadata` after hitting its 60000ms timeout.
+**Test validation**: Passed `npm.cmd run lint`, `npm.cmd run test`, and `npm.cmd run release:win`.
 
 ## 0.0.7 (2026-03-24)
 
