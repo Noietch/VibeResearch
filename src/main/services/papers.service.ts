@@ -5,7 +5,12 @@ import { BrowserWindow } from 'electron';
 import { PapersRepository, SourceEventsRepository } from '@db';
 import { extractArxivId, type CategorizedTag } from '@shared';
 import { getPapersDir } from '../store/app-settings-store';
-import { retryPaperProcessing, schedulePaperProcessing } from './paper-processing.service';
+import {
+  retryPaperProcessing,
+  schedulePaperProcessing,
+  markPaperQueued,
+  setPaperProcessingStatus,
+} from './paper-processing.service';
 import { scheduleCitationExtraction } from './citation-processing.service';
 import { scheduleAutoPaperEnrichment } from './auto-paper-enrichment.service';
 import { scheduleReferenceExtraction } from './reference-extraction-bg.service';
@@ -58,7 +63,7 @@ export class PapersService {
    */
   private async findExistingByPdfContent(pdfPath: string) {
     try {
-      const { text } = await extractTextFromPdf(pdfPath, { maxChars: 3000 });
+      const { text } = await extractTextFromPdf(pdfPath, { maxPages: 3, maxChars: 3000 });
       if (!text) return null;
 
       // Try to extract DOI from the first few pages
@@ -270,7 +275,7 @@ export class PapersService {
       console.log(
         `[importLocalPdf] Duplicate detected, returning existing paper: ${existing.shortId}`,
       );
-      return existing;
+      return { ...existing, isDuplicate: true };
     }
 
     const title =
@@ -304,7 +309,11 @@ export class PapersService {
       rawUrl: resolvedPath,
     });
 
-    // Extract metadata from PDF using LLM (async, non-blocking)
+    // Mark as queued immediately so the UI shows the badge before LLM extraction starts
+    void markPaperQueued(created.id);
+
+    // Extract metadata from PDF using LLM (async, non-blocking).
+    // extractAndUpdateMetadata already calls tagPaper + retryPaperProcessing at the end.
     void this.extractAndUpdateMetadata(created.id, created.shortId, importedPdfPath);
 
     scheduleCitationExtraction(created.id);
@@ -374,6 +383,9 @@ export class PapersService {
     pdfPath: string,
   ): Promise<void> {
     try {
+      // Broadcast immediately so extract button spins right away
+      await setPaperProcessingStatus(paperId, 'extracting_metadata');
+
       const text = await getPaperText(paperId, shortId, undefined, pdfPath, { maxChars: 18000 });
       if (!text.trim()) {
         console.warn(`[papers] No text extracted from PDF for ${shortId}`);
@@ -398,25 +410,31 @@ export class PapersService {
         win.webContents.send('papers:metadataUpdated', { paperId });
       }
 
-      // Auto-tag and index after metadata extraction
-      try {
-        await tagPaper(paperId);
+      // Broadcast tagging status so tag button spins, then run tag + index in parallel
+      await setPaperProcessingStatus(paperId, 'tagging');
+
+      const [tagResult, idxResult] = await Promise.allSettled([
+        tagPaper(paperId),
+        retryPaperProcessing(paperId),
+      ]);
+
+      if (tagResult.status === 'fulfilled') {
         console.log(`[papers] Auto-tagged ${shortId}`);
-      } catch (tagErr) {
+      } else {
         console.warn(
           `[papers] Auto-tag failed for ${shortId}:`,
-          tagErr instanceof Error ? tagErr.message : String(tagErr),
+          tagResult.reason instanceof Error ? tagResult.reason.message : String(tagResult.reason),
         );
       }
-      try {
-        await retryPaperProcessing(paperId);
+      if (idxResult.status === 'fulfilled') {
         console.log(`[papers] Indexed ${shortId}`);
-      } catch (idxErr) {
+      } else {
         console.warn(
           `[papers] Index failed for ${shortId}:`,
-          idxErr instanceof Error ? idxErr.message : String(idxErr),
+          idxResult.reason instanceof Error ? idxResult.reason.message : String(idxResult.reason),
         );
       }
+
       scheduleAutoPaperEnrichment(paperId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

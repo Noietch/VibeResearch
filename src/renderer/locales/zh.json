@@ -690,6 +690,7 @@
       "pending": "排队中",
       "extracting": "提取中",
       "metadata": "元数据",
+      "tagging": "打标签中",
       "chunking": "分块中",
       "indexing": "索引中",
       "needsRetry": "需要重试"

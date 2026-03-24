@@ -54,6 +54,7 @@ function ProcessingBadge({ status, t }: { status?: string; t: TFunction }) {
     queued: 'bg-blue-50 text-blue-600',
     extracting_text: 'bg-amber-50 text-amber-700',
     extracting_metadata: 'bg-amber-50 text-amber-700',
+    tagging: 'bg-purple-50 text-purple-700',
     chunking: 'bg-amber-50 text-amber-700',
     embedding: 'bg-amber-50 text-amber-700',
     failed: 'bg-red-50 text-red-700',
@@ -63,6 +64,7 @@ function ProcessingBadge({ status, t }: { status?: string; t: TFunction }) {
     queued: t('papersByTag.status.pending'),
     extracting_text: t('papersByTag.status.extracting'),
     extracting_metadata: t('papersByTag.status.metadata'),
+    tagging: t('papersByTag.status.tagging'),
     chunking: t('papersByTag.status.chunking'),
     embedding: t('papersByTag.status.indexing'),
     failed: t('papersByTag.status.needsRetry'),
@@ -572,6 +574,17 @@ export function PapersByTag({
     });
   }, [fetchPapers, fetchCounts]);
 
+  // Refresh when a background PDF import batch completes
+  useEffect(() => {
+    return onIpc('papers:importLocalPdfs:progress', (...args: unknown[]) => {
+      const progress = args[1] as { done?: boolean };
+      if (progress.done) {
+        void fetchPapers(true);
+        void fetchCounts();
+      }
+    });
+  }, [fetchPapers, fetchCounts]);
+
   // Check if lightweight model is available for auto-tag
   const canAutoTag = useMemo(() => {
     if (!lightweightModel) return false;
@@ -1041,7 +1054,7 @@ export function PapersByTag({
             {t('papersByTag.library')}
           </h1>
           <span className="rounded-full bg-notion-sidebar px-2.5 py-0.5 text-xs font-medium text-notion-text-secondary">
-            {papers.length}
+            {totalPapers}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -1246,7 +1259,7 @@ export function PapersByTag({
                 <span
                   className={`text-xs ${selectedTag === null ? 'opacity-70' : 'text-notion-text-tertiary'}`}
                 >
-                  {papers.length}
+                  {totalPapers}
                 </span>
               </button>
               {tagList.slice(0, MAX_VISIBLE_CHIPS).map(({ name, count, category }) => {
@@ -1326,7 +1339,7 @@ export function PapersByTag({
       {/* Papers count + actions bar */}
       <div className="flex items-center justify-between py-2.5">
         <p className="text-sm text-notion-text-tertiary">
-          {visiblePapers.length} paper{visiblePapers.length !== 1 ? 's' : ''}
+          {totalPapers} paper{totalPapers !== 1 ? 's' : ''}
         </p>
         <div className="flex items-center gap-2">
           {!isSelectMode && visiblePapers.length > 0 && (
@@ -1546,9 +1559,18 @@ export function PapersByTag({
                   deleting={deleting}
                   downloadingPdf={downloadingPdf}
                   retryingPaperId={retryingPaperId}
-                  autoTagging={autoTaggingIds.has(paper.id)}
-                  indexing={indexingIds.has(paper.id)}
-                  extractingMetadata={extractingMetadataIds.has(paper.id)}
+                  autoTagging={autoTaggingIds.has(paper.id) || paper.processingStatus === 'tagging'}
+                  indexing={
+                    indexingIds.has(paper.id) ||
+                    paper.processingStatus === 'queued' ||
+                    paper.processingStatus === 'embedding' ||
+                    paper.processingStatus === 'chunking'
+                  }
+                  extractingMetadata={
+                    extractingMetadataIds.has(paper.id) ||
+                    paper.processingStatus === 'extracting_text' ||
+                    paper.processingStatus === 'extracting_metadata'
+                  }
                   bgEnriching={bgEnrichingIds.has(paper.id)}
                   canAutoTag={canAutoTag}
                   canIndex={canIndex}
@@ -2013,7 +2035,7 @@ function PaperCard({
                     : 'Auto-tag paper'
               }
             >
-              {autoTaggingPaperId === paper.id ? (
+              {autoTagging ? (
                 <Loader2 size={14} className="animate-spin text-notion-accent" />
               ) : (
                 <Tag size={14} />
@@ -2039,7 +2061,7 @@ function PaperCard({
                     : 'Index paper for semantic search'
                 }
               >
-                {indexingPaperId === paper.id ? (
+                {indexing ? (
                   <Loader2 size={14} className="animate-spin text-notion-accent" />
                 ) : (
                   <Database size={14} />

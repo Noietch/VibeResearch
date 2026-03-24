@@ -8,6 +8,7 @@ export type PaperProcessingStatus =
   | 'idle'
   | 'queued'
   | 'extracting_metadata'
+  | 'tagging'
   | 'embedding'
   | 'completed'
   | 'failed';
@@ -39,6 +40,16 @@ function broadcastProcessingStatus(payload: {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('papers:processingStatus', payload);
   }
+}
+
+/** Update DB processing status and broadcast to renderer. */
+export async function setPaperProcessingStatus(
+  paperId: string,
+  status: PaperProcessingStatus,
+  extra: { processingError?: string | null } = {},
+) {
+  const repo = new PapersRepository();
+  await updateStatus(repo, paperId, status, extra);
 }
 
 function broadcastRebuildStatus(status: EmbeddingRebuildStatus) {
@@ -316,4 +327,18 @@ export async function getPaperProcessingStatus(paperId: string) {
 
 export function schedulePaperProcessing(_paperId: string, _options: { force?: boolean } = {}) {
   // No-op: automatic background processing removed; indexing is now on-demand only.
+}
+
+/**
+ * Mark a newly imported paper as 'queued' so the UI badge shows immediately.
+ * Does NOT start processing — extractAndUpdateMetadata handles that via
+ * tagPaper + retryPaperProcessing after LLM metadata extraction completes.
+ */
+export async function markPaperQueued(paperId: string) {
+  if (shouldSkip()) return;
+  const settings = getSemanticSearchSettings();
+  if (!settings.enabled) return;
+
+  const repo = new PapersRepository();
+  await updateStatus(repo, paperId, 'queued');
 }

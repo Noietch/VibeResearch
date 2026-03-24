@@ -690,6 +690,7 @@
       "pending": "Pending",
       "extracting": "Extracting",
       "metadata": "Metadata",
+      "tagging": "Tagging",
       "chunking": "Chunking",
       "indexing": "Indexing",
       "needsRetry": "Needs retry"
