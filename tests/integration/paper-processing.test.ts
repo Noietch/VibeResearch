@@ -243,6 +243,7 @@ describe('paper processing concurrency', () => {
   it('treats matching model names with different dimensions as rebuild-required', async () => {
     const clearAllIndexedAt = vi.fn().mockResolvedValue(undefined);
     const listPendingSemanticPaperIds = vi.fn().mockResolvedValue([]);
+    const clearAndReinitialize = vi.fn();
 
     vi.doMock('electron', () => ({
       BrowserWindow: { getAllWindows: () => [] },
@@ -274,6 +275,7 @@ describe('paper processing concurrency', () => {
         dimension: 1024,
         model: 'text-embedding-v4',
       })),
+      clearAndReinitialize,
       clear: vi.fn(),
       upsert: vi.fn(),
       remove: vi.fn(),
@@ -296,5 +298,6 @@ describe('paper processing concurrency', () => {
     });
     expect(clearAllIndexedAt).toHaveBeenCalledTimes(1);
     expect(listPendingSemanticPaperIds).toHaveBeenCalledTimes(1);
+    expect(clearAndReinitialize).toHaveBeenCalledWith('text-embedding-v4', 1536);
   });
 });

@@ -242,13 +242,14 @@ export async function rebuildAllEmbeddings(
   let dimensionCheck:
     | Pick<RebuildCheckResult, 'dimensionMatch' | 'currentDimension' | 'newDimension'>
     | undefined;
+  const targetDimension = getEffectiveEmbeddingDimensions(settings);
 
   // Check if model hasn't changed (skip rebuild if same model and has indexed data)
   if (!options.force) {
     const indexStatus = vecIndex.getStatus();
     const currentModel = indexStatus.model;
     const newModel = settings.embeddingModel;
-    const newDimension = getEffectiveEmbeddingDimensions(settings) ?? indexStatus.dimension ?? 1536;
+    const newDimension = targetDimension ?? indexStatus.dimension ?? 1536;
 
     if (
       currentModel &&
@@ -275,6 +276,8 @@ export async function rebuildAllEmbeddings(
       };
     }
   }
+
+  vecIndex.clearAndReinitialize(settings.embeddingModel, settings.embeddingDimensions);
 
   const repo = new PapersRepository();
   await repo.clearAllIndexedAt();
